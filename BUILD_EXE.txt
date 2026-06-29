@@ -1,0 +1,25 @@
+﻿[ BandWagon 실행파일(.exe) 만들기 ]
+
+개발 중에는 run.pyw 를 더블클릭해 실행합니다(스플래시 없음).
+배포용 .exe 를 만들 때만 스플래시(bandwagon_splash.png)가 들어갑니다.
+
+1) 최초 1회: 명령 프롬프트에서  pip install pyinstaller
+   ('pyinstaller'은(는) 내부 또는 외부 명령이 아닙니다 오류가 나면 이 단계를
+   건너뛴 것입니다 -- build_exe.bat이 이제 이걸 미리 확인하고 알려줍니다.)
+2) build_exe.bat 더블클릭  (run.py, bandwagon_splash.png 와 같은 폴더에 있어야 함)
+3) 완료되면  dist\BandWagon.exe  가 생깁니다.
+
+설명:
+- --splash bandwagon_splash.png : PyInstaller 네이티브 스플래시.
+  파이썬/Qt 가 로드되기도 전에 PNG 가 즉시 떠서, 예전처럼 "늦게 뜨는" 문제가 없습니다.
+- 코드(__main__.py)는 창이 준비되면 pyi_splash.close() 로 스플래시를 닫습니다.
+  개발 실행에는 pyi_splash 모듈이 없으므로 자동으로 건너뜁니다.
+- --collect-all scipy / cv2 : 분석(find_peaks)·워프(cv2)에 필요한 모듈을 빠짐없이 포함.
+  (exe 용량이 커지는 대신 "모듈 없음" 오류를 방지합니다. 용량이 부담되면 빼고
+   빌드해 본 뒤, 실행 시 누락 오류가 나는 모듈만 --collect-submodules 로 추가하세요.)
+- 더 빠른 시작을 원하면 --onefile 대신 --onedir 로 빌드하세요(폴더 형태로 나옴).
+
+스플래시 이미지를 바꾸고 싶으면 bandwagon_splash.png 를 같은 크기로 교체만 하면 됩니다.
+
+다음 단계 — "다음 다음 설치 완료" 식 설치 마법사로 만들고 싶다면
+BUILD_INSTALLER.txt 를 보세요(이 exe를 그대로 패키징합니다).

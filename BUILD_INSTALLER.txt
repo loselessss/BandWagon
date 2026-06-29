@@ -1,0 +1,43 @@
+﻿[ BandWagon 설치 마법사(인스톨러) 만들기 ]
+
+build_exe.bat으로 만든 dist\BandWagon\ 폴더는 그 안의 BandWagon.exe를
+더블클릭하면 바로 실행되는 포터블 빌드입니다(--onedir — 폴더 하나에 exe와
+지원파일이 같이 들어있는 방식, 시작이 빠릅니다). 이 문서는 그걸 한 단계 더 묶어서, 받는
+사람이 "다음 다음 다음 설치 완료" 식으로 설치하고(시작 메뉴/바탕화면
+바로가기까지 자동 생성), 나중에 제어판 "프로그램 추가/제거"에서 깨끗하게
+제거할 수 있는 정식 설치 마법사(Setup.exe)로 만드는 방법입니다.
+
+1) 최초 1회만: Inno Setup 설치 (무료)
+   https://jrsoftware.org/isdl.php 에서 "Inno Setup 6" 다운로드 후 설치.
+   (기본 설치 경로 그대로 두면 build_installer.bat이 자동으로 찾습니다.)
+
+2) build_exe.bat 더블클릭  → dist\BandWagon\ 폴더 생성(그 안에 BandWagon.exe)
+   (이미 만들어 둔 게 있다면 건너뛰어도 됩니다.)
+
+3) build_installer.bat 더블클릭
+   → installer.iss를 컴파일해 Output\BandWagon_Setup_1.1.1.exe 생성
+
+4) Output\BandWagon_Setup_1.1.1.exe — 이 파일 하나가 배포할 인스톨러입니다.
+   받는 사람은 이 파일만 받아서 더블클릭하면 설치 마법사가 뜨고,
+   설치 위치(기본: 내 계정 폴더 아래, 관리자 권한/UAC 창 없음), 바탕화면
+   바로가기 생성 여부를 고른 뒤 "설치"를 누르면 끝입니다. 시작 메뉴에도
+   자동으로 등록됩니다.
+   (한 컴퓨터를 여러 계정이 같이 쓴다면 계정마다 따로 설치해야 합니다 —
+   Program Files에 한 번 설치해서 모든 계정이 같이 쓰는 방식이 아닙니다.
+   그 방식이 필요하면 installer.iss의 PrivilegesRequired 주석을 보세요.)
+
+버전을 올릴 때 (예: 1.1.1 -> 1.1.2):
+   - bandwagon/meta.py 의 APP_VERSION
+   - installer.iss 맨 위의 MyAppVersion
+   두 곳을 같이 바꿔야 합니다(자동 동기화되지 않습니다). 바꾼 뒤
+   build_exe.bat -> build_installer.bat 순서로 다시 빌드하세요.
+
+참고:
+   - installer.iss 안의 [Files] 섹션이 dist\BandWagon\ 폴더 전체를 그대로
+     담습니다(--onedir 기준). 나중에 --onefile(파일 하나)로 다시 바꾸고
+     싶다면 build_exe.bat과 installer.iss 양쪽의 주석을 따라 그 줄만 고치면
+     됩니다.
+   - 앱 아이콘(.ico)을 따로 만들어 추가하고 싶다면, build_exe.bat의
+     pyinstaller 명령에 --icon "경로\아이콘.ico" 를 추가하고,
+     installer.iss의 [Icons] 항목에도 IconFilename을 지정하세요.
+     (지금은 둘 다 기본 아이콘을 씁니다 — 동작에는 영향 없음.)
