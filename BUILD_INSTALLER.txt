@@ -15,9 +15,9 @@ build_exe.bat으로 만든 dist\BandWagon\ 폴더는 그 안의 BandWagon.exe를
    (이미 만들어 둔 게 있다면 건너뛰어도 됩니다.)
 
 3) build_installer.bat 더블클릭
-   → installer.iss를 컴파일해 Output\BandWagon_Setup_1.1.1.exe 생성
+   → installer.iss를 컴파일해 Output\BandWagon_Setup_1.2.exe 생성
 
-4) Output\BandWagon_Setup_1.1.1.exe — 이 파일 하나가 배포할 인스톨러입니다.
+4) Output\BandWagon_Setup_1.2.exe — 이 파일 하나가 배포할 인스톨러입니다.
    받는 사람은 이 파일만 받아서 더블클릭하면 설치 마법사가 뜨고,
    설치 위치(기본: 내 계정 폴더 아래, 관리자 권한/UAC 창 없음), 바탕화면
    바로가기 생성 여부를 고른 뒤 "설치"를 누르면 끝입니다. 시작 메뉴에도
@@ -26,7 +26,7 @@ build_exe.bat으로 만든 dist\BandWagon\ 폴더는 그 안의 BandWagon.exe를
    Program Files에 한 번 설치해서 모든 계정이 같이 쓰는 방식이 아닙니다.
    그 방식이 필요하면 installer.iss의 PrivilegesRequired 주석을 보세요.)
 
-버전을 올릴 때 (예: 1.1.1 -> 1.1.2):
+버전을 올릴 때 (예: 1.2 -> 1.2.1):
    - bandwagon/meta.py 의 APP_VERSION
    - installer.iss 맨 위의 MyAppVersion
    두 곳을 같이 바꿔야 합니다(자동 동기화되지 않습니다). 바꾼 뒤

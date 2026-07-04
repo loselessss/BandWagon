@@ -3,10 +3,12 @@
 메인 윈도우 Analyzer(QMainWindow). 다른 모든 모듈을 조립한다.
 
 기능별 메서드는 대부분 믹스인으로 분리돼 있다(StyleMixin/GeometryMixin/
-LanesMixin/FileIOMixin/WesternMixin) — 여기 남은 건 윈도우 골격(_build,
+LanesMixin/FileIOMixin) — 여기 남은 건 윈도우 골격(_build,
 탭 빌드 진입점, 메뉴/단축키)과 여러 믹스인이 공유하는 공용 다이얼로그
 헬퍼뿐이다. 어떤 메서드가 어느 파일에 있는지 헷갈리면 그 파일의 모듈
-docstring을 보면 된다.
+docstring을 보면 된다. 웨스턴 블롯 합성은 별도 독립 모듈(composite.py)이
+담당한다 — 합성 결과를 .bwcomposite 파일로 내보내고 FileIOMixin이 그걸
+임포트한다.
 """
 import sys, os
 from PyQt5.QtWidgets import (
@@ -27,10 +29,9 @@ from .style import StyleMixin
 from .geometry import GeometryMixin
 from .lanes import LanesMixin
 from .fileio import FileIOMixin
-from .western import WesternMixin
 
 
-class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, WesternMixin, QMainWindow):
+class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, QMainWindow):
 
     def __init__(self, path=None, splash=None):
         super().__init__()
@@ -41,9 +42,15 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, WesternMixin,
         self._orig = None
         self._display = None
         self._gray_orig = None
-        self._wb_gray_override = None  # WB 합성 모드일 때 UV 단독 그레이스케일 (None=평소 모드)
-        self._wb_visible_orig = None   # WB 합성 모드일 때 보관해두는 가시광 원본 (참고용 복귀)
-        self._wb_init_state()          # 합성 탭 전용 상태(_wb_visible_img 등) — western.py
+        # 합성 모드에서 분석용으로 쓰는 UV 단독 그레이스케일(None=평소 모드).
+        # 화면(_orig)엔 가시광+UV 블렌드가 보이지만 분석은 이 값을 본다.
+        self._wb_gray_override = None
+        # 편집 기록 재생의 시작 그레이스케일 오버라이드(=_edit_pristine에
+        # 정렬된 UV 단독 강도). 합성 파일을 임포트한 세션에서 편집을 시작할
+        # 때 그 시점의 _wb_gray_override가 여기에 고정되고, 이후 회전/자르기/
+        # 펴기 등이 apply_edit_op을 통해 이 값도 함께 변환해 정렬을 유지한다.
+        # (평소 세션에서는 계속 None.)
+        self._edit_gray_pristine = None
         # 밴드 표시 방식: "area"(경계 영역, 기본) 또는 "line"(피크 위치 한 줄).
         # 둘 다 같은 peak_bounds/peaks를 보여주는 방식만 다를 뿐, 정량값과는
         # 무관 — render_analysis_overlay()와 GelView.paintEvent() 양쪽이
@@ -52,17 +59,22 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, WesternMixin,
         self._pristine_orig = None  # 불러온 직후의 원본 (전체 초기화 시 이 상태로 복귀)
         self._rot_base = None      # 정밀 회전 미리보기용 스냅샷 (세션 시작 시점 원본)
         self._curve_base = None    # 부채꼴(곡률) 보정 미리보기용 스냅샷 (세션 시작 시점 원본)
+        self._shear_base = None    # 기울기(전단) 보정 미리보기용 스냅샷 (세션 시작 시점 원본)
         # 이번 세션에서 한 번이라도 커밋했는지 추적 — True면 다음 커밋은
         # 새 연산을 쌓지 않고 이번 세션 항목 하나만 절대값으로 교체한다
         # (release를 여러 번 해도 누적/오염되지 않도록). 세션 종료 시
         # (_finalize_pending_*/_reset_*) 다시 False로.
         self._rot_session_pushed = False
         self._bow_session_pushed = False
-        # 정밀회전·곡률보정 드래그 중 화면에만 쓰는 다운스케일 캐시.
+        self._shear_session_pushed = False
+        # 정밀회전·곡률보정·기울기보정 드래그 중 화면에만 쓰는 다운스케일 캐시.
         # self._orig은 release 전까지 안 건드리고 이 작은 이미지만 갱신해
         # 무거운 cv2 연산을 가볍게 만든다.
         self._preview_small = None
         self._preview_scale = 1.0
+        # 밝기/대비/톤커브 드래그 중에만 쓰는 색보정 미리보기용 축소본.
+        # 드래그가 끝나 원본 해상도로 확정하면(_refresh_display(preview=False)) None으로 폐기.
+        self._color_preview_base = None
         # ── 되돌리기/다시하기: 연산 리스트 재생 방식 ──────────────────────
         # 이미지를 단계마다 저장하지 않고 '가벼운 연산 기록만 들고 있다가
         # 필요할 때 처음부터 다시 계산'한다(리플레이 방식).
@@ -154,6 +166,15 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, WesternMixin,
         a = QAction(tr("toolbar_project_save"), self); a.triggered.connect(self.save_project)
         a.setShortcut("Ctrl+S")
         a.setToolTip(tr("toolbar_project_save_tip"))
+        tb.addAction(a)
+        tb.addSeparator()
+
+        a = QAction(tr("toolbar_composite_studio"), self); a.triggered.connect(self.open_composite_studio)
+        a.setToolTip(tr("toolbar_composite_studio_tip"))
+        tb.addAction(a)
+        a = QAction(tr("toolbar_composite_import"), self)
+        a.triggered.connect(lambda _checked=False: self.import_composite())
+        a.setToolTip(tr("toolbar_composite_import_tip"))
         tb.addAction(a)
         tb.addSeparator()
 
@@ -255,8 +276,6 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, WesternMixin,
         self._splash_step(tr("splash_loading_tabs"))
         tab_steps = [
             (self._build_tab_correct, tr("splash_tab_adjust")),  # 요청#3: 펴기+보정 통합
-            # (self._build_tab_wb, tr("splash_tab_wb")),  # 요청#2: WB 합성 탭 임시 비활성화.
-            # 이 줄 주석 해제 시 복구(구현은 western.py의 WesternMixin에 있음).
             (self._build_tab_lanes, tr("splash_tab_lanes")),
             (self._build_tab_analysis, tr("splash_tab_analysis")),
             (self._build_tab_std, tr("splash_tab_std")),

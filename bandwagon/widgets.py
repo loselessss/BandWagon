@@ -300,10 +300,18 @@ class GelView(QWidget):
         self._pan_x = 0.0            # 확대 상태에서 보이는 영역의 중심 오프셋(이미지 좌표계, px)
         self._pan_y = 0.0
         self._pan_drag = None        # (start_wx, start_wy, start_pan_x, start_pan_y) 중간클릭 드래그 중
+        # 표시용으로 스케일한 픽스맵 캐시. paintEvent가 매번 원본 해상도
+        # 픽스맵을 SmoothTransformation으로 재스케일하면 팬/레인 드래그처럼
+        # 프레임마다 update()가 도는 상황에서 큰 이미지가 심하게 렉이 걸린다.
+        # 스케일 결과는 (대상 크기, 보간 모드)에만 의존하므로 그 키가 같으면
+        # 재사용한다 — 팬은 _rect 위치만 바꾸고 크기는 그대로라 캐시가 계속
+        # 유효하다. 키 형태: ((w, h, mode) -> QPixmap).
+        self._scaled_cache = None
 
     def set_image(self, pm, size):
         self._pm = pm
         self._img_size = size
+        self._scaled_cache = None   # 원본 픽스맵이 바뀌었으니 스케일 캐시 무효화
         self._recompute_rect()
         self.update()
 
@@ -685,7 +693,17 @@ class GelView(QWidget):
             return
 
         r = self._rect
-        qp.drawPixmap(r, self._pm.scaled(r.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        # 드래그 중에는 FastTransformation으로 가볍게 그리고(손을 떼면 다음
+        # 일반 리페인트에서 Smooth로 한 번만 다시 그려짐), 그 외에는 고품질.
+        # 크기·모드가 같으면 캐시된 스케일 픽스맵을 재사용해 재계산을 없앤다.
+        dragging = (self._pan_drag is not None or self._lane_edge_drag is not None
+                    or self._lane_move_drag is not None or self._corner_drag is not None
+                    or self._vrange_edge_drag is not None or self._crop_a is not None)
+        mode = Qt.FastTransformation if dragging else Qt.SmoothTransformation
+        key = (r.width(), r.height(), mode)
+        if self._scaled_cache is None or self._scaled_cache[0] != key:
+            self._scaled_cache = (key, self._pm.scaled(r.size(), Qt.KeepAspectRatio, mode))
+        qp.drawPixmap(r, self._scaled_cache[1])
 
         for lane in self.lanes:
             if not self.show_overlay and self.mode != "lane":

@@ -22,7 +22,7 @@ from PyQt5.QtCore import Qt
 from .i18n import tr
 from .theme import *
 from .meta import HAS_CV2
-from .imaging import pil_to_pixmap, downscale_for_preview, apply_bow_correction, apply_edit_op
+from .imaging import pil_to_pixmap, downscale_for_preview, apply_bow_correction, apply_shear_correction, apply_edit_op, find_gel_quad
 from .models import CurveModel
 from .widgets import CurveWidget, ChannelBar, SliderRow
 
@@ -34,7 +34,7 @@ class GeometryMixin:
     # "adjust"/"lanes" 자신은 포함하지 않는다.
     _GEOMETRY_OPS = frozenset({
         "rotate", "flip", "invert_colors", "fine_rotate",
-        "bow_correct", "warp", "wb_composite",
+        "bow_correct", "shear_correct", "warp",
     })
 
     def _section_label(self, text):
@@ -159,12 +159,53 @@ class GeometryMixin:
         self.bow_slider.sliderReleased.connect(self._commit_bow_correction)
         self.bow_spin.editingFinished.connect(self._commit_bow_correction)
 
+        # 기울기(전단) 보정 — bow_correct와 동일한 UI/세션 패턴이되 축이 다르다
+        # (bow: 열 기준 세로 포물선 / shear: 행 기준 가로 선형).
+        shear = QGroupBox(tr("group_shear_correction")); shear.setStyleSheet(self._group_css())
+        shv = QVBoxLayout(shear)
+        shear_info = QLabel(tr("shear_correction_info"))
+        shear_info.setStyleSheet(f"color:{MUTE};font-size:10px;"); shear_info.setWordWrap(True)
+        shv.addWidget(shear_info)
+        shrow = QHBoxLayout(); shrow.setSpacing(6)
+        shlbl = QLabel(tr("label_shear")); shlbl.setFixedWidth(28); shlbl.setStyleSheet(f"color:{MUTE};font-size:11px;")
+        shrow.addWidget(shlbl)
+        self.shear_slider = QSlider(Qt.Horizontal)
+        self.shear_slider.setRange(-150, 150); self.shear_slider.setValue(0)
+        self.shear_slider.setStyleSheet(
+            f"QSlider::groove:horizontal{{height:4px;background:{INK3};border-radius:2px;}}"
+            f"QSlider::handle:horizontal{{width:14px;height:14px;margin:-6px 0;"
+            f"background:{INKT};border:2px solid {CYAN};border-radius:8px;}}"
+            f"QSlider::sub-page:horizontal{{background:{CYAN};border-radius:2px;}}")
+        shrow.addWidget(self.shear_slider, 1)
+        self.shear_spin = QSpinBox(); self.shear_spin.setRange(-150, 150); self.shear_spin.setSuffix("px")
+        self.shear_spin.setFixedWidth(64); self.shear_spin.setStyleSheet(self._spin_css())
+        shrow.addWidget(self.shear_spin)
+        btn_shear_reset = QPushButton(tr("btn_reset")); btn_shear_reset.setStyleSheet(self._btn_css())
+        btn_shear_reset.clicked.connect(self._reset_shear_correction)
+        shrow.addWidget(btn_shear_reset)
+        shv.addLayout(shrow)
+        shear_hint = QLabel(tr("shear_sign_hint"))
+        shear_hint.setStyleSheet(f"color:{MUTE};font-size:9px;"); shear_hint.setWordWrap(True)
+        shv.addWidget(shear_hint)
+        v.addWidget(shear)
+
+        self.shear_slider.valueChanged.connect(self._on_shear_value_changed)
+        self.shear_spin.valueChanged.connect(self._on_shear_value_changed)
+        self.shear_slider.sliderReleased.connect(self._commit_shear_correction)
+        self.shear_spin.editingFinished.connect(self._commit_shear_correction)
+
 
         # ===== 색감 보정 =====
         v.addWidget(self._section_label(tr("section_color")))
 
-        self.sl_bright = SliderRow(tr("slider_brightness"), -100, 100, 0); self.sl_bright.valueChanged.connect(self._refresh_display)
-        self.sl_contrast = SliderRow(tr("slider_contrast"), -100, 100, 0); self.sl_contrast.valueChanged.connect(self._refresh_display)
+        # 드래그 중(valueChanged)에는 캔버스 크기 축소본에만 색보정을 적용해
+        # 가볍게 미리보기하고(_refresh_display(preview=True)), 슬라이더를 놓으면
+        # (released) 원본 해상도로 확정한다. valueChanged(int)가 넘기는 슬라이더
+        # 값이 preview 인자에 잘못 들어가지 않도록 람다로 감싼다.
+        self.sl_bright = SliderRow(tr("slider_brightness"), -100, 100, 0)
+        self.sl_bright.valueChanged.connect(lambda _=None: self._refresh_display(preview=True))
+        self.sl_contrast = SliderRow(tr("slider_contrast"), -100, 100, 0)
+        self.sl_contrast.valueChanged.connect(lambda _=None: self._refresh_display(preview=True))
         self.sl_bright.released.connect(self._commit_adjust)
         self.sl_contrast.released.connect(self._commit_adjust)
         v.addWidget(self.sl_bright); v.addWidget(self.sl_contrast)
@@ -202,8 +243,10 @@ class GeometryMixin:
         self._add_tab(page, tr("tab_adjust"))
 
     def _on_curve_changed(self):
+        # 커브 점을 드래그하는 중(changed) — 축소본에만 적용해 가볍게 미리보기.
+        # 점 편집을 끝내면(curve.released → _commit_adjust) 원본 해상도로 확정된다.
         self.curves[self._ch] = self.curve.model
-        self._refresh_display()
+        self._refresh_display(preview=True)
 
     def _reset_curve(self):
         self.curves[self._ch].reset()
@@ -233,20 +276,43 @@ class GeometryMixin:
         mx = h.max()
         return h.astype(float) / mx if mx else h.astype(float)
 
-    def _refresh_display(self):
-        if self._orig is None:
-            return
-        arr = np.array(self._orig.convert("RGB"), dtype=np.float32)
+    def _apply_color_pipeline(self, base_img):
+        """base_img(PIL RGB)에 현재 밝기/대비/톤커브를 적용한 새 PIL 이미지를
+        반환한다. 순수 함수 — self._display 등 상태를 건드리지 않으므로
+        원본 해상도(확정)와 축소본(드래그 미리보기) 양쪽에 그대로 쓴다."""
+        arr = np.asarray(base_img.convert("RGB"), dtype=np.float32)
         arr = arr + float(self.sl_bright.value())
         c = float(self.sl_contrast.value())
         f = (259 * (c + 255)) / (255 * (259 - c)) if c != 255 else 10.0
-        arr = f * (arr - 128) + 128
-        arr = np.clip(arr, 0, 255).astype(np.uint8)
+        arr = np.clip(f * (arr - 128) + 128, 0, 255).astype(np.uint8)
         arr = self.curves["RGB"].lut()[arr]
         for i, ch in enumerate(("Red", "Green", "Blue")):
             arr[:, :, i] = self.curves[ch].lut()[arr[:, :, i]]
-        self._display = Image.fromarray(arr, "RGB")
-        self.gel.set_image(pil_to_pixmap(self._display), (self._display.width, self._display.height))
+        return Image.fromarray(arr, "RGB")
+
+    def _refresh_display(self, preview=False):
+        """색보정 결과를 캔버스에 반영한다.
+
+        preview=True(슬라이더/커브 드래그 중): 캔버스 크기에 맞춰 미리 줄인
+        축소본(_color_preview_base)에만 파이프라인을 적용해 매 프레임 전체
+        해상도 이미지를 재변환하는 렉을 없앤다. self._display(분석/저장에
+        쓰는 확정 이미지)는 건드리지 않는다.
+
+        preview=False(놓았을 때/되돌리기/파일 로드 등): 원본 해상도로 계산해
+        self._display를 확정한다."""
+        if self._orig is None:
+            return
+        if preview:
+            if getattr(self, "_color_preview_base", None) is None:
+                cs = self.gel.size()
+                self._color_preview_base, _ = downscale_for_preview(
+                    self._orig, cs.width(), cs.height())
+            out = self._apply_color_pipeline(self._color_preview_base)
+        else:
+            self._color_preview_base = None   # 확정했으니 축소 캐시 폐기
+            out = self._apply_color_pipeline(self._orig)
+            self._display = out
+        self.gel.set_image(pil_to_pixmap(out), out.size)
         self.status.showMessage(
             tr("status_image_info", w=self._orig.width, h=self._orig.height,
                bright=self.sl_bright.value(), contrast=self.sl_contrast.value()))
@@ -255,6 +321,7 @@ class GeometryMixin:
         if self._orig is None: return
         self._finalize_pending_rotation()
         self._finalize_pending_bow()
+        self._finalize_pending_shear()
         self._record_op("rotate", {"deg": deg})
         self._after_geometry_change()
 
@@ -262,6 +329,7 @@ class GeometryMixin:
         if self._orig is None: return
         self._finalize_pending_rotation()
         self._finalize_pending_bow()
+        self._finalize_pending_shear()
         self._record_op("flip", {"dir": d})
         self._after_geometry_change()
 
@@ -273,6 +341,7 @@ class GeometryMixin:
         if self._orig is None: return
         self._finalize_pending_rotation()
         self._finalize_pending_bow()
+        self._finalize_pending_shear()
         self._record_op("invert_colors", {})
         self._after_geometry_change()
         self.status.showMessage(tr("status_color_inverted"))
@@ -355,6 +424,7 @@ class GeometryMixin:
         if self._rot_base is None:
             return
         self._finalize_pending_bow()
+        self._finalize_pending_shear()
         deg = self.rot_slider.value()
         self._apply_fine_rotation(deg)
         if deg == 0:
@@ -452,6 +522,7 @@ class GeometryMixin:
         if self._curve_base is None:
             return
         self._finalize_pending_rotation()
+        self._finalize_pending_shear()
         amount = self.bow_slider.value()
         self._apply_bow_op(amount)
         if amount == 0:
@@ -479,6 +550,102 @@ class GeometryMixin:
         self.bow_spin.blockSignals(True); self.bow_spin.setValue(0); self.bow_spin.blockSignals(False)
         self._refresh_after_pixels_changed()
         self.status.showMessage(tr("status_bow_reset"))
+
+    @staticmethod
+    def _apply_shear_correction(img, amount):
+        return apply_shear_correction(img, amount)
+
+    def _on_shear_value_changed(self, v):
+        """_on_bow_value_changed와 동일한 패턴(기울기보정판). v는 세션
+        기준(_shear_base) 대비 절대 이동량(px)이며, release해도 유지된다."""
+        if self.shear_slider.value() != v:
+            self.shear_slider.blockSignals(True); self.shear_slider.setValue(v); self.shear_slider.blockSignals(False)
+        if self.shear_spin.value() != v:
+            self.shear_spin.blockSignals(True); self.shear_spin.setValue(v); self.shear_spin.blockSignals(False)
+        if self._orig is None:
+            return
+        if self._shear_base is None:
+            if v == 0:
+                return
+            self._shear_base = self._orig.copy()
+            self._shear_session_pushed = False
+            canvas_size = self.gel.size()
+            self._preview_small, self._preview_scale = downscale_for_preview(
+                self._shear_base, canvas_size.width(), canvas_size.height())
+        # amount는 원본 px 단위라 미리보기 비율(_preview_scale)로 맞춰 줄인다.
+        # v==0이면 _shear_base 자체를 보여준다(이유는 회전/곡률보정 버전과 동일
+        # — self._orig엔 이전 기울기가 baked-in일 수 있음).
+        preview = self._preview_small if v == 0 else self._apply_shear_correction(
+            self._preview_small, v * self._preview_scale)
+        self.gel.set_image(pil_to_pixmap(preview), preview.size)
+        self.status.showMessage(
+            tr("status_image_info", w=self._orig.width, h=self._orig.height,
+               bright=self.sl_bright.value(), contrast=self.sl_contrast.value()))
+
+    def _apply_shear_op(self, amount):
+        """_apply_bow_op과 동일한 절대값-교체 로직(기울기보정판)."""
+        if amount == 0:
+            if self._shear_session_pushed:
+                del self._edit_ops[self._edit_pos]
+                self._edit_pos -= 1
+                self._shear_session_pushed = False
+                self._replay_history()
+                if hasattr(self, "btn_undo"):
+                    self.btn_undo.setEnabled(self._edit_pos >= 0)
+            return
+        if self._shear_session_pushed:
+            self._edit_ops[self._edit_pos] = ("shear_correct", {"amount": amount})
+            self._replay_history()
+        else:
+            self._record_op("shear_correct", {"amount": amount})
+            self._shear_session_pushed = True
+
+    def _finalize_pending_shear(self):
+        """_finalize_pending_bow와 동일한 역할(기울기보정판)."""
+        if self._shear_base is None:
+            return
+        self._apply_shear_op(self.shear_slider.value())
+        self._shear_base = None
+        self._preview_small = None
+        self._preview_scale = 1.0
+        self._shear_session_pushed = False
+        self.shear_slider.blockSignals(True); self.shear_slider.setValue(0); self.shear_slider.blockSignals(False)
+        self.shear_spin.blockSignals(True); self.shear_spin.setValue(0); self.shear_spin.blockSignals(False)
+
+    def _commit_shear_correction(self):
+        """_commit_bow_correction과 동일한 역할(기울기보정판) — 세션을
+        끝내지 않아 슬라이더가 현재 값을 계속 보여준다."""
+        if self._shear_base is None:
+            return
+        self._finalize_pending_rotation()
+        self._finalize_pending_bow()
+        amount = self.shear_slider.value()
+        self._apply_shear_op(amount)
+        if amount == 0:
+            self._shear_base = None
+            self._preview_small = None
+            self._preview_scale = 1.0
+            self._shear_session_pushed = False
+        self._refresh_after_pixels_changed()
+        if amount == 0:
+            self.status.showMessage(tr("status_shear_reset"))
+        else:
+            self.status.showMessage(tr("status_shear_applied"))
+
+    def _reset_shear_correction(self):
+        """_reset_bow_correction과 동일한 역할(기울기보정판)."""
+        if self._shear_base is None:
+            self.shear_slider.setValue(0)
+            return
+        self._apply_shear_op(0)
+        self._shear_base = None
+        self._preview_small = None
+        self._preview_scale = 1.0
+        self._shear_session_pushed = False
+        self.shear_slider.blockSignals(True); self.shear_slider.setValue(0); self.shear_slider.blockSignals(False)
+        self.shear_spin.blockSignals(True); self.shear_spin.setValue(0); self.shear_spin.blockSignals(False)
+        self._refresh_after_pixels_changed()
+        self.status.showMessage(tr("status_shear_reset"))
 
     def _refresh_after_pixels_changed(self):
         """픽셀이 바뀌면 코너/자르기 선택을 비우고 분석용 그레이스케일·
@@ -515,6 +682,10 @@ class GeometryMixin:
             if self._orig is None:
                 return
             self._edit_pristine = self._orig.copy()
+            # 이 시점의 UV 오버라이드(합성 임포트 세션이면 존재)를 재생
+            # 시작 그레이스케일로 함께 고정한다 — 없으면 None(평소 세션).
+            self._edit_gray_pristine = (
+                self._wb_gray_override.copy() if self._wb_gray_override is not None else None)
             self._edit_ops = []
             self._edit_pos = -1
         del self._edit_ops[self._edit_pos + 1:]   # 다시하기 가지 제거
@@ -528,7 +699,11 @@ class GeometryMixin:
             # — 기록이 무한히 늘지 않으면서도 남은 연산은 항상 pristine
             # 기준으로 재생 가능하다는 불변식이 유지된다.
             oldest_op, oldest_params = self._edit_ops.pop(0)
-            self._edit_pristine, _ = apply_edit_op(self._edit_pristine, None, oldest_op, oldest_params)
+            # 가장 오래된 연산을 pristine에 합칠 때, 재생 시작 그레이스케일
+            # 오버라이드도 같은 연산으로 함께 변환해야 정렬이 유지된다
+            # (합성 임포트 세션에서만 _edit_gray_pristine이 non-None).
+            self._edit_pristine, self._edit_gray_pristine = apply_edit_op(
+                self._edit_pristine, self._edit_gray_pristine, oldest_op, oldest_params)
             self._edit_pos -= 1
             if oldest_op == "adjust":
                 # 폐기되는 adjust가 남아있던 adjust 기록 중 가장 오래된
@@ -546,9 +721,9 @@ class GeometryMixin:
         """_edit_pristine부터 _edit_ops[:_edit_pos+1]을 순서대로 다시 적용해
         self._orig(과 분석용 그레이스케일 오버라이드)을 재계산한다. 되돌리기·
         다시하기·연산 추가 후 항상 거쳐야 _orig이 최신 상태가 된다.
-        wb_composite를 만나면 그 결과가 새 '현 시점 이미지'가 되고 이후
-        연산은 그걸 기준으로 이어진다(apply_edit_op이 그 연산에서 입력
-        이미지를 무시하고 새로 만들기 때문에 자동으로 그렇게 됨).
+        합성 파일을 임포트한 세션이면 재생 시작 그레이스케일 오버라이드가
+        _edit_gray_pristine에 있어, 기하 연산이 이미지와 함께 그 오버라이드도
+        변환하며 분석용 UV 정렬을 유지한다(평소 세션에서는 None으로 시작).
 
         'adjust'(밝기/대비/톤커브) 연산은 픽셀을 안 바꾸지만, 재생 범위
         안에서 가장 마지막으로 만난 것을 기억해 슬라이더/커브 위젯에
@@ -563,7 +738,11 @@ class GeometryMixin:
         if self._edit_pristine is None:
             return
         img = self._edit_pristine
-        gray = None
+        # 재생 시작 그레이스케일 오버라이드 — 보통은 None이지만, 합성 파일을
+        # 임포트한 세션에서는 편집 시작 시점의 UV 단독 강도가 여기에 고정돼
+        # 있어(_edit_gray_pristine), 이후 기하 연산이 apply_edit_op을 통해
+        # 이 값도 함께 변환하며 정렬을 유지한다.
+        gray = self._edit_gray_pristine
         adjust_snapshot = None
         lanes_snapshot = None
         for op_name, params in self._edit_ops[: self._edit_pos + 1]:
@@ -635,6 +814,7 @@ class GeometryMixin:
             return
         self._finalize_pending_rotation()  # 진행 중인 미리보기 회전을 먼저 확정/정리
         self._finalize_pending_bow()        # 진행 중인 미리보기 곡률보정도 정리
+        self._finalize_pending_shear()
         self._edit_pos -= 1
         self._replay_history()
         # 진행 중이던 코너/크롭 선택은 의미가 사라지므로 정리
@@ -659,6 +839,7 @@ class GeometryMixin:
             return
         self._finalize_pending_rotation()
         self._finalize_pending_bow()
+        self._finalize_pending_shear()
         self._edit_pos += 1
         self._replay_history()
         self.gel.corners = []
@@ -709,9 +890,11 @@ class GeometryMixin:
         에서 그 단계가 사라질 수 있다. 진행 중인 게 없으면 finalize는
         아무것도 하지 않으므로 안전하다."""
         if on:
-            had_pending = (self._curve_base is not None) or (self._rot_base is not None)
+            had_pending = (self._curve_base is not None) or (self._rot_base is not None) \
+                          or (self._shear_base is not None)
             self._finalize_pending_rotation()
             self._finalize_pending_bow()
+            self._finalize_pending_shear()
             if had_pending:
                 self._refresh_after_pixels_changed()
             for btn, m in [(self.btn_lane, "lane"), (self.btn_corner, "corner"),
@@ -794,6 +977,7 @@ class GeometryMixin:
                        tr("corner_click_order")); return
         self._finalize_pending_rotation()
         self._finalize_pending_bow()
+        self._finalize_pending_shear()
         self._warp(np.array(self.gel.corners, dtype=np.float32))
 
     def _auto_warp(self):
@@ -803,27 +987,12 @@ class GeometryMixin:
             self._info(tr("no_image_title"), tr("no_image_msg")); return
         self._finalize_pending_rotation()
         self._finalize_pending_bow()
-        img = np.array(self._orig.convert("RGB")); h, w = img.shape[:2]
-        import cv2
-        gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-        blur = cv2.GaussianBlur(gray, (5, 5), 0)
-        _, th = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        border = np.concatenate([th[0, :], th[-1, :], th[:, 0], th[:, -1]])
-        if (border == 255).mean() > 0.5:
-            th = cv2.bitwise_not(th)
-        th = cv2.morphologyEx(th, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8), iterations=1)
-        cnts, _ = cv2.findContours(th, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        if not cnts:
+        self._finalize_pending_shear()
+        img = np.array(self._orig.convert("RGB"))
+        quad = find_gel_quad(img)
+        if quad is None:
             self._info(tr("warp_detect_fail_title"), tr("warp_detect_fail_msg") +
                        tr("corner_click_order")); self._enter_manual_corner_mode(); return
-        cnt = max(cnts, key=cv2.contourArea)
-        if cv2.contourArea(cnt) < 0.1 * w * h:
-            self._info(tr("warp_detect_fail_title"), tr("warp_detect_fail_small_msg") +
-                       tr("corner_click_order")); self._enter_manual_corner_mode(); return
-        peri = cv2.arcLength(cnt, True)
-        approx = cv2.approxPolyDP(cnt, 0.02 * peri, True)
-        quad = approx.reshape(4, 2).astype(np.float32) if len(approx) == 4 \
-            else cv2.boxPoints(cv2.minAreaRect(cnt)).astype(np.float32)
         ordered = self._order_corners(quad)
         self.gel.corners = [tuple(map(float, p)) for p in ordered]
         self.gel.update(); self.corner_label.setText(tr("corner_count_auto"))

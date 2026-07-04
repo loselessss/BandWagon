@@ -15,7 +15,7 @@
 ; 버전을 올릴 때는 아래 MyAppVersion과 bandwagon/meta.py의 APP_VERSION을
 ; 같이 맞춰 주세요(서로 자동 동기화되지 않음).
 #define MyAppName "BandWagon"
-#define MyAppVersion "1.1.1"
+#define MyAppVersion "1.3"
 #define MyAppPublisher "BandWagon"
 #define MyAppExeName "BandWagon.exe"
 
