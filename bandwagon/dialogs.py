@@ -19,7 +19,10 @@ from PyQt5.QtGui import (
 )
 from .theme import *
 from .i18n import tr
-from .presets import load_marker_presets, save_marker_presets
+from .presets import (
+    load_marker_presets, save_marker_presets,
+    export_marker_presets_csv, import_marker_presets_csv,
+)
 
 
 def _dialog_style():
@@ -191,6 +194,12 @@ class MarkerPresetManager(QDialog):
         row.addWidget(add); row.addWidget(rm)
         lay.addLayout(row)
 
+        io_row = QHBoxLayout()
+        exp = QPushButton(tr("preset_export_btn")); exp.clicked.connect(self._export)
+        imp = QPushButton(tr("preset_import_btn")); imp.clicked.connect(self._import)
+        io_row.addWidget(exp); io_row.addWidget(imp)
+        lay.addLayout(io_row)
+
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         bb.accepted.connect(self.accept); bb.rejected.connect(self.reject)
         lay.addWidget(bb)
@@ -226,5 +235,36 @@ class MarkerPresetManager(QDialog):
             if 0 <= r < len(self.presets):
                 del self.presets[r]
         self._reload()
+
+    def _export(self):
+        path, _ = QFileDialog.getSaveFileName(
+            self, tr("preset_export_dialog_title"), "bandwagon_markers.csv", tr("preset_csv_filter"))
+        if not path:
+            return
+        try:
+            export_marker_presets_csv(path, self.presets)
+        except Exception as e:
+            QMessageBox.warning(self, tr("input_error_title"), tr("preset_export_error", err=str(e)))
+            return
+        QMessageBox.information(self, tr("preset_export_dialog_title"),
+                                 tr("preset_export_success", n=len(self.presets)))
+
+    def _import(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, tr("preset_import_dialog_title"), "", tr("preset_csv_filter"))
+        if not path:
+            return
+        try:
+            imported = import_marker_presets_csv(path)
+        except Exception as e:
+            QMessageBox.warning(self, tr("input_error_title"), tr("preset_import_error", err=str(e)))
+            return
+        if not imported:
+            QMessageBox.warning(self, tr("input_error_title"), tr("preset_import_empty"))
+            return
+        self.presets.extend(imported)
+        self._reload()
+        QMessageBox.information(self, tr("preset_import_dialog_title"),
+                                 tr("preset_import_success", n=len(imported)))
 
 

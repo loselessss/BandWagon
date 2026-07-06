@@ -4,7 +4,7 @@
 
 (BandWagon v1.1을 모듈로 분할한 것 — 동작은 원본과 동일.)
 """
-import os, json
+import os, json, csv
 from pathlib import Path
 from . import i18n
 
@@ -38,5 +38,38 @@ def save_marker_presets(presets):
         _MARKER_PRESET_PATH.write_text(json.dumps(presets, ensure_ascii=False, indent=2), encoding="utf-8")
     except Exception:
         pass  # 저장 실패해도(권한 등) 앱 동작에는 영향 없음
+
+
+def export_marker_presets_csv(path, presets):
+    """프리셋 하나당 한 줄(이름, MW...)로 CSV에 쓴다. 밴드 개수가 프리셋마다
+    달라도 되므로 헤더 없이 가변 길이 행으로 저장한다. utf-8-sig(BOM)를 쓰는
+    이유는 한글 이름이 든 CSV를 엑셀에서 열었을 때 깨지지 않게 하기 위함."""
+    with open(path, "w", newline="", encoding="utf-8-sig") as f:
+        writer = csv.writer(f)
+        for p in presets:
+            writer.writerow([p["name"]] + [f"{v:g}" for v in p["mw"]])
+
+
+def import_marker_presets_csv(path):
+    """export_marker_presets_csv가 쓴 형식(이름, MW...)을 읽는다. 숫자가 아닌
+    칸은 조용히 건너뛴다 — 사람이 엑셀에서 손으로 수정하다 생기는 실수를
+    파일 전체 실패로 만들지 않기 위해."""
+    presets = []
+    with open(path, "r", newline="", encoding="utf-8-sig") as f:
+        for row in csv.reader(f):
+            if not row or not row[0].strip():
+                continue
+            mw = []
+            for cell in row[1:]:
+                cell = cell.strip()
+                if not cell:
+                    continue
+                try:
+                    mw.append(float(cell))
+                except ValueError:
+                    pass
+            if mw:
+                presets.append({"name": row[0].strip(), "mw": mw})
+    return presets
 
 
