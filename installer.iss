@@ -15,9 +15,10 @@
 ; 버전을 올릴 때는 아래 MyAppVersion과 bandwagon/meta.py의 APP_VERSION을
 ; 같이 맞춰 주세요(서로 자동 동기화되지 않음).
 #define MyAppName "BandWagon"
-#define MyAppVersion "1.3"
+#define MyAppVersion "1.3.1"
 #define MyAppPublisher "BandWagon"
 #define MyAppExeName "BandWagon.exe"
+#define MyAppIcon "bandwagon.ico"
 
 [Setup]
 AppId={{B4A1D7E0-3F6C-4B8A-9C2D-A1B2C3D4E5F6}
@@ -31,6 +32,7 @@ DisableProgramGroupPage=yes
 SourceDir=.
 OutputDir=Output
 OutputBaseFilename=BandWagon_Setup_{#MyAppVersion}
+SetupIconFile={#MyAppIcon}
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern

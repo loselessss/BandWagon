@@ -11,8 +11,8 @@ HAS_CV2 = importlib.util.find_spec("cv2") is not None
 
 # ── 릴리스 메타데이터 ────────────────────────────────────────────────
 APP_NAME     = "BandWagon"
-APP_VERSION  = "1.3"
-RELEASE_DATE = "2026-07-03"
+APP_VERSION  = "1.3.1"
+RELEASE_DATE = "2026-07-06"
 GELPROJ_FORMAT_VERSION = 1   # .bandwagon 내부 JSON 스키마 버전 (구조 바꾸면 올릴 것)
 
 def _source_audit():

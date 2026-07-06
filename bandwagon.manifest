@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+  Per-Monitor-V2 DPI 인식을 exe 자체에 선언한다. 이게 없으면 Windows는
+  프로세스를 "DPI 미인식"으로 보고 부팅 스플래시(Python/Qt가 뜨기 전에
+  나오는 화면)를 모니터 배율만큼 임의로 확대해서 보여주다가, Qt가
+  AA_EnableHighDpiScaling으로 자체 DPI 인식을 켜는 순간 그 자동 확대가
+  꺼지면서 스플래시 크기가 눈에 띄게 툭 바뀌는 문제가 생긴다(v1.3.1에서
+  고침). 처음부터 인식 상태를 고정해두면 이 전환 자체가 없어진다.
+-->
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+      <supportedOS Id="{e2011457-1546-43c5-a5fe-008deee3d3f0}"/> <!-- Vista -->
+      <supportedOS Id="{35138b9a-5d96-4fbd-8e2d-a2440225f93a}"/> <!-- 7 -->
+      <supportedOS Id="{4a2f28e3-53b9-4441-ba9c-d69d4a4a6e38}"/> <!-- 8 -->
+      <supportedOS Id="{1f676c76-80e1-4239-95bb-83d0f6d0da78}"/> <!-- 8.1 -->
+      <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}"/> <!-- 10/11 -->
+    </application>
+  </compatibility>
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2</dpiAwareness>
+      <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true/pm</dpiAware>
+    </windowsSettings>
+  </application>
+</assembly>
