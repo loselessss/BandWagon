@@ -15,6 +15,14 @@ APP_VERSION  = "1.3.1"
 RELEASE_DATE = "2026-07-06"
 GELPROJ_FORMAT_VERSION = 1   # .bandwagon 내부 JSON 스키마 버전 (구조 바꾸면 올릴 것)
 
+def resource_path(name):
+    """빌드/개발 양쪽에서 저장소 루트에 있는 리소스 파일(예: bandwagon.ico)을
+    찾는다. 프로즌(exe) 상태면 PyInstaller가 풀어둔 임시 폴더(_MEIPASS)를,
+    개발 중이면 이 파일(bandwagon/meta.py)의 부모의 부모, 즉 저장소 루트를
+    기준으로 삼는다."""
+    base = getattr(sys, "_MEIPASS", None) or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base, name)
+
 def _source_audit():
     """실행 중인 산출물의 SHA-256 지문을 반환한다(앞자리만 표시용).
     배포본을 받은 사람이 '정보' 창의 값과 원본 해시를 대조해, 코드/실행파일이

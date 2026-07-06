@@ -14,8 +14,9 @@ from PyQt5.QtWidgets import (
     QScrollArea, QCheckBox,
 )
 from PyQt5.QtCore import Qt, QPoint, QPointF, QRectF, QRect, QSize, pyqtSignal, QTimer, QStandardPaths
+from PyQt5.QtGui import QIcon
 
-from .meta import APP_NAME
+from .meta import APP_NAME, resource_path
 from .app import Analyzer
 
 
@@ -58,6 +59,11 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
     app.setStyle("Fusion")
+    # 작업표시줄/타이틀바 아이콘: exe 자체에 --icon으로 심은 것과는 별개로,
+    # Qt 창은 자기 아이콘을 직접 지정해야 한다(안 하면 Qt 기본 아이콘이 뜬다).
+    icon_path = resource_path("bandwagon.ico")
+    if os.path.exists(icon_path):
+        app.setWindowIcon(QIcon(icon_path))
 
     # ── 부팅 스플래시 ──────────────────────────────────────────────
     # 개발 중(.py로 직접 실행)에는 스플래시를 띄우지 않는다. 스플래시는
