@@ -21,7 +21,7 @@ from PyQt5.QtCore import Qt, QTimer, QStandardPaths
 from . import i18n
 from .i18n import tr
 from .theme import *
-from .meta import (APP_NAME, APP_VERSION, RELEASE_DATE, HAS_CV2, _source_audit)
+from .meta import (APP_NAME, APP_VERSION, RELEASE_DATE, HAS_CV2)
 from .models import CurveModel
 from .widgets import GelView, ProfileView
 from .dialogs import _dialog_style
@@ -350,7 +350,6 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, QMainWindow):
                    f"{APP_NAME}\n"
                    f"{tr('about_version', version=APP_VERSION, date=RELEASE_DATE)}\n\n"
                    f"{tr('about_author')}\n\n"
-                   f"Audit (SHA-256): {_source_audit()[:12]}\n\n"
                    f"{tr('about_license_notice')}")
 
     def _show_help(self):
