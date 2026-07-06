@@ -321,18 +321,27 @@ class LanesMixin:
         나눈다. 폭을 균등하게 n_target등분한 뒤, 각 등분선 근처(±40%)에서
         신호가 가장 약한 지점(골)으로 경계를 살짝 옮긴다.
 
+        '균등 너비'를 기본 전제로 두고, 골 스냅은 그 전제를 깨지 않는
+        범위에서만 허용한다 — 안 그러면 이웃한 두 경계가 각자 독립적으로
+        가장 가까운 골을 찾다가 우연히 서로 붙어버려, 폭이 몇 px밖에
+        안 되는 레인이 끼어드는 문제가 생긴다(실제 젤 사진으로 확인함).
+        직전 경계와 최소 seg_w의 절반만큼은 떨어지도록 강제하고, 그 조건을
+        만족하는 골이 없으면 등분선 위치를 그대로 쓴다.
+
         완벽한 자동 분리보다 '항상 정확히 N개가 나오는 안정성'을 우선한다
         — 경계는 레인 모드에서 바로 드래그해 다듬을 수 있다."""
         if sm.max() <= 0 or n_target <= 0:
             return None
         seg_w = W / n_target
         snap_r = max(1, int(seg_w * 0.4))
+        min_gap = max(1, int(seg_w * 0.5))
         bounds = [0]
         for i in range(1, n_target):
             center = int(round(i * seg_w))
             lo = max(0, center - snap_r); hi = min(W, center + snap_r)
+            lo = max(lo, bounds[-1] + min_gap)
             if hi <= lo:
-                bounds.append(center)
+                bounds.append(max(center, bounds[-1] + 1))
                 continue
             local = sm[lo:hi]
             valley = lo + int(np.argmin(local))
