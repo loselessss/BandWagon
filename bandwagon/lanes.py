@@ -318,34 +318,34 @@ class LanesMixin:
     @staticmethod
     def _split_lanes_by_count(sm, n_target, W):
         """평활화된 세로-평균 강도 프로파일 sm을 정확히 n_target개 구간으로
-        나눈다. 폭을 균등하게 n_target등분한 뒤, 각 등분선 근처(±40%)에서
-        신호가 가장 약한 지점(골)으로 경계를 살짝 옮긴다.
+        나눈다. 폭을 균등하게 n_target등분하는 것을 기본으로 삼고, 등분선
+        바로 근처(±15%)에 등분선 지점 자체보다 뚜렷이 약한 골(신호가
+        need_ratio 이하)이 있을 때만 그 골로 살짝 옮긴다.
 
-        '균등 너비'를 기본 전제로 두고, 골 스냅은 그 전제를 깨지 않는
-        범위에서만 허용한다 — 안 그러면 이웃한 두 경계가 각자 독립적으로
-        가장 가까운 골을 찾다가 우연히 서로 붙어버려, 폭이 몇 px밖에
-        안 되는 레인이 끼어드는 문제가 생긴다(실제 젤 사진으로 확인함).
-        직전 경계와 최소 seg_w의 절반만큼은 떨어지도록 강제하고, 그 조건을
-        만족하는 골이 없으면 등분선 위치를 그대로 쓴다.
+        예전에는 ±40% 범위에서 무조건 가장 약한 지점으로 스냅했는데, 그
+        범위가 넓다 보니 사실상 항상 뭔가에는 끌려가버려 레인 폭이
+        지그재그로 들쭉날쭉해지는 문제가 있었다(실제 젤 사진으로 확인함).
+        "뚜렷한 근거가 있을 때만 소폭 보정, 없으면 등분선 그대로"로 바꿔
+        균등함을 기본값으로 두었다.
 
         완벽한 자동 분리보다 '항상 정확히 N개가 나오는 안정성'을 우선한다
         — 경계는 레인 모드에서 바로 드래그해 다듬을 수 있다."""
         if sm.max() <= 0 or n_target <= 0:
             return None
         seg_w = W / n_target
-        snap_r = max(1, int(seg_w * 0.4))
-        min_gap = max(1, int(seg_w * 0.5))
+        snap_r = max(1, int(seg_w * 0.15))
+        need_ratio = 0.75   # 골이 등분선 지점 신호의 75% 이하로 뚜렷이 약할 때만 스냅
         bounds = [0]
         for i in range(1, n_target):
-            center = int(round(i * seg_w))
+            center = min(max(int(round(i * seg_w)), 0), W - 1)
             lo = max(0, center - snap_r); hi = min(W, center + snap_r)
-            lo = max(lo, bounds[-1] + min_gap)
+            lo = max(lo, bounds[-1] + 1)
             if hi <= lo:
-                bounds.append(max(center, bounds[-1] + 1))
+                bounds.append(center)
                 continue
             local = sm[lo:hi]
             valley = lo + int(np.argmin(local))
-            bounds.append(valley)
+            bounds.append(valley if sm[valley] <= need_ratio * sm[center] else center)
         bounds.append(W)
         # 경계가 역전되거나 겹치지 않도록 단조 증가 보정
         for i in range(1, len(bounds)):
