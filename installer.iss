@@ -15,7 +15,7 @@
 ; 버전을 올릴 때는 아래 MyAppVersion과 bandwagon/meta.py의 APP_VERSION을
 ; 같이 맞춰 주세요(서로 자동 동기화되지 않음).
 #define MyAppName "BandWagon"
-#define MyAppVersion "1.4.1"
+#define MyAppVersion "1.4.2"
 #define MyAppPublisher "BandWagon"
 #define MyAppExeName "BandWagon.exe"
 #define MyAppIcon "bandwagon.ico"
@@ -69,3 +69,25 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+// 설치 마법사에서 고른 언어를 앱 첫 실행 언어로 넘겨준다. 안 하면 앱은
+// bandwagon/i18n.py의 load_lang_setting()이 OS 로캘로 알아서 추측하는데,
+// 그러면 설치 때 고른 언어가 앱 언어에 전혀 반영되지 않아 두 선택이
+// 서로 무관해 보이는 문제가 있었다. 이미 저장된 설정(앱에서 직접 언어를
+// 바꾼 적 있는 재설치/업데이트)이 있으면 덮어쓰지 않는다.
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  LangFile, LangCode: string;
+begin
+  if CurStep = ssPostInstall then
+  begin
+    if ActiveLanguage = 'korean' then
+      LangCode := 'ko'
+    else
+      LangCode := 'en';
+    LangFile := ExpandConstant('{%USERPROFILE}\.bandwagon_lang.json');
+    if not FileExists(LangFile) then
+      SaveStringToFile(LangFile, '{"lang": "' + LangCode + '"}', False);
+  end;
+end;

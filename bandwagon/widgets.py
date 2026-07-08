@@ -149,7 +149,7 @@ class CurveWidget(QWidget):
                 x = l + int(i / 255.0 * w)
                 y = bottom - int((float(hist[i]) / mx) * h * 0.9)
                 pts.append(QPoint(x, y))
-            qp.setPen(QPen(QColor(120, 140, 155, 90), 1))
+            qp.setPen(QPen(QColor(120, 140, 155, 90), 1, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
             qp.drawPolyline(*pts)
 
         qp.setPen(QPen(QColor(GRIDC), 1))

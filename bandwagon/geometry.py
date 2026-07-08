@@ -815,14 +815,24 @@ class GeometryMixin:
         self._finalize_pending_rotation()  # 진행 중인 미리보기 회전을 먼저 확정/정리
         self._finalize_pending_bow()        # 진행 중인 미리보기 곡률보정도 정리
         self._finalize_pending_shear()
+        undone_op, undone_params = self._edit_ops[self._edit_pos]
         self._edit_pos -= 1
         self._replay_history()
-        # 진행 중이던 코너/크롭 선택은 의미가 사라지므로 정리
-        self.gel.corners = []
         self.gel.crop_rect = None
         self.gel._crop_a = self.gel._crop_b = None
-        if hasattr(self, "corner_label"):
-            self.corner_label.setText(tr("corner_count", n=0))
+        if undone_op == "warp":
+            # '펴기 실행'을 되돌린 거라면 백지로 보내지 않고 그때 쓴 코너
+            # 지정 상태로 복귀시킨다 — 코너만 살짝 다듬어 바로 다시 펴기를
+            # 실행할 수 있어야지, 처음부터 다시 코너를 찍게 하면 안 된다.
+            self.gel.corners = [tuple(p) for p in undone_params["corners"]]
+            if hasattr(self, "corner_label"):
+                self.corner_label.setText(tr("corner_count", n=len(self.gel.corners)))
+            if hasattr(self, "btn_corner"):
+                self._enter_manual_corner_mode()
+        else:
+            self.gel.corners = []
+            if hasattr(self, "corner_label"):
+                self.corner_label.setText(tr("corner_count", n=0))
         self._after_geometry_change()
         if hasattr(self, "btn_undo"):
             self.btn_undo.setEnabled(self._edit_pos >= 0)
