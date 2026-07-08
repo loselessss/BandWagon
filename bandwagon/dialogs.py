@@ -25,9 +25,48 @@ from .presets import (
 )
 
 
+_ICON_CACHE = {}   # (direction, hex_color, size) -> 저장된 PNG의 절대경로
+
+
+def _triangle_icon_path(direction, hex_color, size=10):
+    """작은 삼각형 화살표를 즉석에서 그려 임시 PNG로 저장하고 그 경로를
+    돌려준다. QSS의 '0크기 위젯 + 테두리로 삼각형 만들기' 트릭이 이
+    환경에서 스핀박스/콤보박스 둘 다 뭉개진 모양으로 깨져 보이는 게
+    실사용 중 확인됐다. data: URI로 바로 넣는 것도 시도했지만 Qt
+    스타일시트의 url()이 data: 스킴을 지원하지 않아(실제 파일 경로만
+    인식) 조용히 무시됐다 — 그래서 실제 파일로 저장해 경로로 참조한다.
+    같은 조합은 프로세스당 한 번만 그려서 캐싱한다."""
+    key = (direction, hex_color, size)
+    if key in _ICON_CACHE:
+        return _ICON_CACHE[key]
+    import tempfile, os
+    from PIL import Image, ImageDraw
+    # 작은 크기에서 폴리곤을 바로 그리면 PIL이 안티에일리어싱 없이 그려
+    # 가장자리가 거칠어 보인다(특히 위쪽 화살표에서 눈에 띔). 4배 크기로
+    # 그린 뒤 LANCZOS로 축소해 매끈하게 만든다(슈퍼샘플링).
+    scale = 4
+    big = size * scale
+    img = Image.new("RGBA", (big, big), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    color = QColor(hex_color)
+    rgba = (color.red(), color.green(), color.blue(), 255)
+    cx = big / 2.0
+    if direction == "up":
+        d.polygon([(cx - 3.5 * scale, big * 0.62), (cx + 3.5 * scale, big * 0.62), (cx, big * 0.30)], fill=rgba)
+    else:
+        d.polygon([(cx - 3.5 * scale, big * 0.38), (cx + 3.5 * scale, big * 0.38), (cx, big * 0.70)], fill=rgba)
+    img = img.resize((size, size), Image.LANCZOS)
+    fd, path = tempfile.mkstemp(prefix=f"bandwagon_arrow_{direction}_", suffix=".png")
+    os.close(fd)
+    img.save(path, format="PNG")
+    path = path.replace("\\", "/")   # QSS url()은 슬래시만 안전하게 인식
+    _ICON_CACHE[key] = path
+    return path
+
+
 def _dialog_style():
-    # 화살표 버튼을 명시적으로 그리는 이유는 _spin_css()와 동일 — 다크 배경
-    # 위에서 Qt 기본 화살표 그림이 거의 안 보이는 문제를 막기 위함.
+    up_icon = _triangle_icon_path("up", INKT)
+    down_icon = _triangle_icon_path("down", INKT)
     return (f"QDialog{{background:{INK2};}}"
             f"QLabel{{color:{INKT};}}"
             f"QDoubleSpinBox,QSpinBox{{background:{INK3};color:{INKT};"
@@ -41,22 +80,13 @@ def _dialog_style():
             f"subcontrol-position:bottom right;width:16px;background:{INK4};"
             f"border-left:1px solid {LINE};border-bottom-right-radius:4px;}}"
             f"QDoubleSpinBox::down-button:hover,QSpinBox::down-button:hover{{background:{LINE};}}"
-            f"QDoubleSpinBox::up-arrow,QSpinBox::up-arrow{{width:0;height:0;"
-            f"border-left:4px solid transparent;border-right:4px solid transparent;"
-            f"border-bottom:5px solid {INKT};}}"
-            f"QDoubleSpinBox::down-arrow,QSpinBox::down-arrow{{width:0;height:0;"
-            f"border-left:4px solid transparent;border-right:4px solid transparent;"
-            f"border-top:5px solid {INKT};}}"
-            # QComboBox도 같은 이유(다크 배경에서 Qt 기본 화살표가 깨져 보임)로
-            # 드롭다운 화살표를 직접 그린다 — 안 그러면 네이티브 아이콘이
-            # 배경/테두리 스타일과 안 맞게 찌그러져 보인다.
+            f"QDoubleSpinBox::up-arrow,QSpinBox::up-arrow{{image:url({up_icon});width:10px;height:10px;}}"
+            f"QDoubleSpinBox::down-arrow,QSpinBox::down-arrow{{image:url({down_icon});width:10px;height:10px;}}"
             f"QComboBox::drop-down{{subcontrol-origin:border;subcontrol-position:top right;"
             f"width:20px;border-left:1px solid {LINE};background:{INK4};"
             f"border-top-right-radius:4px;border-bottom-right-radius:4px;}}"
             f"QComboBox::drop-down:hover{{background:{LINE};}}"
-            f"QComboBox::down-arrow{{width:0;height:0;"
-            f"border-left:4px solid transparent;border-right:4px solid transparent;"
-            f"border-top:5px solid {INKT};}}"
+            f"QComboBox::down-arrow{{image:url({down_icon});width:10px;height:10px;}}"
             f"QPushButton{{background:{INK3};color:{INKT};border:1px solid {LINE};"
             f"border-radius:5px;padding:5px 14px;}}"
             f"QPushButton:hover{{background:{INK4};}}")
@@ -118,6 +148,18 @@ class MarkerDialog(QDialog):
         bb.accepted.connect(self.accept); bb.rejected.connect(self.reject)
         lay.addWidget(bb)
 
+    def _set_band_row_visible(self, sb, visible):
+        """"Band i:" 스핀박스 행(라벨+필드)을 통째로 보이거나 숨긴다.
+        불일치(매칭) 모드에서는 같은 값을 스핀박스와 매칭 드롭다운
+        두 군데에 겹쳐 보여줘서 뭘 봐야 할지 헷갈린다는 피드백이 있어,
+        그 모드에서는 스핀박스를 숨기고 매칭 드롭다운 하나만 보여준다.
+        (스핀박스 자체는 값 저장용으로 계속 쓰이므로 지우지는 않는다 —
+        values()가 여전히 self.spins에서 읽는다.)"""
+        sb.setVisible(visible)
+        label = self.form.labelForField(sb)
+        if label is not None:
+            label.setVisible(visible)
+
     def _on_preset_changed(self, idx):
         # 기존에 수동매칭용으로 추가했던 행(라벨+콤보)을 먼저 깨끗이 제거
         for combo in self.match_combos:
@@ -130,6 +172,7 @@ class MarkerDialog(QDialog):
             self.hint.setText(tr("marker_hint_default", n=self.n))
             for sb in self.spins:
                 sb.setEnabled(True)
+                self._set_band_row_visible(sb, True)
             return
 
         preset = self.presets[idx - 1]
@@ -138,13 +181,17 @@ class MarkerDialog(QDialog):
             # 밴드 개수가 일치 → 위에서 아래로 그대로 자동 채움
             for sb, v in zip(self.spins, mw):
                 sb.setValue(v); sb.setEnabled(True)
+                self._set_band_row_visible(sb, True)
             self.hint.setText(tr("marker_hint_matched", name=preset['name'], n=self.n))
         else:
-            # 개수 불일치 → 수동 매칭 모드: 검출된 밴드마다 프리셋 값을 고르게 함
+            # 개수 불일치 → 수동 매칭 모드: 검출된 밴드마다 프리셋 값을 고르게 함.
+            # 스핀박스는 숨기고(값은 내부적으로만 유지) 매칭 드롭다운 하나만 보여줘
+            # "같은 숫자를 두 군데서 봐야 하나" 하는 혼란을 없앤다.
             self.hint.setText(tr("marker_hint_mismatch", name=preset['name'], preset_n=len(mw), n=self.n))
             options = ["—"] + [f"{v:g} kDa" for v in mw]
             for i, sb in enumerate(self.spins):
                 sb.setEnabled(False)
+                self._set_band_row_visible(sb, False)
                 combo = QComboBox()
                 combo.addItems(options)
                 # 검출 순서와 프리셋 순서가 같다고 가정하고 1차 추정값을 미리 선택

@@ -136,6 +136,15 @@ class CompositeStudio(QDialog):
         info.setStyleSheet(f"color:{MUTE};font-size:11px;"); info.setWordWrap(True)
         root.addWidget(info)
 
+        # 0) 이미 만들어둔 .bwcomposite가 있으면 처음부터 다시 만들 필요 없이
+        # 바로 열기 — export 직후 흐름(last_export_path + accept)과 똑같이
+        # 처리해서 메인 창(fileio.open_composite_studio)이 그대로 이어받는다.
+        btn_load_existing = QPushButton(tr("toolbar_composite_import"))
+        btn_load_existing.setToolTip(tr("toolbar_composite_import_tip"))
+        btn_load_existing.clicked.connect(self._load_existing)
+        btn_load_existing.setStyleSheet(self._btn_css())
+        root.addWidget(btn_load_existing)
+
         # 1) 두 장 불러오기
         load_box = QGroupBox(tr("wb_group_load")); load_box.setStyleSheet(self._group_css())
         load_row = QHBoxLayout(load_box); load_row.setSpacing(10)
@@ -364,6 +373,27 @@ class CompositeStudio(QDialog):
         self.last_export_path = path
         # 내보내기가 곧 이 창의 목적이므로, 성공하면 창을 accept로 닫아
         # 호출부가 '방금 저장한 걸 바로 분석으로 열까요?'를 물을 수 있게 한다.
+        self.accept()
+
+    def _load_existing(self):
+        """이미 내보내둔 .bwcomposite를 골라 곧바로 분석으로 넘긴다.
+        .bwcomposite는 최종 블렌드/그레이스케일만 담고 원본 가시광·UV
+        사진은 안 남기므로(설계상 의도적으로 안 그렇게 함 — 클래스
+        docstring 참고), 이 창 안에서 다시 정렬 편집을 이어갈 방법은
+        없다 — 그래서 _export()와 똑같이 last_export_path만 채우고
+        accept()해서, 호출부(open_composite_studio)의 '지금 분석할까요?'
+        흐름을 그대로 재사용한다."""
+        path, _ = QFileDialog.getOpenFileName(
+            self, tr("toolbar_composite_import"), self._last_dir,
+            tr("composite_file_filter"))
+        if not path:
+            return
+        try:
+            load_composite(path)   # 형식 검증만 — 실제 사용은 호출부의 import_composite가 함
+        except Exception as ex:
+            QMessageBox.warning(self, tr("composite_import_failed_title"), str(ex)); return
+        self._last_dir = str(Path(path).parent)
+        self.last_export_path = path
         self.accept()
 
     # ── 스타일 헬퍼 (메인 윈도우 StyleMixin에 의존하지 않도록 자체 보유) ──

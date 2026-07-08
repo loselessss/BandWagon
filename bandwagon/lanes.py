@@ -10,7 +10,7 @@ _replay_history)에 함께 기록된다 — _commit_lanes()가 "lanes" 연산을
 복원을 책임진다(자세한 내용은 geometry.py의 _GEOMETRY_OPS 주석 참고)."""
 import numpy as np
 from PyQt5.QtWidgets import (
-    QCheckBox, QComboBox, QFormLayout, QGroupBox, QHBoxLayout, QHeaderView,
+    QComboBox, QFormLayout, QGroupBox, QHBoxLayout, QHeaderView,
     QInputDialog, QLabel, QPushButton, QSlider, QSpinBox, QTableWidget,
     QTableWidgetItem, QVBoxLayout, QWidget,
 )
@@ -32,12 +32,10 @@ class LanesMixin:
         h = QVBoxLayout(box)
 
         nrow = QHBoxLayout(); nrow.setSpacing(6)
-        self.chk_lane_n = QCheckBox(tr("chk_lane_count"))
-        self.chk_lane_n.setStyleSheet(f"color:{INKT};" + self._checkbox_css())
-        self.chk_lane_n.toggled.connect(lambda on: self.sp_lane_n.setEnabled(on))
-        nrow.addWidget(self.chk_lane_n)
+        nlabel = QLabel(tr("chk_lane_count")); nlabel.setStyleSheet(f"color:{INKT};")
+        nrow.addWidget(nlabel)
         self.sp_lane_n = QSpinBox(); self.sp_lane_n.setRange(2, 60); self.sp_lane_n.setValue(15)
-        self.sp_lane_n.setEnabled(False); self.sp_lane_n.setStyleSheet(self._spin_css())
+        self.sp_lane_n.setStyleSheet(self._spin_css())
         nrow.addWidget(self.sp_lane_n)
         h.addLayout(nrow)
         nhint = QLabel(tr("lane_count_hint"))
@@ -215,16 +213,44 @@ class LanesMixin:
 
     def _apply_lanes_snapshot(self, snapshot):
         """되돌리기/다시하기로 적용 위치가 바뀐 뒤, 그 시점의 레인 구성을
-        복원한다. 분석 결과는 함께 복원하지 않고 비운다(다시 분석을
-        돌려야 함) — snapshot이 None이면(그 지점까지 'lanes' 기록이 없으면)
-        self._lanes_pristine으로 되돌린다."""
+        복원한다. Lane.to_dict()/from_dict()는 분석 결과(peaks 등)를 담지
+        않으므로(프로젝트 저장용 설계 — 위 docstring 참고), 경계(x1,x2)가
+        기존 레인과 그대로인 것만 분석 결과를 이어받는다. 경계가 바뀐
+        레인은 그 결과가 더는 유효하지 않으므로 비워서(다시 분석 필요)
+        기존 동작을 유지한다.
+
+        이 구분이 필요한 이유: _commit_lanes()는 레인 '경계'가 안 바뀐
+        커밋(예: 마커 종류/MW만 바꾸는 _edit_marker)에서도 호출되는데,
+        그때마다 _record_op가 곧바로 _replay_history를 돌려 여기로
+        들어온다. 예전엔 무조건 분석 결과를 비워서, 마커 MW를 지정해
+        방금 계산한 결과가 커밋 직후 바로 사라지는 문제가 있었다(실사용
+        중 확인: peaks가 None이 되고 레인 객체 자체가 새로 바뀜)."""
         if not hasattr(self, "lane_table"):
             return   # UI가 아직 만들어지기 전(이론상 도달 안 함) 방어
         dicts = snapshot["lanes"] if snapshot is not None else self._lanes_pristine
-        self.lanes = [Lane.from_dict(d) for d in dicts]
+        old_by_geom = {(l.x1, l.x2): l for l in self.lanes}
+        new_lanes = []
+        for d in dicts:
+            lane = Lane.from_dict(d)
+            old = old_by_geom.get((lane.x1, lane.x2))
+            if old is not None:
+                lane.profile = old.profile
+                lane.peaks = old.peaks
+                lane.peak_area = old.peak_area
+                lane.peak_volume = old.peak_volume
+                lane.peak_prom = old.peak_prom
+                lane.peak_bounds = old.peak_bounds
+                lane.n_smear = old.n_smear
+                lane.mw = old.mw
+            new_lanes.append(lane)
+        self.lanes = new_lanes
         self.gel.set_lanes(self.lanes)
-        self.profile.set_lanes([])
-        self.result_table.setRowCount(0)
+        # profile/결과표도 위와 같은 이유로 무조건 비우지 않는다 — ProfileView.set_lanes는
+        # profile이 None인 레인을 알아서 걸러내고, _refresh_results()도 peaks가 None인
+        # 레인은 건너뛰므로, 경계가 안 바뀐 레인의 보존된 결과는 그대로 다시 보여주고
+        # 진짜 무효화된(경계가 바뀐) 레인은 자연히 빈 채로 나온다.
+        self.profile.set_lanes(self.lanes)
+        self._refresh_results()
         self._rebuild_lane_table()
 
     def _toggle_lane_mode(self, on):
@@ -260,9 +286,16 @@ class LanesMixin:
 
     def _auto_lanes(self):
         """세로 방향 강도 프로파일에서 레인(밴드가 모인 열)을 자동 검출.
-        예상 레인 개수를 지정하면 폭을 그 개수로 균등 분할한 뒤 경계를 신호가
-        약한 지점(골)으로 살짝 보정한다 — 항상 정확히 N개가 나오는 게 목표이며,
-        세밀한 경계는 레인 모드에서 드래그로 다듬는 걸 전제로 한다."""
+        레인 개수를 폭으로 균등 분할한 뒤 경계를 신호가 약한 지점(골)으로
+        살짝 보정한다 — 항상 정확히 N개가 나오는 게 목표이며, 세밀한 경계는
+        레인 모드에서 드래그로 다듬는 걸 전제로 한다.
+
+        예전엔 개수를 안 정하고도 돌릴 수 있었는데(전역/지역 임계값으로
+        레인을 스스로 찾는 방식), 실제 젤 사진에서는 신호가 약한 레인이
+        배경으로 오인돼 절반도 못 잡는 경우가 흔해 사실상 못 쓸 수준이었다
+        (실제 이미지로 확인: 15개 중 4~6개만 검출). 레인 개수는 촬영한
+        사람이 이미 알고 있는 값이라 입력을 아예 필수로 바꿔 그 불안정한
+        경로 자체를 없앴다."""
         if self._gray_orig is None:
             self._info(tr("no_image_title"), tr("no_image_msg")); return
         g = self._gray_orig.astype(float)
@@ -274,36 +307,11 @@ class LanesMixin:
         k = max(3, W // 300)
         sm = np.convolve(col, np.ones(k) / k, mode="same")
 
-        n_target = self.sp_lane_n.value() if self.chk_lane_n.isChecked() else None
-
-        if n_target is not None:
-            spans = self._split_lanes_by_count(sm, n_target, W)
-            if spans is None:
-                self._info(tr("detect_fail_title"), tr("detect_fail_count_msg", n=n_target))
-                return
-        else:
-            # 개수 모를 때: 지역(이미지 폭의 1/8 단위) 적응 임계값.
-            # 전역 평균을 쓰면 강한 레인 1~2개가 평균을 끌어올려 약한 레인이
-            # 통째로 배경 취급되는 문제가 있어, 구간별로 임계값을 따로 잡는다.
-            seg = max(W // 8, 40)
-            local_max = np.zeros_like(sm)
-            for s0 in range(0, W, seg):
-                e0 = min(W, s0 + seg)
-                local_max[s0:e0] = sm[s0:e0].max() if sm[s0:e0].max() > 0 else sm.max()
-            thr = np.maximum(0.12 * sm.max(), 0.35 * local_max)
-            mask = sm > thr
-            spans = []; s = None
-            for i, m in enumerate(mask):
-                if m and s is None:
-                    s = i
-                elif not m and s is not None:
-                    spans.append((s, i - 1)); s = None
-            if s is not None:
-                spans.append((s, len(mask) - 1))
-            minw = max(3, W // 150)
-            spans = [(a, b) for a, b in spans if b - a >= minw]
-            if not spans:
-                self._info(tr("detect_fail_title"), tr("detect_fail_no_boundary")); return
+        n_target = self.sp_lane_n.value()
+        spans = self._split_lanes_by_count(sm, n_target, W)
+        if spans is None:
+            self._info(tr("detect_fail_title"), tr("detect_fail_count_msg", n=n_target))
+            return
 
         self._clear_lanes()
         self._suppress_lane_commit = True
@@ -462,6 +470,12 @@ class LanesMixin:
         dlg = MarkerDialog(len(lane.peaks), lane.marker_mw, self)
         if dlg.exec_():
             lane.marker_mw = dlg.values()
+            # run_analysis()가 매번 하는 gel.set_lanes/profile.set_lanes를
+            # 여기서도 해줘야, 젤 이미지 위 kDa 라벨이 "밴드 분석 실행"을
+            # 다시 누르지 않아도 바로 나타난다(실사용 스크린샷으로 확인:
+            # OK 직후엔 라벨이 안 뜨고 재분석해야만 떴었음).
+            self.gel.set_lanes(self.lanes)
+            self.profile.set_lanes(self.lanes)
             self._compute_mw(); self._refresh_results()
 
     def _open_marker_presets(self):

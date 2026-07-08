@@ -169,12 +169,11 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, QMainWindow):
         tb.addAction(a)
         tb.addSeparator()
 
+        # 기존 .bwcomposite 파일 열기는 합성 창 안으로 옮겼다(CompositeStudio의
+        # "기존 합성 파일 불러오기" 버튼) — 툴바에 "합성" 관련 진입점이 하나만
+        # 있으면 되고, 그 창이 여닫는 김에 같이 처리하는 게 자연스럽다.
         a = QAction(tr("toolbar_composite_studio"), self); a.triggered.connect(self.open_composite_studio)
         a.setToolTip(tr("toolbar_composite_studio_tip"))
-        tb.addAction(a)
-        a = QAction(tr("toolbar_composite_import"), self)
-        a.triggered.connect(lambda _checked=False: self.import_composite())
-        a.setToolTip(tr("toolbar_composite_import_tip"))
         tb.addAction(a)
         tb.addSeparator()
 
