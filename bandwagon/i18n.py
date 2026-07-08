@@ -51,7 +51,7 @@ STRINGS = {
         "marker_hint_default": "검출된 밴드 {n}개. 위에서 아래 순서로 분자량을 입력하세요 (kDa).",
         "marker_hint_matched": "'{name}' 적용 — 밴드 {n}개가 일치해 자동으로 채웠습니다. 필요하면 값을 직접 수정할 수 있습니다.",
         "marker_hint_mismatch": "'{name}'은 밴드 {preset_n}개인데 검출된 밴드는 {n}개입니다. 각 밴드가 프리셋의 몇 번째 값에 해당하는지 직접 골라주세요.",
-        "preset_match_row_label": "  매칭:",
+        "preset_match_row_label": "  밴드 {n} 매칭:",
         # MarkerPresetManager
         "preset_manager_title": "마커 프리셋 관리",
         "preset_col_name": "이름",
@@ -450,7 +450,7 @@ STRINGS = {
         "marker_hint_default": "{n} band(s) detected. Enter molecular weight (kDa) top to bottom.",
         "marker_hint_matched": "Applied '{name}' — {n} band(s) matched and filled in automatically. You can still edit the values.",
         "marker_hint_mismatch": "'{name}' has {preset_n} band(s), but {n} were detected. Please match each detected band to a preset value.",
-        "preset_match_row_label": "  Match:",
+        "preset_match_row_label": "  Band {n} match:",
         # MarkerPresetManager
         "preset_manager_title": "Manage Marker Presets",
         "preset_col_name": "Name",

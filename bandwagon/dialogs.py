@@ -47,6 +47,16 @@ def _dialog_style():
             f"QDoubleSpinBox::down-arrow,QSpinBox::down-arrow{{width:0;height:0;"
             f"border-left:4px solid transparent;border-right:4px solid transparent;"
             f"border-top:5px solid {INKT};}}"
+            # QComboBox도 같은 이유(다크 배경에서 Qt 기본 화살표가 깨져 보임)로
+            # 드롭다운 화살표를 직접 그린다 — 안 그러면 네이티브 아이콘이
+            # 배경/테두리 스타일과 안 맞게 찌그러져 보인다.
+            f"QComboBox::drop-down{{subcontrol-origin:border;subcontrol-position:top right;"
+            f"width:20px;border-left:1px solid {LINE};background:{INK4};"
+            f"border-top-right-radius:4px;border-bottom-right-radius:4px;}}"
+            f"QComboBox::drop-down:hover{{background:{LINE};}}"
+            f"QComboBox::down-arrow{{width:0;height:0;"
+            f"border-left:4px solid transparent;border-right:4px solid transparent;"
+            f"border-top:5px solid {INKT};}}"
             f"QPushButton{{background:{INK3};color:{INKT};border:1px solid {LINE};"
             f"border-radius:5px;padding:5px 14px;}}"
             f"QPushButton:hover{{background:{INK4};}}")
@@ -142,7 +152,7 @@ class MarkerDialog(QDialog):
                 combo.setCurrentIndex(guess)
                 combo.currentIndexChanged.connect(
                     lambda v, j=i, mwlist=mw: self._apply_match(j, v, mwlist))
-                self.form.addRow(tr("preset_match_row_label"), combo)
+                self.form.addRow(tr("preset_match_row_label", n=i + 1), combo)
                 self.match_combos.append(combo)
                 self._apply_match(i, guess, mw)
 

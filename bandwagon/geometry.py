@@ -403,18 +403,26 @@ class GeometryMixin:
     def _finalize_pending_rotation(self):
         """정밀 회전 세션을 완전히 끝낸다 — 다른 작업(코너 지정/되돌리기/
         곡률보정 등)으로 넘어가기 전에 호출되어, release 전 각도까지
-        확정 기록하고 슬라이더를 0으로 되돌린다. 평소 release는
-        _commit_fine_rotation()이 처리하며 세션을 끝내지 않는다 — 여기는
-        더 이상 이 슬라이더를 보지 않을 시점이라 0으로 돌려도 안 헷갈린다."""
+        확정 기록한다. _apply_fine_rotation() 안에서 결국 _replay_history()가
+        돌면서 _sync_geom_sliders()가 슬라이더를 현재 값으로 맞춰주므로,
+        여기서 슬라이더를 0으로 강제로 되돌리지 않는다 — 예전엔 그렇게
+        했었는데, 그러면 값은 실제로 적용된 채(0이 아님) 슬라이더만 0으로
+        보이는 불일치가 생겼다(다른 모드로 넘어갈 때마다 재현되던 버그).
+
+        이미 이 값 그대로 커밋돼 있으면(=재생으로 세션이 막 복원된 직후
+        다른 모드로 또 넘어가는 경우) 다시 적용하지 않는다 — 안 그러면
+        모드를 바꿀 때마다 매번 불필요하게 재계산해, 이미 적용된 보정이
+        한 번 더 적용되는 것처럼(실제로는 같은 결과를 다시 그리는 것뿐
+        이지만) 보이는 깜빡임이 생긴다."""
         if self._rot_base is None:
             return
-        self._apply_fine_rotation(self.rot_slider.value())
-        self._rot_base = None
+        v = self.rot_slider.value()
+        if self._rot_session_pushed and self._edit_pos >= 0 \
+                and self._edit_ops[self._edit_pos] == ("fine_rotate", {"deg": v}):
+            return
+        self._apply_fine_rotation(v)
         self._preview_small = None
         self._preview_scale = 1.0
-        self._rot_session_pushed = False
-        self.rot_slider.blockSignals(True); self.rot_slider.setValue(0); self.rot_slider.blockSignals(False)
-        self.rot_spin.blockSignals(True); self.rot_spin.setValue(0); self.rot_spin.blockSignals(False)
 
     def _commit_fine_rotation(self):
         """슬라이더 release(또는 입력 완료) 시 호출. 고품질로 다시 렌더해
@@ -508,13 +516,13 @@ class GeometryMixin:
         """_finalize_pending_rotation과 동일한 역할(곡률보정판)."""
         if self._curve_base is None:
             return
-        self._apply_bow_op(self.bow_slider.value())
-        self._curve_base = None
+        v = self.bow_slider.value()
+        if self._bow_session_pushed and self._edit_pos >= 0 \
+                and self._edit_ops[self._edit_pos] == ("bow_correct", {"amount": v}):
+            return
+        self._apply_bow_op(v)
         self._preview_small = None
         self._preview_scale = 1.0
-        self._bow_session_pushed = False
-        self.bow_slider.blockSignals(True); self.bow_slider.setValue(0); self.bow_slider.blockSignals(False)
-        self.bow_spin.blockSignals(True); self.bow_spin.setValue(0); self.bow_spin.blockSignals(False)
 
     def _commit_bow_correction(self):
         """_commit_fine_rotation과 동일한 역할(곡률보정판) — 세션을
@@ -604,13 +612,13 @@ class GeometryMixin:
         """_finalize_pending_bow와 동일한 역할(기울기보정판)."""
         if self._shear_base is None:
             return
-        self._apply_shear_op(self.shear_slider.value())
-        self._shear_base = None
+        v = self.shear_slider.value()
+        if self._shear_session_pushed and self._edit_pos >= 0 \
+                and self._edit_ops[self._edit_pos] == ("shear_correct", {"amount": v}):
+            return
+        self._apply_shear_op(v)
         self._preview_small = None
         self._preview_scale = 1.0
-        self._shear_session_pushed = False
-        self.shear_slider.blockSignals(True); self.shear_slider.setValue(0); self.shear_slider.blockSignals(False)
-        self.shear_spin.blockSignals(True); self.shear_spin.setValue(0); self.shear_spin.blockSignals(False)
 
     def _commit_shear_correction(self):
         """_commit_bow_correction과 동일한 역할(기울기보정판) — 세션을
@@ -734,7 +742,14 @@ class GeometryMixin:
         연산을 만나면 그 이전 레인 기록은 버린다(=None) — 기하가 바뀌면
         레인 좌표가 더는 안 맞아 실제로도 자동 초기화되므로, 되돌리기로
         그 시점에 갈 때도 같은 결과(레인 없음 또는 그 이후에 다시 잡은
-        레인)가 나와야 한다."""
+        레인)가 나와야 한다.
+
+        정밀회전/곡률(부채꼴)/기울기 보정 슬라이더도 마지막(=_edit_pos)
+        연산이 그 종류일 때만 값을 보여주고, 그 직전 이미지를 세션
+        기준(_rot_base 등)으로 다시 세워둔다(_sync_geom_sliders) — 이걸
+        안 하면 되돌리기로 곡률보정이 적용된 지점에 왔을 때 이미지는
+        보정된 채인데 슬라이더만 0으로 보이는 불일치가 생긴다(실사용
+        중 발견된 버그)."""
         if self._edit_pristine is None:
             return
         img = self._edit_pristine
@@ -745,7 +760,12 @@ class GeometryMixin:
         gray = self._edit_gray_pristine
         adjust_snapshot = None
         lanes_snapshot = None
-        for op_name, params in self._edit_ops[: self._edit_pos + 1]:
+        ops = self._edit_ops[: self._edit_pos + 1]
+        pre_last_img = None
+        n = len(ops)
+        for i, (op_name, params) in enumerate(ops):
+            if i == n - 1:
+                pre_last_img = img   # 마지막 연산을 적용하기 '직전' 상태 — 세션 기준으로 재사용
             img, gray = apply_edit_op(img, gray, op_name, params)
             if op_name == "adjust":
                 adjust_snapshot = params
@@ -757,6 +777,36 @@ class GeometryMixin:
         self._wb_gray_override = gray
         self._apply_adjust_snapshot(adjust_snapshot)
         self._apply_lanes_snapshot(lanes_snapshot)
+        last_op, last_params = ops[-1] if ops else (None, None)
+        self._sync_geom_sliders(last_op, last_params, pre_last_img)
+
+    def _sync_geom_sliders(self, last_op, last_params, pre_last_img):
+        """정밀회전/곡률/기울기 슬라이더 표시값 + 세션 상태(_rot_base 등)를
+        현재 위치의 실제 마지막 연산에 맞춘다. 그 셋 중 하나가 마지막
+        연산이면 슬라이더에 그 값을 보여주고 그 연산 직전 이미지를 세션
+        기준으로 세워 계속 드래그해도 정확히 이어지게 하고, 아니면(다른
+        종류의 연산이거나 편집 기록이 아예 없으면) 세션을 닫고 0으로
+        보여준다 — 라이브 드래그 커밋 때와 완전히 같은 상태가 되도록."""
+        if not hasattr(self, "rot_slider"):
+            return   # UI가 아직 만들어지기 전(이론상 도달 안 함) 방어
+
+        rot_deg = last_params["deg"] if last_op == "fine_rotate" else 0
+        self._rot_base = pre_last_img if last_op == "fine_rotate" else None
+        self._rot_session_pushed = last_op == "fine_rotate"
+        self.rot_slider.blockSignals(True); self.rot_slider.setValue(rot_deg); self.rot_slider.blockSignals(False)
+        self.rot_spin.blockSignals(True); self.rot_spin.setValue(rot_deg); self.rot_spin.blockSignals(False)
+
+        bow_amt = last_params["amount"] if last_op == "bow_correct" else 0
+        self._curve_base = pre_last_img if last_op == "bow_correct" else None
+        self._bow_session_pushed = last_op == "bow_correct"
+        self.bow_slider.blockSignals(True); self.bow_slider.setValue(bow_amt); self.bow_slider.blockSignals(False)
+        self.bow_spin.blockSignals(True); self.bow_spin.setValue(bow_amt); self.bow_spin.blockSignals(False)
+
+        shear_amt = last_params["amount"] if last_op == "shear_correct" else 0
+        self._shear_base = pre_last_img if last_op == "shear_correct" else None
+        self._shear_session_pushed = last_op == "shear_correct"
+        self.shear_slider.blockSignals(True); self.shear_slider.setValue(shear_amt); self.shear_slider.blockSignals(False)
+        self.shear_spin.blockSignals(True); self.shear_spin.setValue(shear_amt); self.shear_spin.blockSignals(False)
 
     def _commit_adjust(self):
         """밝기/대비/톤커브 조정을 되돌리기 스택에 한 단계로 기록한다.
@@ -865,17 +915,14 @@ class GeometryMixin:
         self.status.showMessage(tr("status_redo_done"))
 
     def _after_geometry_change(self):
-        """빠른 회전(90/180)·반전·자르기·펴기처럼 한 번에 확정되는 변환 뒤에 호출.
-        정밀 회전·곡률 보정 기준선도 새로 잡는다(슬라이더를 0으로)."""
+        """빠른 회전(90/180)·반전·자르기·펴기처럼 한 번에 확정되는 변환 뒤,
+        그리고 되돌리기/다시하기 뒤에도 호출된다. 정밀회전/곡률/기울기
+        보정 슬라이더 상태는 그 전에 이미 실행된 _replay_history()가
+        _sync_geom_sliders로 현재 위치에 맞게 정리해뒀으므로 여기서는
+        건드리지 않는다(예전엔 여기서 무조건 0으로 밀어버려서, 되돌리기로
+        곡률보정이 적용된 지점에 돌아왔을 때 이미지는 보정된 채인데
+        슬라이더만 0으로 보이는 불일치가 있었다)."""
         self._refresh_after_pixels_changed()
-        self._rot_base = None
-        self._rot_session_pushed = False
-        self.rot_slider.blockSignals(True); self.rot_slider.setValue(0); self.rot_slider.blockSignals(False)
-        self.rot_spin.blockSignals(True); self.rot_spin.setValue(0); self.rot_spin.blockSignals(False)
-        self._curve_base = None
-        self._bow_session_pushed = False
-        self.bow_slider.blockSignals(True); self.bow_slider.setValue(0); self.bow_slider.blockSignals(False)
-        self.bow_spin.blockSignals(True); self.bow_spin.setValue(0); self.bow_spin.blockSignals(False)
 
     def _on_tab_changed(self, _i):
         """탭을 전환하면 이전 탭에서 켜둔 마우스 동작(레인 수동 검출/코너 지정/
