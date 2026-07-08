@@ -24,7 +24,7 @@ from .theme import *
 from .meta import (APP_NAME, APP_VERSION, RELEASE_DATE, HAS_CV2)
 from .models import CurveModel
 from .widgets import GelView, ProfileView
-from .dialogs import _dialog_style
+from .dialogs import _dialog_style, _no_help_button
 from .style import StyleMixin
 from .geometry import GeometryMixin
 from .lanes import LanesMixin
@@ -353,6 +353,7 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, QMainWindow):
 
     def _show_help(self):
         dlg = QDialog(self)
+        _no_help_button(dlg)
         dlg.setWindowTitle(tr("toolbar_help"))
         dlg.setMinimumSize(560, 620)
         dlg.setStyleSheet(_dialog_style())

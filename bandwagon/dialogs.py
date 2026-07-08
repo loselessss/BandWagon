@@ -64,6 +64,13 @@ def _triangle_icon_path(direction, hex_color, size=10):
     return path
 
 
+def _no_help_button(dlg):
+    """제목표시줄의 '?' 컨텍스트 도움말 버튼을 없앤다. WhatsThis 텍스트를
+    이 앱 어디에도 걸어두지 않아서, 눌러봤자 커서만 금지 모양으로 바뀌고
+    아무 일도 안 일어나 혼란만 준다(실사용 중 확인된 문제)."""
+    dlg.setWindowFlags(dlg.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+
+
 def _dialog_style():
     up_icon = _triangle_icon_path("up", INKT)
     down_icon = _triangle_icon_path("down", INKT)
@@ -107,6 +114,7 @@ def _table_css():
 class MarkerDialog(QDialog):
     def __init__(self, n, existing, parent=None):
         super().__init__(parent)
+        _no_help_button(self)
         self.setWindowTitle(tr("marker_dialog_title"))
         self.setMinimumWidth(320)
         self.setStyleSheet(_dialog_style() +
@@ -229,6 +237,7 @@ class MarkerPresetManager(QDialog):
     """마커 프리셋 추가/삭제용 작은 관리 창."""
     def __init__(self, presets, parent=None):
         super().__init__(parent)
+        _no_help_button(self)
         self.setWindowTitle(tr("preset_manager_title"))
         self.setMinimumWidth(320)
         self.setStyleSheet(_dialog_style())
@@ -269,11 +278,16 @@ class MarkerPresetManager(QDialog):
             self.listw.setItem(r, 1, QTableWidgetItem(", ".join(f"{v:g}" for v in p["mw"])))
 
     def _add(self):
-        name, ok = QInputDialog.getText(self, tr("preset_add_title"), tr("preset_add_name_label"))
+        # flags를 명시하면(기본값 대신) Qt가 '?' 컨텍스트 도움말 버튼을
+        # 자동으로 안 붙인다 — WhatsThis 텍스트가 없어 눌러도 아무 효과
+        # 없이 커서만 바뀌는 문제를 없애기 위함(_no_help_button과 동일 목적).
+        no_help_flags = Qt.WindowTitleHint | Qt.WindowCloseButtonHint
+        name, ok = QInputDialog.getText(
+            self, tr("preset_add_title"), tr("preset_add_name_label"), flags=no_help_flags)
         if not ok or not name.strip():
             return
         text, ok = QInputDialog.getText(
-            self, tr("preset_add_title"), tr("preset_add_mw_label"))
+            self, tr("preset_add_title"), tr("preset_add_mw_label"), flags=no_help_flags)
         if not ok or not text.strip():
             return
         try:

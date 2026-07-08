@@ -38,7 +38,7 @@ from PyQt5.QtWidgets import (
 
 from .i18n import tr
 from .theme import CYAN, INK2, INK3, INKT, MUTE
-from .dialogs import _dialog_style
+from .dialogs import _dialog_style, _no_help_button
 from .imaging import (
     blend_for_uv_canvas, blend_visible_uv, downscale_for_preview,
     pil_to_pixmap, uv_only_grayscale, warp_uv_to_visible, warp_visible_to_uv,
@@ -119,6 +119,7 @@ class CompositeStudio(QDialog):
 
     def __init__(self, parent=None, last_dir=None):
         super().__init__(parent)
+        _no_help_button(self)
         self.setWindowTitle(tr("composite_studio_title"))
         self.setStyleSheet(_dialog_style())
         self.setMinimumSize(520, 640)
@@ -290,7 +291,8 @@ class CompositeStudio(QDialog):
             self._show_image_dialog(tr("wb_uv_reference_dialog_title"), self._uv_img)
 
     def _show_image_dialog(self, title, pil_img):
-        dlg = QDialog(self); dlg.setWindowTitle(title); dlg.setStyleSheet(_dialog_style())
+        dlg = QDialog(self); _no_help_button(dlg)
+        dlg.setWindowTitle(title); dlg.setStyleSheet(_dialog_style())
         lay = QVBoxLayout(dlg)
         lbl = QLabel(); lbl.setPixmap(pil_to_pixmap(pil_img).scaled(
             700, 700, Qt.KeepAspectRatio, Qt.SmoothTransformation))

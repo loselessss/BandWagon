@@ -20,7 +20,7 @@ from .i18n import tr
 from .theme import *
 from .models import Lane
 from .widgets import StdCurveView
-from .dialogs import MarkerDialog, MarkerPresetManager, _dialog_style
+from .dialogs import MarkerDialog, MarkerPresetManager, _dialog_style, _no_help_button
 from .presets import load_marker_presets, save_marker_presets
 
 
@@ -454,7 +454,7 @@ class LanesMixin:
         if lane.kind == "marker":
             self._edit_marker(lane)
         elif lane.kind == "bsa":
-            dlg = QInputDialog(self); dlg.setStyleSheet(_dialog_style())
+            dlg = QInputDialog(self); dlg.setStyleSheet(_dialog_style()); _no_help_button(dlg)
             dlg.setWindowTitle(tr("bsa_conc_title")); dlg.setLabelText(tr("bsa_conc_label", name=lane.name))
             dlg.setInputMode(QInputDialog.DoubleInput)
             dlg.setDoubleRange(0, 100000); dlg.setDoubleDecimals(2); dlg.setDoubleValue(max(lane.bsa_amount, 1.0))
