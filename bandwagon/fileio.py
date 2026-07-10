@@ -37,13 +37,19 @@ class FileIOMixin:
         "프로젝트 열기"가 툴바에 따로 있었는데, 사용자 입장에서 어차피
         "그냥 파일 열기"일 뿐이라 구분할 이유가 없어서 합쳤다.
 
-        지금 창의 내용을 바꾸지 않고 새 창을 하나 더 띄운다 — 여러 젤을
-        동시에 띄워두고 비교하기 위함(예: 마커/설정을 나란히 맞춰보기)."""
+        지금 창이 비어있으면(self._orig is None, 아직 아무 이미지도 안 연
+        상태) 그 자리에 바로 연다 — 굳이 빈 창을 하나 더 남겨둘 이유가
+        없기 때문. 이미 뭔가 열려 있는 창이면 그 내용을 바꾸지 않고 새
+        창을 하나 더 띄운다 — 여러 젤을 동시에 띄워두고 비교하기 위함
+        (예: 마커/설정을 나란히 맞춰보기)."""
         path, _ = QFileDialog.getOpenFileName(self, tr("dlg_open_title"), self._last_dir,
                                               tr("dlg_open_filter"))
         if not path:
             return
         self._last_dir = str(Path(path).parent)
+        if self._orig is None:
+            self.open_path_smart(path)
+            return
         win = self.__class__(None, splash=None)   # Analyzer를 여기서 직접 import하면 순환 참조가 생김
         self.__class__._open_windows.append(win)
         win.open_path_smart(path)
