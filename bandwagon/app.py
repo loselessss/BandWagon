@@ -113,6 +113,7 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, QMainWindow):
         # None으로 되돌아간다(_reset_session_state).
         self._current_project_path = None
         self._saved_snapshot = None   # closeEvent가 이걸 현재 상태와 비교해 저장 여부를 물어봄
+        self._img_hash_cache = (None, None)  # (self._orig 참조, 해시) — _project_state_snapshot 캐시
 
         self.curves = {c: CurveModel() for c in ("RGB", "Red", "Green", "Blue")}
         self._ch = "RGB"

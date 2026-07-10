@@ -189,13 +189,21 @@ class FileIOMixin:
         메타데이터를 안 바꾸고 이미지 자체만 바꾸기 때문이다.
 
         제목표시줄 '*' 표시(_refresh_title)가 이 함수를 몇 초마다 반복
-        호출하므로, PNG 인코딩(압축) 대신 원본 픽셀 바이트를 그대로
-        해싱한다 — 동일 여부만 판단하면 되니 압축은 불필요한 비용이고,
-        raw bytes 해싱이 실측상 수십 배 더 빠르다."""
+        호출한다. self._orig.tobytes()는 압축 없는 원본 픽셀 사본이라
+        (PNG보다 훨씬 빠르지만) 호출할 때마다 이미지 크기만큼 메모리를
+        일시적으로 더 쓴다 — self._orig 객체 자체가 바뀌지 않는 한(즉
+        편집으로 재할당되지 않는 한) 해시가 그대로일 수밖에 없으므로,
+        객체 identity로 캐싱해 실제로 이미지가 바뀐 순간에만 다시
+        해싱한다. 대부분의 틱(사진은 그대로, 레인/커브/메모만 만지는
+        중)은 이 캐시를 그대로 재사용해 tobytes() 호출 자체를 건너뛴다."""
         if self._orig is None:
+            self._img_hash_cache = (None, None)
             return None
+        if self._img_hash_cache[0] is not self._orig:
+            h_img = hashlib.sha256(); h_img.update(self._orig.tobytes())
+            self._img_hash_cache = (self._orig, h_img.hexdigest())
         h = hashlib.sha256()
-        h.update(self._orig.tobytes())
+        h.update(self._img_hash_cache[1].encode())
         meta = {
             "bright": self.sl_bright.value(),
             "contrast": self.sl_contrast.value(),
