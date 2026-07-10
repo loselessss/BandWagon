@@ -14,7 +14,7 @@ import sys, os
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QLabel, QPushButton, QAction, QSizePolicy, QMessageBox, QSplitter,
-    QStatusBar, QToolBar, QTabWidget, QDialog, QDialogButtonBox,
+    QStatusBar, QMenu, QTabWidget, QDialog, QDialogButtonBox,
     QScrollArea, QCheckBox,
 )
 from PyQt5.QtCore import Qt, QTimer, QStandardPaths
@@ -32,6 +32,11 @@ from .fileio import FileIOMixin
 
 
 class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, QMainWindow):
+    # "파일 > 열기"가 새로 띄우는 창들의 참조를 여기 계속 들고 있는다 —
+    # 파이썬이 지역 변수로만 들고 있으면 GC가 곧바로 회수해 Qt가 창을
+    # 닫아버린다. QApplication은 기본이 quitOnLastWindowClosed=True라
+    # 마지막 창이 닫힐 때 앱도 같이 종료된다(추가 설정 불필요).
+    _open_windows = []
 
     def __init__(self, path=None, splash=None):
         super().__init__()
@@ -101,6 +106,12 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, QMainWindow):
         self._adjust_pristine = {"bright": 0, "contrast": 0, "curves": {}}
         self._last_dir = QStandardPaths.writableLocation(QStandardPaths.DocumentsLocation) \
                          or os.path.expanduser("~")  # 파일 열기/저장 기본 폴더 (System32 등으로 안 떨어지게)
+        # 현재 작업 중인 .bandwagon 프로젝트 파일 경로 — 있으면 "프로젝트 저장"이
+        # 대화상자 없이 이 경로에 바로 덮어쓴다(Ctrl+S 반복 저장을 편하게).
+        # 이미지만 열었거나(프로젝트로 저장한 적 없음) 새 세션을 시작하면
+        # None으로 되돌아간다(_reset_session_state).
+        self._current_project_path = None
+        self._saved_snapshot = None   # closeEvent가 이걸 현재 상태와 비교해 저장 여부를 물어봄
 
         self.curves = {c: CurveModel() for c in ("RGB", "Red", "Green", "Blue")}
         self._ch = "RGB"
@@ -108,7 +119,10 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, QMainWindow):
 
         self._build()
         if path:
-            QTimer.singleShot(0, lambda: self.load_image(path))
+            # 그림 경로뿐 아니라, 탐색기에서 .bandwagon 파일을 더블클릭해
+            # 실행된 경우(파일 연결)에도 여기로 경로가 넘어온다 — 확장자를
+            # 보고 알아서 그림/프로젝트로 나눠 연다.
+            QTimer.singleShot(0, lambda: self.open_path_smart(path))
         # 창이 뜬 뒤(이벤트 루프 시작 후) 백그라운드에서 scipy/cv2를 미리 데워둔다.
         # 부팅은 빠른 채로, 첫 분석/펴기 클릭 때의 '멈칫'을 없앤다. 200ms 정도
         # 늦춰 시작해 최초 화면 렌더링과 경쟁하지 않게 한다.
@@ -147,79 +161,78 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, QMainWindow):
         self._splash_step(tr("splash_loading_ui"))
         self._apply_palette()
 
-        tb = QToolBar(); tb.setMovable(False); tb.setStyleSheet(self._toolbar_css())
-        self.addToolBar(tb)
-        for text, slot, sep in [
-            (tr("toolbar_open"), self.open_image, False),
-            (tr("toolbar_paste"), self.paste_image, False),
-        ]:
-            a = QAction(text, self); a.triggered.connect(slot); tb.addAction(a)
-            if sep: tb.addSeparator()
-        tb.actions()[0].setShortcut("Ctrl+O")
-        tb.actions()[1].setShortcut("Ctrl+V")  # 붙여넣기를 툴바 액션 단축키로 — 포커스 위젯에 먹혀 안 되던 문제 해결
+        mb = self.menuBar(); mb.setStyleSheet(self._menubar_css())
 
-        tb.addSeparator()
-        a = QAction(tr("toolbar_project_open"), self); a.triggered.connect(self.open_project)
-        a.setShortcut("Ctrl+Shift+O")
-        a.setToolTip(tr("toolbar_project_open_tip"))
-        tb.addAction(a)
+        # ── 파일: 열기/붙여넣기 + 프로젝트 저장 + 결과 이미지 내보내기를
+        # 전부 한 메뉴로 묶는다. 웨스턴블롯은 성격이 다른(별도 창에서
+        # 작업하는) 흐름이라 여기 안 넣고 따로 분리한다.
+        m_file = mb.addMenu(tr("menu_file"))
+        a = QAction(tr("dlg_open_title"), self); a.triggered.connect(self.open_anything)
+        a.setShortcut("Ctrl+O"); m_file.addAction(a)
+        a = QAction(tr("toolbar_paste"), self); a.triggered.connect(self.paste_image)
+        a.setShortcut("Ctrl+V"); m_file.addAction(a)  # 포커스 위젯에 먹히지 않게 단축키를 액션에 직접 건다
+        m_file.addSeparator()
         a = QAction(tr("toolbar_project_save"), self); a.triggered.connect(self.save_project)
-        a.setShortcut("Ctrl+S")
-        a.setToolTip(tr("toolbar_project_save_tip"))
-        tb.addAction(a)
-        tb.addSeparator()
-
-        # 기존 .bwcomposite 파일 열기는 합성 창 안으로 옮겼다(CompositeStudio의
-        # "기존 합성 파일 불러오기" 버튼) — 툴바에 "합성" 관련 진입점이 하나만
-        # 있으면 되고, 그 창이 여닫는 김에 같이 처리하는 게 자연스럽다.
-        a = QAction(tr("toolbar_composite_studio"), self); a.triggered.connect(self.open_composite_studio)
-        a.setToolTip(tr("toolbar_composite_studio_tip"))
-        tb.addAction(a)
-        tb.addSeparator()
-
+        a.setShortcut("Ctrl+S"); a.setToolTip(tr("toolbar_project_save_tip")); m_file.addAction(a)
+        a = QAction(tr("toolbar_project_save_as"), self); a.triggered.connect(self.save_project_as)
+        a.setShortcut("Ctrl+Shift+S"); a.setToolTip(tr("toolbar_project_save_as_tip")); m_file.addAction(a)
+        a = QAction(tr("menu_project_open_location"), self); a.triggered.connect(self.open_project_location)
+        a.setToolTip(tr("menu_project_open_location_tip")); m_file.addAction(a)
+        m_file.addSeparator()
         a = QAction(tr("toolbar_copy_result"), self); a.triggered.connect(self.copy_image)
-        a.setToolTip(tr("toolbar_copy_result_tip"))
-        tb.addAction(a)
-        tb.addSeparator()
+        a.setToolTip(tr("toolbar_copy_result_tip")); m_file.addAction(a)
         a = QAction(tr("toolbar_save_result"), self); a.triggered.connect(self.save_image)
-        a.setToolTip(tr("toolbar_save_result_tip"))
-        tb.addAction(a)
+        a.setToolTip(tr("toolbar_save_result_tip")); m_file.addAction(a)
+        a = QAction(tr("toolbar_export_csv"), self); a.triggered.connect(self.export_csv)
+        m_file.addAction(a)
 
-        for text, slot, sep in [
-            (tr("toolbar_export_csv"), self.export_csv, True),
-            (tr("toolbar_reset_all"), self.reset_all, False),
-        ]:
-            a = QAction(text, self); a.triggered.connect(slot); tb.addAction(a)
-            if sep: tb.addSeparator()
+        # ── 웨스턴블롯 ────────────────────────────────────────────────
+        # "새로 만들기"(스튜디오 열기)와 "기존 파일 불러오기"를 나란히 둬서
+        # 프로젝트 메뉴의 저장/새로 저장과 비슷한 짝을 이룬다 — 다만 합성은
+        # "지금 세션에 다시 덮어쓸 경로"라는 개념이 없어(스튜디오가 메인
+        # 창 상태를 전혀 참조하지 않는 독립 창이라, 자세한 이유는
+        # composite.py 모듈 docstring 참고) '저장/다른 이름으로 저장' 짝
+        # 대신 이 형태로 갔다.
+        m_wb = mb.addMenu(tr("menu_western"))
+        a = QAction(tr("menu_western_open"), self); a.triggered.connect(self.open_composite_studio)
+        a.setToolTip(tr("toolbar_composite_studio_tip")); m_wb.addAction(a)
+        a = QAction(tr("toolbar_composite_import"), self)
+        a.triggered.connect(lambda _checked=False: self.import_composite())
+        a.setToolTip(tr("toolbar_composite_import_tip")); m_wb.addAction(a)
 
-        tb.addSeparator()
+        # ── 편집 ─────────────────────────────────────────────────────
+        m_edit = mb.addMenu(tr("menu_edit"))
+        a = QAction(tr("toolbar_reset_all"), self); a.triggered.connect(self.reset_all)
+        m_edit.addAction(a)
+        m_edit.addSeparator()
         self.btn_undo = QAction(tr("toolbar_undo"), self)
         self.btn_undo.setShortcut("Ctrl+Z")
         self.btn_undo.setToolTip(tr("toolbar_undo_tip"))
         self.btn_undo.triggered.connect(self._undo)
         self.btn_undo.setEnabled(False)
-        tb.addAction(self.btn_undo)
-
+        m_edit.addAction(self.btn_undo)
         self.btn_redo = QAction(tr("toolbar_redo"), self)
         self.btn_redo.setShortcut("Ctrl+Y")
         self.btn_redo.setToolTip(tr("toolbar_redo_tip"))
         self.btn_redo.triggered.connect(self._redo)
         self.btn_redo.setEnabled(False)
-        tb.addAction(self.btn_redo)
+        m_edit.addAction(self.btn_redo)
 
-        tb.addSeparator()
-        helpbtn = QAction(tr("toolbar_help"), self)
-        helpbtn.triggered.connect(self._show_help)
-        tb.addAction(helpbtn)
-        about = QAction(tr("toolbar_about"), self)
-        about.triggered.connect(self._show_about)
-        tb.addAction(about)
+        # ── 정보 ─────────────────────────────────────────────────────
+        m_info = mb.addMenu(tr("menu_info"))
+        a = QAction(tr("toolbar_help"), self); a.triggered.connect(self._show_help)
+        m_info.addAction(a)
+        a = QAction(tr("toolbar_about"), self); a.triggered.connect(self._show_about)
+        m_info.addAction(a)
 
-        tb.addSeparator()
-        self.lang_action = QAction(tr("toolbar_lang_switch"), self)
-        self.lang_action.setToolTip(tr("toolbar_lang_switch_tip"))
-        self.lang_action.triggered.connect(self._toggle_language)
-        tb.addAction(self.lang_action)
+        # ── 언어 ─────────────────────────────────────────────────────
+        # 예전엔 토글 버튼 하나였는데, 지금 언어가 뭔지 헷갈리지 않게
+        # 두 언어를 나란히 두고 고르는 방식으로 바꿨다.
+        m_lang = mb.addMenu(tr("menu_language"))
+        a = QAction(tr("lang_name_ko"), self); a.triggered.connect(lambda: self._set_language("ko"))
+        m_lang.addAction(a)
+        a = QAction(tr("lang_name_en"), self); a.triggered.connect(lambda: self._set_language("en"))
+        m_lang.addAction(a)
 
         central = QWidget(); self.setCentralWidget(central)
         root = QHBoxLayout(central); root.setContentsMargins(10, 10, 10, 10); root.setSpacing(10)
@@ -278,6 +291,7 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, QMainWindow):
             (self._build_tab_lanes, tr("splash_tab_lanes")),
             (self._build_tab_analysis, tr("splash_tab_analysis")),
             (self._build_tab_std, tr("splash_tab_std")),
+            (self._build_tab_memo, tr("splash_tab_memo")),
         ]
         for _fn, _label in tab_steps:
             self._splash_step(_label)
@@ -339,10 +353,11 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, QMainWindow):
     def _info(self, t, x): self._box(QMessageBox.Information, t, x).exec_()
     def _warn(self, t, x): self._box(QMessageBox.Warning, t, x).exec_()
 
-    def _toggle_language(self):
-        new_lang = "en" if i18n.CURRENT_LANG == "ko" else "ko"
+    def _set_language(self, lang):
+        if lang == i18n.CURRENT_LANG:
+            return
         self._info(tr("lang_switch_title"), tr("lang_switch_restart_msg"))
-        i18n.set_lang(new_lang)  # 저장 + 전역 갱신; 다음 실행부터 적용
+        i18n.set_lang(lang)  # 저장 + 전역 갱신; 다음 실행부터 적용
 
     def _show_about(self):
         self._info(tr("about_title", app=APP_NAME),

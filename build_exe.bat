@@ -32,6 +32,12 @@ REM    for the taskbar/titlebar icon -- the exe icon alone isn't enough).
 REM  --manifest bandwagon.manifest : declares Per-Monitor-V2 DPI
 REM    awareness on the exe itself, so the boot splash renders at a
 REM    consistent size from the start (see bandwagon.manifest for why).
+REM  bandwagon_composite.ico : a color-variant icon just for the
+REM    .bwcomposite file-type association (installer.iss), so those
+REM    files look different from .bandwagon project files in Explorer.
+REM    Not embedded in the exe itself -- just needs to exist as a plain
+REM    file next to BandWagon.exe for the registry DefaultIcon entry
+REM    to point at.
 REM
 REM To change the splash image, just replace bandwagon_splash.png
 REM with another file of the same size.
@@ -69,7 +75,7 @@ if errorlevel 1 (
   exit /b 1
 )
 
-%PYCMD% -m PyInstaller --noconfirm --clean --onedir --noconsole --name BandWagon --icon "bandwagon.ico" --add-data "bandwagon.ico;." --manifest "bandwagon.manifest" --splash "bandwagon_splash.png" --collect-submodules bandwagon --collect-all scipy --collect-all cv2 run.py 2>&1 | findstr /V /C:"Hidden import"
+%PYCMD% -m PyInstaller --noconfirm --clean --onedir --noconsole --name BandWagon --icon "bandwagon.ico" --add-data "bandwagon.ico;." --add-data "bandwagon_composite.ico;." --manifest "bandwagon.manifest" --splash "bandwagon_splash.png" --collect-submodules bandwagon --collect-all scipy --collect-all cv2 run.py 2>&1 | findstr /V /C:"Hidden import"
 
 echo.
 echo ============================================

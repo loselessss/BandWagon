@@ -356,8 +356,14 @@ def uv_only_grayscale(uv_warped):
 def apply_bow_correction(img, amount):
     """img(PIL Image)에 곡률 보정을 적용한다. 각 열(x)을 중심에서 멀수록
     0에 가깝고 중앙에서 amount(px)만큼 큰 포물선 모양으로 수직 이동시킨다
-    (cv2.remap, BORDER_REPLICATE). amount>0: 처진 모양을 위로 당겨 편다,
+    (cv2.remap, BORDER_REFLECT). amount>0: 처진 모양을 위로 당겨 편다,
     amount<0: 솟은 모양을 아래로 당겨 편다.
+
+    가장자리는 BORDER_REPLICATE(가장자리 픽셀을 그대로 늘여씀)이 아니라
+    BORDER_REFLECT(거울처럼 반사)를 쓴다 — 실제 원본 픽셀은 아니지만(그건
+    이 시점까지의 회전·자르기 전체를 누적 계산해 pristine에서 역매핑해야
+    해서 훨씬 큰 작업), 밋밋하게 늘어나 보이는 것보다 자연스럽다(실사용
+    피드백으로 교체).
 
     모듈 레벨 함수인 이유: apply_edit_op()가 Analyzer 클래스 정의보다
     앞에서 이 함수를 참조해야 한다(클래스 내부 staticmethod로 두면
@@ -374,7 +380,7 @@ def apply_bow_correction(img, amount):
     map_y = map_y - shift[np.newaxis, :]
     import cv2
     out = cv2.remap(arr, map_x, map_y, interpolation=cv2.INTER_LINEAR,
-                     borderMode=cv2.BORDER_REPLICATE)
+                     borderMode=cv2.BORDER_REFLECT)
     return Image.fromarray(out, "RGB")
 
 
@@ -388,8 +394,9 @@ def apply_shear_correction(img, amount):
     amount(px): 이미지 위쪽(y=0)과 아래쪽(y=h-1) 사이의 총 가로 이동량.
     중심 행(h/2)은 이동 없음, 위쪽 절반은 -amount/2 ~ 0, 아래쪽 절반은
     0 ~ +amount/2로 선형 이동한다(부호는 위쪽 기준 오른쪽으로 치우친
-    사진을 왼쪽으로 당겨 펴는 방향). cv2.remap, BORDER_REPLICATE로
-    빈 가장자리는 가장 가까운 픽셀로 채운다.
+    사진을 왼쪽으로 당겨 펴는 방향). cv2.remap, BORDER_REFLECT로 빈
+    가장자리를 거울처럼 반사해 채운다(apply_bow_correction과 동일한
+    이유로 BORDER_REPLICATE에서 교체).
 
     bow_correct처럼 모듈 레벨 함수 — apply_edit_op()가 참조해야 하므로
     클래스 안에 두면 순환 의존이 생긴다."""
@@ -405,7 +412,7 @@ def apply_shear_correction(img, amount):
     map_x = map_x - shift[:, np.newaxis]
     import cv2
     out = cv2.remap(arr, map_x, map_y, interpolation=cv2.INTER_LINEAR,
-                     borderMode=cv2.BORDER_REPLICATE)
+                     borderMode=cv2.BORDER_REFLECT)
     return Image.fromarray(out, "RGB")
 
 

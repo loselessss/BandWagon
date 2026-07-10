@@ -78,13 +78,19 @@ STRINGS = {
         "profile_title": "밀도 프로파일 (원본 기준)",
         "profile_empty_hint": "밴드 분석을 실행하면 레인별 곡선이 표시됩니다",
         "std_curve_empty_hint": "BSA 표준 레인 2개 이상에서 표준곡선이 생성됩니다",
-        # 툴바
-        "toolbar_open": "열기",
+        # 메뉴바 (예전엔 툴바였음 — 항목이 늘면서 카테고리별 메뉴로 재구성)
+        "menu_file": "파일",
+        "menu_western": "웨스턴블롯",
+        "menu_western_open": "만들기",
+        "menu_edit": "편집",
+        "menu_info": "정보",
+        "menu_language": "언어",
+        "lang_name_ko": "한국어",
+        "lang_name_en": "English",
         "toolbar_paste": "붙여넣기",
         "toolbar_project_open": "프로젝트 열기",
-        "toolbar_project_open_tip": "저장된 .bandwagon 프로젝트(원본 이미지 + 오버레이/분석 상태)를 불러옵니다. (Ctrl+Shift+O)",
         "toolbar_project_save": "프로젝트 저장",
-        "toolbar_project_save_tip": "현재 이미지와 모든 조정·레인·분석 상태를 .bandwagon 파일 하나로 저장합니다.\n나중에 '프로젝트 열기'로 다시 불러와 이어서 작업할 수 있습니다. (Ctrl+S)",
+        "toolbar_project_save_tip": "현재 이미지와 모든 조정·레인·분석 상태를 .bandwagon 파일 하나로 저장합니다.\n이미 저장/열어둔 파일이 있으면 그 자리에 바로 덮어씁니다. (Ctrl+S)",
         "toolbar_composite_studio": "합성 (Western Blot)",
         "toolbar_composite_studio_tip": "가시광+UV 사진을 정렬해 합성하는 별도 창을 엽니다.\n이미 만들어둔 .bwcomposite 파일을 여는 것도 이 창 안에서 할 수 있습니다.",
         "toolbar_composite_import": "기존 합성 파일 불러오기",
@@ -102,9 +108,7 @@ STRINGS = {
         "status_nothing_to_redo": "다시 적용할 작업이 없습니다.",
         "status_redo_done": "다시하기 완료.",
         "toolbar_help": "사용법",
-        "toolbar_about": "정보",
-        "toolbar_lang_switch": "English",   # 한국어 모드에서는 전환할 대상 언어명을 보여줌
-        "toolbar_lang_switch_tip": "프로그램 언어를 영어로 전환합니다 (재시작 필요)",
+        "toolbar_about": "개발자 정보",
         "zoom_out": "축소",
         "zoom_in": "확대",
         "zoom_reset_tip": "화면에 맞춤으로 되돌리기",
@@ -192,6 +196,8 @@ STRINGS = {
         "tab_adjust": "보정",
         "tab_warp": "펴기",
         "tab_std": "정량",
+        "project_memo_label": "메모",
+        "project_memo_placeholder": "이 분석에 대한 메모를 남기세요 — 프로젝트 저장 시 함께 저장됩니다.",
         # 보정 탭 마무리
         "adjust_display_only_note": "보정은 화면 표시용입니다. 분석값은 바뀌지 않습니다.",
         # 펴기 탭
@@ -262,7 +268,8 @@ STRINGS = {
         "auto_detect_done_title": "자동 인식 완료",
         "auto_detect_done_msg": "젤 영역을 인식했습니다. 표시된 코너로 펴시겠습니까?\n아니요를 누르면 코너를 드래그해 조정할 수 있습니다.",
         "status_warp_done": "펴기 완료 — {w}×{h}px",
-        "dlg_open_image_title": "이미지 열기",
+        "dlg_open_title": "열기",
+        "dlg_open_filter": "모든 지원 파일 (*.png *.jpg *.jpeg *.tif *.tiff *.bmp *.webp *.bandwagon *.bwcomposite);;이미지 (*.png *.jpg *.jpeg *.tif *.tiff *.bmp *.webp);;BandWagon 프로젝트 (*.bandwagon);;웨스턴 블롯 합성 (*.bwcomposite)",
         "clipboard_source_name": "클립보드",
         "clipboard_empty_msg": "클립보드에 이미지가 없습니다.",
         "open_failed_title": "열기 실패",
@@ -279,6 +286,15 @@ STRINGS = {
         "default_filename_with_overlay": "gel_result_분석포함.png",
         "status_saved": "저장됨: {path}",
         "gelproj_filter": "BandWagon 프로젝트 (*.bandwagon)",
+        "toolbar_project_save_as": "프로젝트 새로 저장",
+        "toolbar_project_save_as_tip": "지금 상태를 새 파일 이름/위치로 저장합니다(사본 만들기).",
+        "menu_project_open_location": "프로젝트 현재 위치 열기",
+        "menu_project_open_location_tip": "지금 작업 중인 프로젝트 파일이 있는 폴더를 탐색기로 엽니다.",
+        "no_project_path_msg": "아직 저장하거나 불러온 프로젝트 파일이 없습니다.",
+        "unsaved_changes_title": "저장하지 않은 변경사항",
+        "unsaved_changes_msg": "마지막 저장 이후 바뀐 내용이 있습니다. 저장할까요?",
+        "unsaved_save_btn": "저장",
+        "unsaved_discard_btn": "저장 안 함",
         "status_project_saved": "프로젝트 저장됨: {path}",
         "project_save_failed_title": "프로젝트 저장 실패",
         "version_warning_title": "버전 경고",
@@ -298,6 +314,7 @@ STRINGS = {
         "splash_tab_lanes": "레인 도구 불러오는 중...",
         "splash_tab_analysis": "분석 도구 불러오는 중...",
         "splash_tab_std": "표준곡선 도구 불러오는 중...",
+        "splash_tab_memo": "메모 탭 불러오는 중...",
         "splash_almost_done": "거의 다 됐습니다...",
         # 합성 탭
         "composite_studio_title": "웨스턴 블롯 합성 스튜디오",
@@ -352,21 +369,36 @@ STRINGS = {
         "help_html":
             "<h3>기본 흐름</h3>"
             "<p>이미지 열기 -> (필요시) <b>보정/펴기</b>로 다듬기 -> <b>레인</b>에서 레인 지정 후 분석 "
-            "-> 마커 MW 입력 -> <b>정량</b>·<b>분석</b> 탭에서 결과 확인 -> 저장</p>"
+            "-> 마커 MW 입력 -> <b>분석</b>·<b>정량</b> 탭에서 결과 확인 -> 저장</p>"
+
+            "<h3>메뉴 구성</h3>"
+            "<p><b>파일</b>(열기·붙여넣기·프로젝트 저장/새로 저장/현재 위치 열기·결과 이미지 "
+            "내보내기) · <b>웨스턴블롯</b>(합성 만들기·기존 합성 파일 불러오기) · "
+            "<b>편집</b>(전체 초기화·되돌리기·다시하기) · <b>정보</b>(사용법·개발자 정보) · "
+            "<b>언어</b>(한국어/English)</p>"
 
             "<h3>이미지 불러오기 / 저장</h3>"
             "<p>"
-            "· <b>열기</b>: 파일 선택, <b>붙여넣기</b>: 클립보드 이미지 그대로 사용(Ctrl+V도 가능)<br>"
-            "· <b>결과 이미지 복사 / 결과 이미지 저장</b>: 분석 결과가 있으면 '사진만' / '분석 포함(합성)' 중 선택<br>"
-            "· <b>CSV 내보내기</b>: 밴드별 MW·강도·Volume 표 저장<br>"
+            "· <b>파일 &gt; 열기(Ctrl+O)</b>: 그림·.bandwagon 프로젝트·.bwcomposite 합성 파일을 "
+            "구분 없이 한 대화상자에서 고르면 확장자를 보고 알아서 불러옵니다. "
+            "<b>지금 창은 그대로 두고 새 창을 하나 더 띄웁니다</b> — 여러 젤을 동시에 띄워두고 "
+            "비교할 수 있습니다. <b>붙여넣기(Ctrl+V)</b>는 예전처럼 지금 창에 바로 적용됩니다<br>"
+            "· 설치본에서는 탐색기에서 .bandwagon/.bwcomposite 파일을 더블클릭해도 바로 열립니다"
+            "(아이콘 색으로 두 종류가 구분됩니다)<br>"
+            "· <b>결과 이미지 내보내기</b> 메뉴 — 복사 / 저장: 분석 결과가 있으면 '사진만' / '분석 포함(합성)' 중 선택, "
+            "CSV 저장: 밴드별 MW·강도·Volume 표 저장<br>"
             "· <b>되돌리기(Ctrl+Z)</b>: 회전·반전·자르기·펴기·색상반전·곡률보정을 한 단계씩 취소"
             "</p>"
 
             "<h3>프로젝트 저장 / 불러오기 (.bandwagon)</h3>"
             "<p>"
-            "· <b>프로젝트 저장(Ctrl+S)</b>: 현재 이미지 + 밝기/대비/톤커브 + 레인 구성 + "
-            "분석 파라미터를 파일 하나(.bandwagon)에 통째로 저장<br>"
-            "· <b>프로젝트 열기(Ctrl+Shift+O)</b>: 저장된 .bandwagon 파일을 불러와 그 상태에서 이어서 작업<br>"
+            "· <b>프로젝트 저장(Ctrl+S)</b>: 현재 이미지 + 밝기/대비/톤커브 + 레인 구성 + 메모 + "
+            "분석 파라미터를 파일 하나(.bandwagon)에 통째로 저장. 이미 열었거나 저장한 적 있는 "
+            "파일이면 대화상자 없이 그 자리에 바로 덮어씁니다<br>"
+            "· <b>프로젝트 새로 저장(Ctrl+Shift+S)</b>: 항상 새 이름/위치를 물어봅니다(사본 만들기)<br>"
+            "· <b>프로젝트 현재 위치 열기</b>: 지금 작업 중인 프로젝트 파일이 있는 폴더를 탐색기로 엽니다<br>"
+            "· 마지막 저장 이후 바뀐 내용이 있는 채로 창을 닫으려 하면 저장할지 물어봅니다<br>"
+            "· 그림 파일 열기는 '파일 &gt; 열기' 하나로 통합돼 있습니다(.bandwagon 확장자면 자동으로 프로젝트로 불러옴)<br>"
             "· '결과 이미지 저장'(PNG)과는 다릅니다 — PNG는 보기용 최종 이미지 한 장이고, "
             ".bandwagon은 다시 열어 레인·커브·분석을 수정할 수 있는 작업 파일입니다."
             "</p>"
@@ -383,31 +415,41 @@ STRINGS = {
             "자동 인식이 안 맞으면 코너 지정 모드를 켜고 이미지 위에서 드래그해 "
             "사각형을 만든 뒤 <b>네 모서리를 끌어</b> 맞추세요.<br>"
             "그래디언트 젤 특유의 부채꼴(가운데가 처지거나 솟는) 휨은 "
-            "'부채꼴(곡률) 보정' 슬라이더로 라이브 미리보기를 보며 조정합니다.</p>"
+            "'부채꼴(곡률) 보정' 슬라이더로 라이브 미리보기를 보며 조정합니다.<br>"
+            "사진이 평행사변형으로 비스듬히 찍혀 위/아래 변의 좌우 위치가 어긋난 경우는 "
+            "'기울기(전단) 보정' 슬라이더로 바로잡습니다 — 레인 경계선이 수직이 되는 "
+            "지점을 찾으면 됩니다.</p>"
 
             "<h3>보정 탭</h3>"
             "<p>회전(90°/180°/정밀회전) · 좌우·상하 반전 · 자르기 · 색상 반전 · 밝기/대비.<br>"
             "밝기·대비는 화면 표시용일 뿐 분석 결과에는 영향을 주지 않습니다. "
             "나머지(회전·반전·자르기·색상반전)는 원본 자체를 바꾸므로 분석에도 반영됩니다.</p>"
 
-            "<h3>합성 탭</h3>"
+            "<h3>웨스턴블롯 메뉴 (합성)</h3>"
             "<p>가시광 사진(마커가 보이는 일반 사진)과 UV 사진(밴드가 보이는 형광 사진)을 "
-            "정렬해 하나로 합칩니다. 빈 썸네일을 클릭해 파일에서 열거나 클립보드에서 "
-            "붙여넣어 두 사진을 불러오세요. 이미 불러온 썸네일을 클릭하면 원본을 크게 "
-            "볼 수 있습니다.<br>"
-            "두 사진을 모두 불러왔으면, 아래 캔버스에서 <b>UV 사진 위에</b> 드래그해 "
-            "사각형을 만든 뒤 네 모서리를 끌어 맞추세요. 그 즉시 같은 화면에 가시광 사진이 "
-            "그 영역에 어떻게 겹쳐지는지 실시간으로 함께 보입니다. '가시광 투명도' "
-            "슬라이더로 겹쳐 보이는 정도를 조절하며 정렬을 맞추다가, 맞으면 '합성 결과를 "
-            "메인 이미지로 적용'을 누르세요.<br>"
-            "적용 후에는 화면에 두 사진을 섞은 합성 이미지가 보이지만, "
-            "<b>실제 밴드 분석은 UV 신호만으로 계산</b>됩니다 — 가시광 사진의 마커 글자나 "
-            "종이 배경이 밴드로 오검출되는 것을 막기 위함입니다. "
-            "가시광/UV 원본은 각 썸네일을 다시 클릭해 언제든 확인할 수 있습니다.</p>"
+            "정렬해 하나로 합치는 기능은 메인 창과 별개인 <b>합성 스튜디오</b> 창에서 합니다.<br>"
+            "· <b>만들기</b>: 합성 스튜디오를 새로 엽니다. 빈 썸네일을 클릭해 파일에서 열거나 "
+            "클립보드에서 붙여넣어 두 사진을 불러오세요(이미 불러온 썸네일을 클릭하면 원본을 "
+            "크게 볼 수 있습니다). 두 사진을 모두 불러왔으면 캔버스에서 <b>UV 사진 위에</b> "
+            "드래그해 사각형을 만든 뒤 네 모서리를 끌어 맞추세요 — 그 즉시 가시광 사진이 그 "
+            "영역에 어떻게 겹쳐지는지 실시간으로 같이 보입니다. '가시광 투명도' 슬라이더로 "
+            "겹쳐 보이는 정도를 조절하며 정렬을 맞추다가, 맞으면 '합성 내보내기'로 "
+            ".bwcomposite 파일을 저장하세요. 저장 직후 바로 분석을 시작할지 물어봅니다<br>"
+            "· <b>기존 합성 파일 불러오기</b>: 이미 만들어둔 .bwcomposite를 열어 바로 분석을 "
+            "시작합니다(스튜디오를 다시 열 필요 없음)<br>"
+            "· .bwcomposite 파일을 '파일 &gt; 열기'나 탐색기 더블클릭으로 열면, 메인 창에서 "
+            "바로 분석을 시작하면서 빈 합성 스튜디오 창도 같이 뜹니다(새로 합성을 만들거나 "
+            "다른 합성 파일을 이어서 불러올 수 있게)<br>"
+            "· 합성 이미지는 화면에는 가시광+UV를 섞어 보여주지만, <b>실제 밴드 분석은 UV "
+            "신호만으로 계산</b>됩니다 — 가시광 사진의 마커 글자나 종이 배경이 밴드로 "
+            "오검출되는 것을 막기 위함입니다. .bwcomposite는 이 화면용 합성본과 분석용 UV "
+            "그레이스케일만 담고 있어, 원본 가시광/UV 사진 두 장으로 다시 코너를 맞추는 "
+            "작업은 못 합니다(그러려면 처음부터 '만들기'로 새로 해야 합니다).</p>"
 
             "<h3>레인 탭</h3>"
             "<p>"
-            "· <b>레인 자동 검출</b>: 레인 개수를 알면 체크박스로 지정 시 더 정확합니다<br>"
+            "· <b>레인 자동 검출</b>: 젤에 로딩한 레인 개수를 입력해야 합니다(촬영한 사람은 "
+            "이미 아는 값이라, 그 개수로 폭을 정확히 나눕니다)<br>"
             "· <b>레인 수동 조정</b> 켜고 이미지 위에서 좌우 드래그 = 레인 추가<br>"
             "· 레인 경계선 드래그 = 폭 조정, 레인 이름(라벨) 드래그 = 레인 통째로 이동<br>"
             "· 테이블에서 유형을 '마커'로 바꾸면 MW 입력창이 바로 열립니다(다시 선택하면 재오픈)<br>"
@@ -426,9 +468,15 @@ STRINGS = {
             "MW는 마커 레인에 입력한 값을 기준으로 곡선 보간하여 계산되며, "
             "정량 계산은 항상 보정 전 원본 데이터를 사용합니다.</p>"
 
+            "<h3>메모 탭</h3>"
+            "<p>정량 탭 바로 옆에 있는 자유 메모장입니다. 이 분석에 대한 메모를 남기면 "
+            "프로젝트 저장/불러오기 시 함께 저장·복원됩니다. 새 이미지를 열면(같은 창에서 "
+            "새로 시작하면) 초기화됩니다.</p>"
+
             "<h3>마커 프리셋</h3>"
             "<p>자주 쓰는 마커(밴드별 분자량)를 등록해두면 다음에 같은 마커를 쓸 때 "
-            "'관리…'에서 선택만으로 자동 입력됩니다. 밴드 개수가 다르면 수동으로 매칭할 수 있습니다.</p>"
+            "'관리…'에서 선택만으로 자동 입력됩니다. 밴드 개수가 다르면 수동으로 매칭할 수 있습니다. "
+            "'내보내기…'/'가져오기…'로 CSV 파일로 백업하거나 다른 컴퓨터/동료와 공유할 수 있습니다.</p>"
 
             "<h3>오픈소스 라이선스 고지</h3>"
             "<p style='font-size:11px;'>"
@@ -476,13 +524,19 @@ STRINGS = {
         "profile_title": "Density Profile (raw image)",
         "profile_empty_hint": "Run band analysis to see per-lane curves here",
         "std_curve_empty_hint": "A standard curve appears once 2+ BSA standard lanes are analyzed",
-        # Toolbar
-        "toolbar_open": "Open",
+        # Menu bar (used to be a toolbar -- reorganized into category menus as it grew)
+        "menu_file": "File",
+        "menu_western": "Western Blot",
+        "menu_western_open": "Create",
+        "menu_edit": "Edit",
+        "menu_info": "Info",
+        "menu_language": "Language",
+        "lang_name_ko": "한국어",
+        "lang_name_en": "English",
         "toolbar_paste": "Paste",
         "toolbar_project_open": "Open Project",
-        "toolbar_project_open_tip": "Load a saved .bandwagon project (original image + overlay/analysis state). (Ctrl+Shift+O)",
         "toolbar_project_save": "Save Project",
-        "toolbar_project_save_tip": "Save the current image plus all adjustments, lanes, and analysis state into one .bandwagon file.\nReopen it later with 'Open Project' to keep working. (Ctrl+S)",
+        "toolbar_project_save_tip": "Save the current image plus all adjustments, lanes, and analysis state into one .bandwagon file.\nIf a file is already open/saved, this overwrites it in place. (Ctrl+S)",
         "toolbar_composite_studio": "Composite (Western Blot)",
         "toolbar_composite_studio_tip": "Open a separate window to align and blend a visible-light + UV photo.\nOpening a .bwcomposite file you already made is also done from inside that window.",
         "toolbar_composite_import": "Load Existing Composite File",
@@ -500,9 +554,7 @@ STRINGS = {
         "status_nothing_to_redo": "Nothing to redo.",
         "status_redo_done": "Redo complete.",
         "toolbar_help": "Help",
-        "toolbar_about": "About",
-        "toolbar_lang_switch": "한국어",   # In English mode, show the target language name to switch to
-        "toolbar_lang_switch_tip": "Switch the app language to Korean (restart required)",
+        "toolbar_about": "Developer Info",
         "zoom_out": "Out",
         "zoom_in": "In",
         "zoom_reset_tip": "Reset to fit screen",
@@ -590,6 +642,8 @@ STRINGS = {
         "tab_adjust": "Adjust",
         "tab_warp": "Warp",
         "tab_std": "Standard Curve",
+        "project_memo_label": "Notes",
+        "project_memo_placeholder": "Leave notes about this analysis — saved together with the project.",
         # Adjust tab wrap-up
         "adjust_display_only_note": "Adjustments are for on-screen display only. Analysis values are unaffected.",
         # Warp tab
@@ -660,7 +714,8 @@ STRINGS = {
         "auto_detect_done_title": "Auto-Detection Complete",
         "auto_detect_done_msg": "Detected the gel area. Warp using the shown corners?\nChoose No to drag the corners and adjust them first.",
         "status_warp_done": "Warp complete — {w}×{h}px",
-        "dlg_open_image_title": "Open Image",
+        "dlg_open_title": "Open",
+        "dlg_open_filter": "All Supported Files (*.png *.jpg *.jpeg *.tif *.tiff *.bmp *.webp *.bandwagon *.bwcomposite);;Images (*.png *.jpg *.jpeg *.tif *.tiff *.bmp *.webp);;BandWagon Project (*.bandwagon);;Western Blot Composite (*.bwcomposite)",
         "clipboard_source_name": "Clipboard",
         "clipboard_empty_msg": "No image found on the clipboard.",
         "open_failed_title": "Failed to Open",
@@ -677,6 +732,15 @@ STRINGS = {
         "default_filename_with_overlay": "gel_result_with_overlay.png",
         "status_saved": "Saved: {path}",
         "gelproj_filter": "BandWagon Project (*.bandwagon)",
+        "toolbar_project_save_as": "Save Project As",
+        "toolbar_project_save_as_tip": "Save the current state to a new file name/location (make a copy).",
+        "menu_project_open_location": "Open Project Location",
+        "menu_project_open_location_tip": "Open the folder containing the current project file in Explorer/Finder.",
+        "no_project_path_msg": "No project file has been saved or opened yet.",
+        "unsaved_changes_title": "Unsaved Changes",
+        "unsaved_changes_msg": "There are changes since the last save. Save them?",
+        "unsaved_save_btn": "Save",
+        "unsaved_discard_btn": "Don't Save",
         "status_project_saved": "Project saved: {path}",
         "project_save_failed_title": "Failed to Save Project",
         "version_warning_title": "Version Warning",
@@ -696,6 +760,7 @@ STRINGS = {
         "splash_tab_lanes": "Loading lane tools...",
         "splash_tab_analysis": "Loading analysis tools...",
         "splash_tab_std": "Loading standard curve tools...",
+        "splash_tab_memo": "Loading notes tab...",
         "splash_almost_done": "Almost done...",
         # Composite tab
         "composite_studio_title": "Western Blot Composite Studio",
@@ -750,21 +815,37 @@ STRINGS = {
         "help_html":
             "<h3>Basic Workflow</h3>"
             "<p>Open an image -> (if needed) clean up in <b>Adjust/Warp</b> -> assign lanes in <b>Lanes</b> and run analysis "
-            "-> enter marker MW -> check results in <b>Standard Curve</b>/<b>Analysis</b> -> save</p>"
+            "-> enter marker MW -> check results in <b>Analysis</b>/<b>Standard Curve</b> -> save</p>"
+
+            "<h3>Menu Layout</h3>"
+            "<p><b>File</b> (Open, Paste, Save/Save As/Open Project Location, Export Result Image) · "
+            "<b>Western Blot</b> (Create composite, Load existing composite file) · "
+            "<b>Edit</b> (Reset All, Undo, Redo) · <b>Info</b> (Help, Developer Info) · "
+            "<b>Language</b> (한국어/English)</p>"
 
             "<h3>Opening / Saving Images</h3>"
             "<p>"
-            "· <b>Open</b>: choose a file. <b>Paste</b>: use a clipboard image directly (Ctrl+V works too)<br>"
-            "· <b>Copy Result Image / Save Result Image</b>: if there are analysis results, choose 'image only' or 'with overlay'<br>"
-            "· <b>Export CSV</b>: save a table of MW/intensity/volume per band<br>"
+            "· <b>File &gt; Open (Ctrl+O)</b>: pick an image, a .bandwagon project, or a .bwcomposite "
+            "file in one dialog — the file extension decides which one loads. "
+            "<b>This always opens in a new window</b>, leaving the current one untouched, so you can "
+            "keep several gels open side by side. <b>Paste (Ctrl+V)</b> still applies to the current "
+            "window as before<br>"
+            "· In the installed app, double-clicking a .bandwagon or .bwcomposite file in Explorer "
+            "opens it directly (the two file types have differently-colored icons)<br>"
+            "· <b>Export Result Image</b> menu — Copy/Save: if there are analysis results, choose 'image only' or "
+            "'with overlay'; Export CSV: save a table of MW/intensity/volume per band<br>"
             "· <b>Undo (Ctrl+Z)</b>: undo rotate/flip/crop/warp/invert/bow-correction one step at a time"
             "</p>"
 
             "<h3>Save / Open Project (.bandwagon)</h3>"
             "<p>"
             "· <b>Save Project (Ctrl+S)</b>: save the current image plus brightness/contrast/tone curve/lane setup/"
-            "analysis parameters into one .bandwagon file<br>"
-            "· <b>Open Project (Ctrl+Shift+O)</b>: reload a saved .bandwagon and keep working from that state<br>"
+            "notes/analysis parameters into one .bandwagon file. If a file is already open or was saved before, "
+            "this overwrites it in place with no dialog<br>"
+            "· <b>Save Project As (Ctrl+Shift+S)</b>: always asks for a new name/location (make a copy)<br>"
+            "· <b>Open Project Location</b>: opens the folder containing the current project file in Explorer<br>"
+            "· If you try to close a window with changes since the last save, you'll be asked whether to save first<br>"
+            "· Opening a project file is done through the same 'File &gt; Open' menu above (just pick a .bandwagon file)<br>"
             "· This differs from 'Save Result Image' (PNG) — a PNG is one final image for viewing, while "
             ".bandwagon is a working file you can reopen to edit lanes/curves/analysis again."
             "</p>"
@@ -781,31 +862,42 @@ STRINGS = {
             "If auto-detection misses, turn on Corner Mode, drag a rectangle on the image, "
             "then <b>drag the 4 corners</b> to fit.<br>"
             "The bow (sag) typical of gradient gels — where the center dips or rises — can be corrected "
-            "live with the 'Bow Correction' slider.</p>"
+            "live with the 'Bow Correction' slider.<br>"
+            "If the photo was shot at a slight angle (parallelogram-shaped, top and bottom edges "
+            "horizontally offset), use the 'Shear Correction' slider — move it until the lane "
+            "boundaries look vertical.</p>"
 
             "<h3>Adjust Tab</h3>"
             "<p>Rotate (90°/180°/fine) · flip horizontal/vertical · crop · invert colors · brightness/contrast.<br>"
             "Brightness/contrast are display-only and don't affect analysis results. "
             "The rest (rotate/flip/crop/invert) modify the original image and do affect analysis.</p>"
 
-            "<h3>Composite Tab</h3>"
-            "<p>Aligns and merges a visible-light photo (showing markers) with a UV photo "
-            "(showing fluorescent bands) into one. Click an empty thumbnail to load each photo, "
-            "either by opening a file or pasting from the clipboard. Click a thumbnail that already "
-            "has a photo to view the original larger.<br>"
-            "Once both photos are loaded, drag a rectangle <b>on the UV photo</b> in the canvas below, "
-            "then drag the 4 corners to fit. The same canvas immediately "
-            "shows how the visible-light photo overlays that area, live. Use the 'Visible-Light "
-            "Opacity' slider to adjust how strongly it shows through while you fine-tune the alignment, "
-            "then click 'Apply Composite as Main Image' once it looks right.<br>"
-            "After applying, the screen shows the blended composite, but "
-            "<b>actual band analysis is computed from UV signal only</b> — this prevents marker text "
-            "or paper background from the visible-light photo being mistaken for bands. "
-            "You can always check either original photo again by clicking its thumbnail.</p>"
+            "<h3>Western Blot Menu (Composite)</h3>"
+            "<p>Aligning and merging a visible-light photo (showing markers) with a UV photo "
+            "(showing fluorescent bands) happens in its own <b>Composite Studio</b> window, "
+            "separate from the main window.<br>"
+            "· <b>Create</b>: opens a new Composite Studio. Click an empty thumbnail to load each "
+            "photo, either by opening a file or pasting from the clipboard (click a thumbnail that "
+            "already has a photo to view the original larger). Once both are loaded, drag a "
+            "rectangle <b>on the UV photo</b> in the canvas, then drag the 4 corners to fit — the "
+            "visible-light photo immediately shows overlaid on that area, live. Use the "
+            "'Visible-Light Opacity' slider while fine-tuning, then click 'Export Composite' to "
+            "save a .bwcomposite file. You'll be asked whether to start analyzing it right away<br>"
+            "· <b>Load Existing Composite File</b>: opens an already-exported .bwcomposite and "
+            "starts analysis immediately (no need to reopen the studio)<br>"
+            "· Opening a .bwcomposite via 'File &gt; Open' or an Explorer double-click starts "
+            "analysis in the main window while also opening a blank Composite Studio alongside it "
+            "(handy for making a new composite or loading another one)<br>"
+            "· The screen shows the blended visible+UV image, but <b>actual band analysis is "
+            "computed from UV signal only</b> — this prevents marker text or paper background from "
+            "the visible-light photo being mistaken for bands. A .bwcomposite only stores this "
+            "blended view plus the analysis-only UV grayscale, so it can't be reopened in the "
+            "studio to redo the corner alignment (start over with 'Create' for that).</p>"
 
             "<h3>Lanes Tab</h3>"
             "<p>"
-            "· <b>Auto-Detect Lanes</b>: more accurate if you check the box and specify the expected lane count<br>"
+            "· <b>Auto-Detect Lanes</b>: you must enter the number of lanes loaded on the gel "
+            "(you already know this, so it splits the width by exactly that count)<br>"
             "· Turn on <b>Manual Lane Mode</b> and drag left-right on the image to add a lane<br>"
             "· Drag a lane edge to resize it; drag a lane's name label to move the whole lane<br>"
             "· Switching a lane's type to 'Marker' opens the MW entry dialog right away (reselecting reopens it)<br>"
@@ -824,9 +916,15 @@ STRINGS = {
             "MW is computed by curve interpolation from the values you entered on marker lanes, and "
             "quantification always uses the raw image data, before any adjustments.</p>"
 
+            "<h3>Notes Tab</h3>"
+            "<p>A free-form notes box right next to the Standard Curve tab. Anything you write here "
+            "is saved with the project and restored when you reopen it. Opening a new image (starting "
+            "fresh in the same window) clears it.</p>"
+
             "<h3>Marker Presets</h3>"
             "<p>Save frequently-used markers (molecular weight per band) so you can fill them in automatically "
-            "next time via 'Manage…'. If the band count differs, you can match them manually.</p>"
+            "next time via 'Manage…'. If the band count differs, you can match them manually. "
+            "Use 'Export…'/'Import…' to back them up as a CSV file or share them with another computer or colleague.</p>"
 
             "<h3>Open-Source License Notice</h3>"
             "<p style='font-size:11px;'>"

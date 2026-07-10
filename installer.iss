@@ -15,7 +15,7 @@
 ; 버전을 올릴 때는 아래 MyAppVersion과 bandwagon/meta.py의 APP_VERSION을
 ; 같이 맞춰 주세요(서로 자동 동기화되지 않음).
 #define MyAppName "BandWagon"
-#define MyAppVersion "1.4.5"
+#define MyAppVersion "2.0.0"
 #define MyAppPublisher "BandWagon"
 #define MyAppExeName "BandWagon.exe"
 #define MyAppIcon "bandwagon.ico"
@@ -66,6 +66,36 @@ Source: "dist\BandWagon\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdir
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+
+[Registry]
+; .bandwagon 확장자를 이 앱에 연결 — 탐색기에서 더블클릭하면 BandWagon.exe가
+; 그 경로를 커맨드라인 인자로 받아서 뜬다(bandwagon/app.py의 Analyzer.__init__ ->
+; open_path_smart가 확장자를 보고 프로젝트로 연다).
+;
+; Root는 HKCR이 아니라 HKA를 쓴다 — 처음엔 HKCR로 했다가 실제 설치에서
+; "RegCreateKeyEx 실패, 액세스가 거부되었습니다"로 막혔다. HKCR은 그냥
+; 문자 그대로 HKEY_CLASSES_ROOT에 쓰려고 시도하는데, 이건 관리자 권한
+; 없이는(PrivilegesRequired=lowest) 쓸 수 없다. HKA(Inno Setup 6.1+ 전용
+; 루트)는 설치 권한에 맞춰 HKLM\Software\Classes(관리자 설치) 또는
+; HKCU\Software\Classes(지금처럼 lowest)로 알아서 골라 쓴다 — 실제
+; 설치로만 드러난 문제라 시뮬레이션으로는 못 잡았다.
+; uninsdeletevalue/uninsdeletekey라 제거 시 등록도 같이 지워진다.
+Root: HKA; Subkey: ".bandwagon"; ValueType: string; ValueName: ""; ValueData: "BandWagon.Project"; Flags: uninsdeletevalue
+Root: HKA; Subkey: "BandWagon.Project"; ValueType: string; ValueName: ""; ValueData: "BandWagon Project"; Flags: uninsdeletekey
+Root: HKA; Subkey: "BandWagon.Project\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"
+Root: HKA; Subkey: "BandWagon.Project\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""
+
+; .bwcomposite(웨스턴 블롯 합성 파일)도 마찬가지로 연결한다. 아이콘은 앱
+; 아이콘 그대로 쓰지 않고 색만 다르게 만든 bandwagon_composite.ico를 따로
+; 써서(build_exe.bat이 exe 옆에 그대로 복사해 둠), 탐색기에서 프로젝트
+; 파일과 한눈에 구분되게 한다.
+Root: HKA; Subkey: ".bwcomposite"; ValueType: string; ValueName: ""; ValueData: "BandWagon.Composite"; Flags: uninsdeletevalue
+Root: HKA; Subkey: "BandWagon.Composite"; ValueType: string; ValueName: ""; ValueData: "BandWagon Western Blot Composite"; Flags: uninsdeletekey
+; PyInstaller 6.x onedir는 --add-data로 넣은 파일을 exe 옆이 아니라
+; _internal\ 폴더 안에 둔다(bandwagon.ico도 마찬가지 — meta.resource_path()가
+; sys._MEIPASS로 찾는 이유).
+Root: HKA; Subkey: "BandWagon.Composite\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\_internal\bandwagon_composite.ico"
+Root: HKA; Subkey: "BandWagon.Composite\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent

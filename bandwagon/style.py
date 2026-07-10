@@ -26,12 +26,16 @@ class StyleMixin:
             f"QScrollBar::handle:vertical{{background:{INK4};border-radius:5px;min-height:24px;}}"
             f"QScrollBar::add-line,QScrollBar::sub-line{{height:0;}}")
 
-    def _toolbar_css(self):
-        return (f"QToolBar{{background:{INK1};border-bottom:1px solid {LINE};padding:6px 10px;spacing:4px;}}"
-                f"QToolBar::separator{{width:1px;background:{LINE};margin:5px 6px;}}"
-                f"QToolButton{{color:{INKT};background:{INK2};border:1px solid {LINE};"
-                f"border-radius:6px;padding:6px 13px;font-size:12px;}}"
-                f"QToolButton:hover{{background:{INK4};border-color:{LINE2};}}")
+    def _menubar_css(self):
+        return (f"QMenuBar{{background:{INK1};border-bottom:1px solid {LINE};padding:2px 6px;}}"
+                f"QMenuBar::item{{color:{INKT};background:transparent;padding:6px 10px;border-radius:5px;}}"
+                f"QMenuBar::item:selected{{background:{INK3};}}"
+                f"QMenuBar::item:pressed{{background:{INK4};}}"
+                f"QMenu{{background:{INK2};color:{INKT};border:1px solid {LINE};padding:4px;}}"
+                f"QMenu::item{{padding:6px 24px 6px 12px;border-radius:4px;}}"
+                f"QMenu::item:selected{{background:{INK3};color:{CYAN};}}"
+                f"QMenu::item:disabled{{color:{MUTE};}}"
+                f"QMenu::separator{{height:1px;background:{LINE};margin:4px 8px;}}")
 
     def _tabs_css(self):
         return (f"QTabWidget::pane{{border:1px solid {LINE};border-radius:8px;background:{INK2};top:-1px;}}"

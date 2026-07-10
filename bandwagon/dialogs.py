@@ -108,7 +108,12 @@ def _table_css():
             f"QHeaderView::section{{background:{INK2};color:{MUTE};border:none;"
             f"border-bottom:1px solid {LINE};padding:5px;font-size:10px;}}"
             f"QTableWidget::item:selected{{background:rgba(63,180,230,0.30);color:{INKT};}}"
-            f"QTableWidget::item:selected:!active{{background:rgba(63,180,230,0.30);color:{INKT};}}")
+            f"QTableWidget::item:selected:!active{{background:rgba(63,180,230,0.30);color:{INKT};}}"
+            # 셀 더블클릭으로 이름을 편집할 때 뜨는 QLineEdit — 위 QTableWidget
+            # 규칙은 아이템 표시에만 적용되고 이 편집기 위젯엔 안 먹혀서,
+            # 지정 안 하면 Qt 기본(검정 글씨)이 다크 배경 위에서 안 보였다.
+            f"QTableWidget QLineEdit{{background:{INK1};color:{INKT};"
+            f"border:1px solid {CYAN};border-radius:2px;}}")
 
 
 class MarkerDialog(QDialog):

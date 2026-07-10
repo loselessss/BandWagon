@@ -12,7 +12,7 @@ import numpy as np
 from PyQt5.QtWidgets import (
     QComboBox, QFormLayout, QGroupBox, QHBoxLayout, QHeaderView,
     QInputDialog, QLabel, QPushButton, QSlider, QSpinBox, QTableWidget,
-    QTableWidgetItem, QVBoxLayout, QWidget,
+    QTableWidgetItem, QTextEdit, QVBoxLayout, QWidget,
 )
 from PyQt5.QtCore import Qt
 
@@ -195,6 +195,22 @@ class LanesMixin:
         self.std_label.setAlignment(Qt.AlignCenter)
         v.addWidget(self.std_label)
         self._add_tab(page, tr("tab_std"))
+
+    def _build_tab_memo(self):
+        """정량 탭 바로 옆의 독립 탭 — 프로젝트 저장 시 함께 저장되는
+        자유 메모. 처음엔 정량 탭 안에 끼워 넣었는데, 별도 탭으로
+        분리해달라는 피드백이 있어 옮겼다."""
+        page = self._new_page(); v = QVBoxLayout(page); v.setContentsMargins(10, 10, 10, 10); v.setSpacing(8)
+        hint = QLabel(tr("project_memo_placeholder"))
+        hint.setStyleSheet(f"color:{MUTE};font-size:10px;"); hint.setWordWrap(True)
+        v.addWidget(hint)
+        self.memo_edit = QTextEdit()
+        self.memo_edit.setPlaceholderText(tr("project_memo_placeholder"))
+        self.memo_edit.setStyleSheet(
+            f"QTextEdit{{background:{INK1};color:{INKT};border:1px solid {LINE};"
+            f"border-radius:6px;padding:6px;font-size:11px;}}")
+        v.addWidget(self.memo_edit, 1)
+        self._add_tab(page, tr("project_memo_label"))
 
     def _commit_lanes(self):
         """레인 구성(개수/경계/이름/종류/마커값)을 되돌리기 스택에 한
