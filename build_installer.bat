@@ -9,6 +9,8 @@ REM   2) Run this file (build_installer.bat)
 REM First time only: install Inno Setup (free) from
 REM   https://jrsoftware.org/isdl.php
 
+cd /d "%~dp0"
+
 if not exist "dist\BandWagon\BandWagon.exe" (
   echo [ERROR] dist\BandWagon\BandWagon.exe not found.
   echo         Run build_exe.bat first to create it.

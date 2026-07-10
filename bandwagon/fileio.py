@@ -186,11 +186,16 @@ class FileIOMixin:
         """지금 상태를 나타내는 해시. 창을 닫을 때 마지막 저장 시점과
         비교해 '저장 안 한 변경사항이 있는지' 판단하는 데 쓴다. 이미지
         픽셀까지 포함해야 한다 — 회전/자르기 같은 편집은 레인/커브 같은
-        메타데이터를 안 바꾸고 이미지 자체만 바꾸기 때문이다."""
+        메타데이터를 안 바꾸고 이미지 자체만 바꾸기 때문이다.
+
+        제목표시줄 '*' 표시(_refresh_title)가 이 함수를 몇 초마다 반복
+        호출하므로, PNG 인코딩(압축) 대신 원본 픽셀 바이트를 그대로
+        해싱한다 — 동일 여부만 판단하면 되니 압축은 불필요한 비용이고,
+        raw bytes 해싱이 실측상 수십 배 더 빠르다."""
         if self._orig is None:
             return None
         h = hashlib.sha256()
-        buf = io.BytesIO(); self._orig.save(buf, format="PNG"); h.update(buf.getvalue())
+        h.update(self._orig.tobytes())
         meta = {
             "bright": self.sl_bright.value(),
             "contrast": self.sl_contrast.value(),
@@ -234,9 +239,18 @@ class FileIOMixin:
         event.accept()
 
     def _after_load(self, name):
-        self.setWindowTitle(f"{APP_NAME} v{APP_VERSION} — {name}")
+        self._base_title = f"{APP_NAME} v{APP_VERSION} — {name}"
         self._pristine_orig = self._orig.copy()   # 전체 초기화 시 복귀할 기준
-        self._reset_session_state()
+        self._reset_session_state()   # _saved_snapshot을 방금 리셋한 상태 기준으로 갱신
+        self._refresh_title()
+
+    def _refresh_title(self):
+        """저장 안 한 변경사항이 있으면 제목표시줄 앞에 '*'를 붙인다.
+        _title_timer(app.py)가 주기적으로 부르고, 저장/불러오기 직후에도
+        바로 반영되도록 즉시 한 번 더 호출한다."""
+        dirty = self._project_state_snapshot() != getattr(self, "_saved_snapshot", None)
+        base = getattr(self, "_base_title", f"{APP_NAME} v{APP_VERSION}")
+        self.setWindowTitle(f"* {base}" if dirty else base)
 
     def _ask_overlay_option(self):
         """분석 결과가 있을 때 '사진만/분석 포함(합성)'을 묻는다.
@@ -353,8 +367,9 @@ class FileIOMixin:
             self._current_project_path = path
             # 제목표시줄이 클립보드/이전 이미지 이름에 머물러 있지 않도록,
             # 저장 성공 시 지금 작업 중인 프로젝트 파일 이름으로 갱신한다.
-            self.setWindowTitle(f"{APP_NAME} v{APP_VERSION} — {Path(path).name}")
+            self._base_title = f"{APP_NAME} v{APP_VERSION} — {Path(path).name}"
             self._saved_snapshot = self._project_state_snapshot()
+            self._refresh_title()
             self.status.showMessage(tr("status_project_saved", path=path))
         except Exception as ex:
             self._warn(tr("project_save_failed_title"), str(ex))
@@ -449,6 +464,7 @@ class FileIOMixin:
             # 전(빈 상태) 기준이었다 — 방금 불러온 상태로 다시 맞춰야 "저장 안
             # 한 변경사항 있음"으로 잘못 뜨지 않는다.
             self._saved_snapshot = self._project_state_snapshot()
+            self._refresh_title()
             self.status.showMessage(tr("status_project_loaded", path=path, n=len(self.lanes)))
         except KeyError:
             self._warn(tr("open_failed_title"), tr("gelproj_invalid_msg"))
@@ -532,5 +548,6 @@ class FileIOMixin:
             self._orig = self._display = self._gray_orig = None
             self.gel._pm = None; self.gel.update()
             self._reset_session_state()
-            self.setWindowTitle(f"{APP_NAME} v{APP_VERSION}")
+            self._base_title = f"{APP_NAME} v{APP_VERSION}"
+            self._refresh_title()
             self.status.showMessage(tr("status_reset_done"))

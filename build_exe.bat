@@ -1,5 +1,6 @@
 @echo off
 setlocal
+cd /d "%~dp0"
 REM ===================================================
 REM  Build BandWagon.exe with PyInstaller
 REM ===================================================
@@ -38,6 +39,12 @@ REM    files look different from .bandwagon project files in Explorer.
 REM    Not embedded in the exe itself -- just needs to exist as a plain
 REM    file next to BandWagon.exe for the registry DefaultIcon entry
 REM    to point at.
+REM  --exclude-module tkinter : this app never imports tkinter (it's
+REM    all PyQt5), but scipy's PyInstaller hook pulls it in anyway "just
+REM    in case", which drags along the whole Tcl/Tk runtime -- including
+REM    a _tcl_data\tzdata folder full of per-country timezone names that
+REM    have nothing to do with gel analysis. Excluding it trims dead
+REM    weight from the build with no functional loss.
 REM
 REM To change the splash image, just replace bandwagon_splash.png
 REM with another file of the same size.
@@ -75,7 +82,7 @@ if errorlevel 1 (
   exit /b 1
 )
 
-%PYCMD% -m PyInstaller --noconfirm --clean --onedir --noconsole --name BandWagon --icon "bandwagon.ico" --add-data "bandwagon.ico;." --add-data "bandwagon_composite.ico;." --manifest "bandwagon.manifest" --splash "bandwagon_splash.png" --collect-submodules bandwagon --collect-all scipy --collect-all cv2 run.py 2>&1 | findstr /V /C:"Hidden import"
+%PYCMD% -m PyInstaller --noconfirm --clean --onedir --noconsole --name BandWagon --icon "bandwagon.ico" --add-data "bandwagon.ico;." --add-data "bandwagon_composite.ico;." --manifest "bandwagon.manifest" --splash "bandwagon_splash.png" --collect-submodules bandwagon --collect-all scipy --collect-all cv2 --exclude-module tkinter run.py 2>&1 | findstr /V /C:"Hidden import"
 
 echo.
 echo ============================================

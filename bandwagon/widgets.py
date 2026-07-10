@@ -278,6 +278,7 @@ class GelView(QWidget):
         self.mode = "lane"
         self.show_overlay = True  # 라이브 프리뷰에서 레인/밴드/MW 오버레이 표시 여부
         self.band_display_style = "area"  # "area"(경계 영역) 또는 "line"(피크 위치 한 줄)
+        self.selected_band = None  # (lane, band_index) — 결과 표에서 고른 밴드를 캔버스에서 굵게 강조
         self._lane_a = None
         self._lane_b = None
         self._lane_edge_drag = None   # (lane, "x1"|"x2") 레인 경계를 드래그 중일 때
@@ -727,18 +728,25 @@ class GelView(QWidget):
                 if self.band_display_style == "line":
                     # 선 모드: 각 피크 위치에 가로 줄 하나만 — 촘촘한 밴드가
                     # 많을 때 영역 박스끼리 겹쳐 보이는 걸 피하고 싶을 때 사용.
-                    for py in lane.peaks:
+                    for j, py in enumerate(lane.peaks):
                         wy = self._iy_to_wy(float(py))
-                        qp.setPen(QPen(QColor(lane.color), 2))
+                        is_sel = self.selected_band == (lane, j)
+                        qp.setPen(QPen(QColor(lane.color), 4 if is_sel else 2))
                         qp.drawLine(QPointF(x1, wy), QPointF(x2, wy))
                 else:
-                    for (top, bot) in bounds:
+                    for j, (top, bot) in enumerate(bounds):
                         wtop = self._iy_to_wy(float(top)); wbot = self._iy_to_wy(float(bot))
-                        band_col = QColor(lane.color); band_col.setAlpha(60)
+                        is_sel = self.selected_band == (lane, j)
+                        band_col = QColor(lane.color); band_col.setAlpha(90 if is_sel else 60)
                         qp.fillRect(QRectF(x1, wtop, x2 - x1, wbot - wtop), band_col)
-                        qp.setPen(QPen(QColor(lane.color), 1.4))
+                        qp.setPen(QPen(QColor(lane.color), 3 if is_sel else 1.4))
                         qp.drawLine(QPointF(x1, wtop), QPointF(x2, wtop))
                         qp.drawLine(QPointF(x1, wbot), QPointF(x2, wbot))
+                        if is_sel:
+                            # 결과 표에서 고른 밴드 — 위아래뿐 아니라 좌우 경계까지
+                            # 굵은 흰 테두리로 감싸서 어느 레인 색이든 눈에 띄게 한다.
+                            qp.setPen(QPen(QColor(255, 255, 255), 2))
+                            qp.drawRect(QRectF(x1, wtop, x2 - x1, wbot - wtop))
 
         # 텍스트(레인 제목 + MW)는 모든 레인 박스를 다 그린 뒤 별도 패스로 그린다.
         # 한 루프 안에서 레인마다 박스→글자를 순서대로 그리면, 다음 레인의 박스가

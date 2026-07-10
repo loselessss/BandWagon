@@ -184,6 +184,7 @@ class LanesMixin:
         self.result_table.setStyleSheet(self._table_css())
         self.result_table.setEditTriggers(QTableWidget.NoEditTriggers)  # 요청#9: 결과는 편집 불가(읽기 전용)
         self.result_table.setSelectionMode(QTableWidget.ExtendedSelection)
+        self.result_table.cellClicked.connect(self._on_result_cell_clicked)
         v.addWidget(self.result_table, 1)
         self._add_tab(page, tr("tab_analysis"))
 
@@ -387,6 +388,7 @@ class LanesMixin:
         재현한다). 사용자가 직접 누르는 '레인 전체 삭제' 버튼은
         _on_clear_lanes_clicked가 처리한다."""
         self.lanes = []
+        self.gel.selected_band = None
         self.gel.set_lanes([])
         self.profile.set_lanes([])
         self.result_table.setRowCount(0)
@@ -409,7 +411,7 @@ class LanesMixin:
             # activated는 currentIndexChanged와 달리 '같은 항목을 다시 선택'해도
             # 신호가 발생한다 — 그래야 이미 '마커'인 상태에서 마커를 다시 눌렀을 때
             # MW 입력창을 재오픈할 수 있다(별도 MW 버튼을 없앤 대신 이 방식을 씀).
-            combo.activated.connect(lambda idx, l=lane: self._set_lane_kind(l, idx))
+            combo.activated.connect(lambda idx, l=lane, c=combo: self._set_lane_kind(l, idx, c))
             self.lane_table.setCellWidget(r, 1, combo)
             order = QWidget(); oh = QHBoxLayout(order); oh.setContentsMargins(0, 0, 0, 0); oh.setSpacing(2)
             up = QPushButton("Up"); up.setFixedWidth(26); up.setFixedHeight(20); up.setStyleSheet(self._compact_btn_css())
@@ -465,24 +467,40 @@ class LanesMixin:
                 self.lanes[row].name = it.text(); self.gel.update()
                 self._commit_lanes()
 
-    def _set_lane_kind(self, lane, idx):
-        lane.kind = ["sample", "marker", "bsa"][idx]
-        if lane.kind == "marker":
-            self._edit_marker(lane)
-        elif lane.kind == "bsa":
+    def _set_lane_kind(self, lane, idx, combo):
+        old_kind = lane.kind
+        new_kind = ["sample", "marker", "bsa"][idx]
+        lane.kind = new_kind
+        ok = True
+        if new_kind == "marker":
+            ok = self._edit_marker(lane)
+        elif new_kind == "bsa":
             dlg = QInputDialog(self); dlg.setStyleSheet(_dialog_style()); _no_help_button(dlg)
             dlg.setWindowTitle(tr("bsa_conc_title")); dlg.setLabelText(tr("bsa_conc_label", name=lane.name))
             dlg.setInputMode(QInputDialog.DoubleInput)
             dlg.setDoubleRange(0, 100000); dlg.setDoubleDecimals(2); dlg.setDoubleValue(max(lane.bsa_amount, 1.0))
-            if dlg.exec_():
+            ok = bool(dlg.exec_())
+            if ok:
                 lane.bsa_amount = dlg.doubleValue()
+        if not ok:
+            # 대화상자를 취소했거나(마커 MW 입력/BSA 농도) 아직 분석 전이라
+            # 입력 자체를 못 연 경우 — 유형이 바뀐 채로 남으면 안 되니 원래
+            # 유형으로 되돌린다(콤보 표시도 함께). setCurrentIndex는
+            # activated가 아니라 currentIndexChanged에서만 신호가 나가므로
+            # 여기서 되돌려도 무한 루프에 빠지지 않는다.
+            lane.kind = old_kind
+            combo.setCurrentIndex({"sample": 0, "marker": 1, "bsa": 2}[old_kind])
+            return
         self.gel.update()
         self._commit_lanes()
 
     def _edit_marker(self, lane):
+        """반환값: MW를 실제로 입력/확정했으면 True, 취소했거나 아직 분석 전이라
+        입력창을 못 열었으면 False — 호출부(_set_lane_kind)가 이 값으로 유형을
+        되돌릴지 판단한다."""
         if lane.peaks is None or len(lane.peaks) == 0:
             self._info(tr("no_bands_title"), tr("no_bands_run_analysis_msg"))
-            return
+            return False
         dlg = MarkerDialog(len(lane.peaks), lane.marker_mw, self)
         if dlg.exec_():
             lane.marker_mw = dlg.values()
@@ -493,6 +511,8 @@ class LanesMixin:
             self.gel.set_lanes(self.lanes)
             self.profile.set_lanes(self.lanes)
             self._compute_mw(); self._refresh_results()
+            return True
+        return False
 
     def _open_marker_presets(self):
         """밴드 분석 여부와 무관하게, 레인 탭에서 바로 마커 프리셋을 추가/삭제."""
@@ -527,6 +547,7 @@ class LanesMixin:
         for lane in self.lanes:
             lane.analyze(self._gray_orig, prom, dist, threshold_pct=thresh,
                          y_top=y_top, y_bot=y_bot, smear_max_px=smear_max_px)
+        self.gel.selected_band = None  # 재분석하면 밴드 구성이 바뀔 수 있어 이전 강조는 무효화
         self.gel.set_lanes(self.lanes)
         self.profile.set_lanes(self.lanes)
         self._compute_mw()
@@ -637,4 +658,13 @@ class LanesMixin:
                 vol = f"{lane.peak_volume[j]:.0f}" if lane.peak_volume is not None else "—"
                 for c, val in enumerate([lane.name, str(j + 1), mw, inten, vol]):
                     it = QTableWidgetItem(val); it.setForeground(lane.color)
+                    it.setData(Qt.UserRole, (lane, j))
                     self.result_table.setItem(r, c, it)
+
+    def _on_result_cell_clicked(self, row, _col):
+        """결과 표에서 행을 클릭하면 그 밴드를 캔버스에서 굵게 강조 표시한다 —
+        레인이 많을 때 어느 박스가 어느 결과 행인지 한눈에 대응이 안 되던
+        문제라, 클릭으로 캔버스 쪽을 짚어주게 했다."""
+        it = self.result_table.item(row, 0)
+        self.gel.selected_band = it.data(Qt.UserRole) if it else None
+        self.gel.update()

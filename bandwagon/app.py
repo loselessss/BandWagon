@@ -40,7 +40,8 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, QMainWindow):
 
     def __init__(self, path=None, splash=None):
         super().__init__()
-        self.setWindowTitle(f"{APP_NAME} v{APP_VERSION}")
+        self._base_title = f"{APP_NAME} v{APP_VERSION}"
+        self.setWindowTitle(self._base_title)
         self.setMinimumSize(1080, 700)
         self.resize(1380, 860)
 
@@ -127,6 +128,14 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, QMainWindow):
         # 부팅은 빠른 채로, 첫 분석/펴기 클릭 때의 '멈칫'을 없앤다. 200ms 정도
         # 늦춰 시작해 최초 화면 렌더링과 경쟁하지 않게 한다.
         QTimer.singleShot(200, self._prewarm_heavy_imports)
+        # 저장 안 한 변경사항이 있으면 제목표시줄에 "*"를 붙인다. 편집이
+        # 일어나는 모든 지점(레인/커브/밝기/메모/분석 파라미터 등)마다
+        # 일일이 dirty 플래그를 세우는 대신, closeEvent가 이미 쓰는
+        # _project_state_snapshot() 해시 비교를 주기적으로 재사용한다 —
+        # 코드 중복 없이 항상 같은 기준으로 판단된다.
+        self._title_timer = QTimer(self)
+        self._title_timer.timeout.connect(self._refresh_title)
+        self._title_timer.start(2000)
 
     def _prewarm_heavy_imports(self):
         """데몬 스레드에서 scipy·cv2를 미리 import해 첫 분석/펴기 클릭 때의
