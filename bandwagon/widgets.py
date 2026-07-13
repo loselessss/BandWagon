@@ -18,7 +18,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QPoint, QPointF, QRectF, QRect, QSize, pyqtSignal, QTimer, QStandardPaths
 from PyQt5.QtGui import (
     QPainter, QPen, QColor, QPixmap, QImage, QBrush,
-    QPainterPath, QLinearGradient, QFont, QPolygonF, QPalette,
+    QPainterPath, QLinearGradient, QFont, QFontMetrics, QPolygonF, QPalette,
 )
 from .theme import *
 from .i18n import tr
@@ -780,13 +780,26 @@ class GelView(QWidget):
                 if lane.kind == "marker": tag += " [M]"
                 elif lane.kind == "bsa":  tag += " [BSA]"
                 qp.setPen(QColor(lane.color)); qp.setFont(QFont("DejaVu Sans", 8, QFont.Bold))
-                qp.drawText(QRectF(x1 + 2, r.top() + 2, max(40, x2 - x1), 16), Qt.AlignLeft, tag)
+                name_w = max(40, x2 - x1)
+                fm_name = qp.fontMetrics()
+                # 레인 이름이 길면 최대 3줄까지 줄바꿈 허용 — 그 이상은 (드물게 아주
+                # 긴 이름) 잘린다. 실제로 몇 줄 썼는지 알아야, 아래 MW 라벨 시작
+                # 위치를 그 밑으로 밀어 겹침을 막을 수 있다(예: 마커 맨 위 밴드가
+                # 250 이상이라 캔버스 맨 위에 가깝게 찍히면 이름과 겹치던 문제).
+                natural = fm_name.boundingRect(QRect(0, 0, int(name_w), 10_000),
+                                               Qt.TextWordWrap, tag)
+                name_h = min(natural.height(), fm_name.lineSpacing() * 3)
+                name_rect = QRectF(x1 + 2, r.top() + 2, name_w, name_h)
+                qp.drawText(name_rect, Qt.TextWordWrap | Qt.AlignLeft | Qt.AlignTop, tag)
                 if lane.peaks is None:
                     continue
                 font_mw = QFont("DejaVu Sans Mono", 7, QFont.Bold)
                 qp.setFont(font_mw)
                 bounds = lane.peak_bounds if lane.peak_bounds else None
-                last_ty = -1e9   # 같은 레인에서 라벨이 겹치지 않도록 직전 라벨 y 추적
+                # 첫 MW 라벨이 레인 이름(1~3줄)과 겹치지 않도록, 시작 기준선을
+                # 이름 텍스트 바로 아래로 잡아둔다(그 아래 로직이 "직전 라벨보다
+                # 11px 이상 아래" 규칙으로 자연스럽게 밀어준다).
+                last_ty = r.top() + 2 + name_h + 2 - 11
                 for j, py in enumerate(lane.peaks):
                     if j >= len(lane.mw) or lane.mw[j] is None or lane.mw[j] <= 0:
                         continue

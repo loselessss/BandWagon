@@ -44,17 +44,22 @@ def downscale_for_preview(img, canvas_w, canvas_h, margin=1.5):
 
 
 def render_analysis_overlay(base_img, lanes, band_style="area"):
-    """원본 해상도의 base_img 위에 레인 경계·검출 밴드·MW 라벨을 그려 합성한
-    새 이미지를 반환한다(화면 캡처가 아니라 원본 좌표 기준으로 직접 그림 —
-    저장 해상도가 화면 크기에 좌우되지 않음).
+    """base_img 위에 레인 경계·검출 밴드·MW 라벨을 그려 합성한 새 이미지를
+    반환한다(화면 캡처가 아니라 원본 좌표 기준으로 직접 그림 — 저장 해상도가
+    화면 크기에 좌우되지 않음).
+
+    레인 이름은 원본 이미지 위에 겹쳐 그리지 않고, 그 높이만큼 캔버스를
+    위로 늘려 만든 별도 띠(header)에 그린다 — 화면 캔버스(GelView)는 줌/팬/
+    좌표변환이 걸려있어 이미지를 겹치지 않게 밀어내는 정도로만 처리하지만,
+    내보내기는 고정 해상도라 아예 겹칠 일이 없게 만들 수 있다.
 
     band_style: "area"(경계 영역, 반투명 박스) 또는 "line"(피크 위치 한 줄).
-    화면 캔버스(GelView)와 항상 같은 방식으로 호출돼야 한다.
 
-    2-패스로 그린다: 레인 박스/밴드선을 먼저 다 그리고 텍스트(제목/MW)는
-    나중에 — 한 패스로 그리면 다음 레인 박스가 이전 레인 글자를 덮는다."""
-    img = base_img.convert("RGB").copy()
-    draw = ImageDraw.Draw(img)
+    3-패스로 그린다: 레인 박스/밴드선 → 레인 이름(헤더) → MW 라벨. 밴드보다
+    레인 박스를 먼저 그려야 다음 레인 박스가 이전 레인 글자를 안 덮는다."""
+    img0 = base_img.convert("RGB")
+    W, H = img0.size
+    measure = ImageDraw.Draw(Image.new("RGB", (1, 1)))
 
     def _font_to_fit(text, max_width, base_size=14, min_size=7):
         """텍스트가 max_width(px) 안에 들어가는 가장 큰 폰트 크기를 찾는다.
@@ -65,17 +70,36 @@ def render_analysis_overlay(base_img, lanes, band_style="area"):
                 f = ImageFont.truetype("DejaVuSans-Bold.ttf", size)
             except Exception:
                 return ImageFont.load_default(), len(text) * size * 0.6
-            bbox = draw.textbbox((0, 0), text, font=f)
+            bbox = measure.textbbox((0, 0), text, font=f)
             w = bbox[2] - bbox[0]
             if w <= max_width:
                 return f, w
             size -= 1
         try:
             f = ImageFont.truetype("DejaVuSans-Bold.ttf", min_size)
-            bbox = draw.textbbox((0, 0), text, font=f)
+            bbox = measure.textbbox((0, 0), text, font=f)
             return f, bbox[2] - bbox[0]
         except Exception:
             return ImageFont.load_default(), len(text) * min_size * 0.6
+
+    def _wrap_lines(text, font, max_width, max_lines=3):
+        """단어 단위로 줄바꿈해 최대 max_lines줄까지만 반환한다(그 이상은
+        잘림) — 레인 이름이 길어도 헤더 높이가 무한정 늘어나지 않게."""
+        words = text.split(" ")
+        lines, cur = [], ""
+        for w in words:
+            trial = (cur + " " + w).strip()
+            bbox = measure.textbbox((0, 0), trial, font=font)
+            if bbox[2] - bbox[0] <= max_width or not cur:
+                cur = trial
+            else:
+                lines.append(cur)
+                cur = w
+                if len(lines) >= max_lines:
+                    return lines[:max_lines]
+        if cur:
+            lines.append(cur)
+        return lines[:max_lines]
 
     try:
         font_small = ImageFont.truetype("DejaVuSansMono-Bold.ttf", 11)
@@ -84,9 +108,27 @@ def render_analysis_overlay(base_img, lanes, band_style="area"):
             font_small = ImageFont.truetype("DejaVuSansMono.ttf", 11)
         except Exception:
             font_small = ImageFont.load_default()
-    H = img.height
 
-    # ── 1패스: 레인 박스 + 밴드 표시 (텍스트보다 먼저, 즉 아래 레이어) ──
+    # ── 헤더 높이 계산: 모든 레인 이름 중 가장 많이 줄바꿈된 것 기준 ──
+    lane_labels = []  # (lane, lines, font, line_h)
+    header_h = 16
+    for lane in lanes:
+        label = lane.name
+        if lane.kind == "marker": label += " [M]"
+        elif lane.kind == "bsa": label += " [BSA]"
+        lane_w = max(1, lane.x2 - lane.x1)
+        font, _ = _font_to_fit(label, lane_w - 8)
+        lines = _wrap_lines(label, font, lane_w - 8)
+        line_h = font.size + 3
+        lane_labels.append((lane, lines, font, line_h))
+        header_h = max(header_h, line_h * len(lines) + 6)
+
+    # ── 헤더만큼 위로 늘린 새 캔버스에 원본을 붙여넣는다 ──
+    img = Image.new("RGB", (W, H + header_h), (13, 18, 23))
+    img.paste(img0, (0, header_h))
+    draw = ImageDraw.Draw(img)
+
+    # ── 1패스: 레인 박스 + 밴드 표시(이미지 영역 — header_h만큼 아래로 오프셋) ──
     # band_style="area": 위경계~아래경계 영역을 반투명 박스로 — '여기서부터
     # 여기까지를 한 밴드로 본다(=적분 범위)'가 한눈에 들어온다.
     # band_style="line": 피크 위치에 한 줄만 — 밴드가 촘촘해 영역들이 서로
@@ -97,16 +139,17 @@ def render_analysis_overlay(base_img, lanes, band_style="area"):
     odraw = ImageDraw.Draw(overlay)
     for lane in lanes:
         col = (lane.color.red(), lane.color.green(), lane.color.blue())
-        draw.rectangle([lane.x1, 0, lane.x2, H - 1], outline=col, width=2)
+        draw.rectangle([lane.x1, header_h, lane.x2, header_h + H - 1], outline=col, width=2)
         if lane.peaks is not None:
             if band_style == "line":
                 for py in lane.peaks:
-                    py = int(py)
+                    py = int(py) + header_h
                     odraw.line([(lane.x1, py), (lane.x2, py)], fill=col + (255,), width=2)
             else:
                 bounds = lane.peak_bounds if lane.peak_bounds else [
                     (max(0, int(py) - 5), min(H - 1, int(py) + 5)) for py in lane.peaks]
                 for (top, bot) in bounds:
+                    top += header_h; bot += header_h
                     # 영역을 옅은 반투명 채우기로, 위/아래 경계는 또렷한 선으로
                     odraw.rectangle([lane.x1, top, lane.x2, bot], fill=col + (55,))
                     odraw.line([(lane.x1, top), (lane.x2, top)], fill=col + (255,), width=1)
@@ -114,40 +157,39 @@ def render_analysis_overlay(base_img, lanes, band_style="area"):
     img = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
     draw = ImageDraw.Draw(img)  # 합성 후 이미지가 바뀌었으니 Draw 핸들도 새로 받음
 
-    # ── 2패스: 텍스트(레인 제목 + MW 값) — 항상 레인 박스 위에 그려짐 ──
-    for lane in lanes:
+    # ── 2패스: 레인 이름 — 헤더 띠 안에만 그려 이미지와 절대 안 겹친다 ──
+    for lane, lines, font, line_h in lane_labels:
         col = (lane.color.red(), lane.color.green(), lane.color.blue())
-        label = lane.name
-        if lane.kind == "marker": label += " [M]"
-        elif lane.kind == "bsa": label += " [BSA]"
+        for i, line in enumerate(lines):
+            draw.text((lane.x1 + 5, 3 + i * line_h), line, fill=col, font=font)
+
+    # ── 3패스: MW 값 — 이미지 영역 안(header_h만큼 오프셋)에 그린다 ──
+    for lane in lanes:
+        if lane.peaks is None:
+            continue
         lane_w = max(1, lane.x2 - lane.x1)
-        font, text_w = _font_to_fit(label, lane_w - 8)
-        draw.rectangle([lane.x1 + 2, 2, lane.x1 + 2 + text_w + 6, 2 + font.size + 4],
-                       fill=(13, 18, 23))
-        draw.text((lane.x1 + 5, 3), label, fill=col, font=font)
-        if lane.peaks is not None:
-            bounds = lane.peak_bounds if lane.peak_bounds else None
-            last_ty = -1e9   # 같은 레인 라벨 겹침 방지(직전 라벨 y 추적)
-            for j, py in enumerate(lane.peaks):
-                py = int(py)
-                if band_style == "line" or not bounds:
-                    top = py                    # 선 모드: 그 줄 바로 위
-                else:
-                    top = bounds[j][0]          # 영역 모드: 경계 위쪽 기준
-                if j < len(lane.mw) and lane.mw[j] is not None and lane.mw[j] > 0:
-                    txt = f"{lane.mw[j]:.1f}"
-                    # 밴드 영역 위(상단 경계선보다 살짝 위)에 투명 배경으로, 흰 글자+검은
-                    # 외곽선을 입혀 어떤 배경색(밴드의 진한 파란색 등) 위에서도 또렷하게
-                    # 보이게 함. 옆으로 빼지 않으므로 인접 레인과 안 겹친다.
-                    bbox = draw.textbbox((0, 0), txt, font=font_small)
-                    tw = bbox[2] - bbox[0]
-                    tx = lane.x1 + (lane_w - tw) / 2  # 레인 폭 중앙에 배치
-                    ty = top - bbox[3] - 2             # 밴드 영역 위쪽 경계선 바로 위
-                    if ty < last_ty + 12:             # 너무 가까우면 아래로 밀어 겹침 방지
-                        ty = last_ty + 12
-                    last_ty = ty
-                    draw.text((tx, ty), txt, font=font_small,
-                              fill=(255, 255, 255), stroke_width=2, stroke_fill=(0, 0, 0))
+        bounds = lane.peak_bounds if lane.peak_bounds else None
+        last_ty = header_h - 12   # 같은 레인 라벨 겹침 방지(직전 라벨 y 추적)
+        for j, py in enumerate(lane.peaks):
+            py = int(py) + header_h
+            if band_style == "line" or not bounds:
+                top = py                    # 선 모드: 그 줄 바로 위
+            else:
+                top = bounds[j][0] + header_h  # 영역 모드: 경계 위쪽 기준
+            if j < len(lane.mw) and lane.mw[j] is not None and lane.mw[j] > 0:
+                txt = f"{lane.mw[j]:.1f}"
+                # 밴드 영역 위(상단 경계선보다 살짝 위)에 투명 배경으로, 흰 글자+검은
+                # 외곽선을 입혀 어떤 배경색(밴드의 진한 파란색 등) 위에서도 또렷하게
+                # 보이게 함. 옆으로 빼지 않으므로 인접 레인과 안 겹친다.
+                bbox = draw.textbbox((0, 0), txt, font=font_small)
+                tw = bbox[2] - bbox[0]
+                tx = lane.x1 + (lane_w - tw) / 2  # 레인 폭 중앙에 배치
+                ty = top - bbox[3] - 2             # 밴드 영역 위쪽 경계선 바로 위
+                if ty < last_ty + 12:             # 너무 가까우면 아래로 밀어 겹침 방지
+                    ty = last_ty + 12
+                last_ty = ty
+                draw.text((tx, ty), txt, font=font_small,
+                          fill=(255, 255, 255), stroke_width=2, stroke_fill=(0, 0, 0))
     return img
 
 
