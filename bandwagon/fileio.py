@@ -30,6 +30,16 @@ from .dialogs import _dialog_style
 
 class FileIOMixin:
 
+    def new_window(self):
+        """완전히 빈 새 창을 하나 더 연다 — 파일 선택 없이 그냥 새 세션을
+        시작하고 싶을 때(예: 클립보드 붙여넣기로 시작할 예정이거나, 나중에
+        볼 자리를 미리 띄워두고 싶을 때) 쓴다. open_anything()과 달리
+        지금 창이 비어있어도 상관없이 항상 새 창을 띄운다 — 사용자가
+        명시적으로 "새 창"을 눌렀으니 그 의도를 그대로 따른다."""
+        win = self.__class__(None, splash=None)   # Analyzer를 여기서 직접 import하면 순환 참조가 생김
+        self.__class__._open_windows.append(win)
+        win.show()
+
     def open_anything(self):
         """"열기" 메뉴의 단일 진입점 — 그림 파일과 프로젝트(.bandwagon)를
         구분하지 않고 한 대화상자에서 고르면, 확장자를 보고 알아서

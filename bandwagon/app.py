@@ -177,6 +177,8 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, QMainWindow):
         # 전부 한 메뉴로 묶는다. 웨스턴블롯은 성격이 다른(별도 창에서
         # 작업하는) 흐름이라 여기 안 넣고 따로 분리한다.
         m_file = mb.addMenu(tr("menu_file"))
+        a = QAction(tr("menu_new_window"), self); a.triggered.connect(self.new_window)
+        a.setShortcut("Ctrl+N"); a.setToolTip(tr("menu_new_window_tip")); m_file.addAction(a)
         a = QAction(tr("dlg_open_title"), self); a.triggered.connect(self.open_anything)
         a.setShortcut("Ctrl+O"); m_file.addAction(a)
         a = QAction(tr("toolbar_paste"), self); a.triggered.connect(self.paste_image)
@@ -310,6 +312,10 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, QMainWindow):
         self._splash_step(tr("splash_almost_done"))
         # 커브 위젯이 생성된 뒤에 연결 (탭 전환 시 커브 갱신)
         self.tabs.currentChanged.connect(self._on_tab_changed)
+        # currentChanged는 탭이 "바뀔 때"만 발생해 처음 뜬 탭(인덱스 0)에는
+        # 신호가 안 온다 — 시작할 때부터 보정 탭이 활성이니 가이드 상태를
+        # 한 번 직접 맞춰준다.
+        self._on_tab_changed(self.tabs.currentIndex())
 
         self.status = QStatusBar(); self.status.setStyleSheet(f"background:{INK1};color:{MUTE};")
         self.setStatusBar(self.status)

@@ -924,7 +924,7 @@ class GeometryMixin:
         슬라이더만 0으로 보이는 불일치가 있었다)."""
         self._refresh_after_pixels_changed()
 
-    def _on_tab_changed(self, _i):
+    def _on_tab_changed(self, i):
         """탭을 전환하면 이전 탭에서 켜둔 마우스 동작(레인 수동 검출/코너 지정/
         자르기/세로 범위 지정 모드)을 모두 끈다. 안 그러면 다른 탭으로
         넘어가서도 이미지 위에서 마우스가 이전 모드대로 동작해 혼란을 준다."""
@@ -939,6 +939,12 @@ class GeometryMixin:
             self.btn_vrange.blockSignals(True); self.btn_vrange.setChecked(False); self.btn_vrange.blockSignals(False)
             self.btn_vrange.setText(tr("btn_vrange_mode_off"))
         self.gel.set_mode("view")
+        # 통합 보정 탭(회전/펴기/곡률/기울기)이 항상 탭 목록의 첫 번째로
+        # 추가되므로(_build() 참고) 인덱스 0으로 판별한다 — 이 탭에서만
+        # 격자+중앙 십자선 가이드를 보여줘 수평/수직이 맞는지 확인하기
+        # 쉽게 한다.
+        self.gel.show_guides = (i == 0)
+        self.gel.update()
 
     def _set_exclusive_mode(self, which: str, on: bool):
         """레인 수동 조정 / 코너 지정 / 자르기 / 세로 범위 지정 중 하나만

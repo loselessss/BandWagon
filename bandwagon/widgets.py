@@ -279,6 +279,7 @@ class GelView(QWidget):
         self.show_overlay = True  # 라이브 프리뷰에서 레인/밴드/MW 오버레이 표시 여부
         self.band_display_style = "area"  # "area"(경계 영역) 또는 "line"(피크 위치 한 줄)
         self.selected_band = None  # (lane, band_index) — 결과 표에서 고른 밴드를 캔버스에서 굵게 강조
+        self.show_guides = False  # 회전/펴기 보정 중 격자+중앙 십자선 가이드 표시 여부
         self._lane_a = None
         self._lane_b = None
         self._lane_edge_drag = None   # (lane, "x1"|"x2") 레인 경계를 드래그 중일 때
@@ -683,6 +684,24 @@ class GelView(QWidget):
             self._lane_a = self._lane_b = None
             self.update()
 
+    def _draw_guides(self, qp, r):
+        """회전/펴기 보정 중 수평·수직이 맞는지 눈으로 확인하라고 겹쳐
+        그리는 격자 + 중앙 십자선. 분석 결과와는 무관한 순수 시각 보조선이라
+        저장/내보내기 이미지에는 절대 포함하지 않는다(화면 전용)."""
+        grid_pen = QPen(QColor(255, 255, 255, 60), 1)
+        qp.setPen(grid_pen)
+        for i in range(1, 10):  # 10%마다 격자선(9개)
+            x = r.left() + r.width() * i / 10
+            qp.drawLine(QPointF(x, r.top()), QPointF(x, r.bottom()))
+            y = r.top() + r.height() * i / 10
+            qp.drawLine(QPointF(r.left(), y), QPointF(r.right(), y))
+        cross_pen = QPen(QColor(255, 60, 60, 200), 1.5)
+        qp.setPen(cross_pen)
+        cx = r.left() + r.width() / 2
+        cy = r.top() + r.height() / 2
+        qp.drawLine(QPointF(cx, r.top()), QPointF(cx, r.bottom()))
+        qp.drawLine(QPointF(r.left(), cy), QPointF(r.right(), cy))
+
     def paintEvent(self, _):
         qp = QPainter(self)
         qp.setRenderHint(QPainter.Antialiasing)
@@ -705,6 +724,9 @@ class GelView(QWidget):
         if self._scaled_cache is None or self._scaled_cache[0] != key:
             self._scaled_cache = (key, self._pm.scaled(r.size(), Qt.KeepAspectRatio, mode))
         qp.drawPixmap(r, self._scaled_cache[1])
+
+        if self.show_guides:
+            self._draw_guides(qp, r)
 
         for lane in self.lanes:
             if not self.show_overlay and self.mode != "lane":

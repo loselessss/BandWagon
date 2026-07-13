@@ -80,6 +80,8 @@ STRINGS = {
         "std_curve_empty_hint": "BSA 표준 레인 2개 이상에서 표준곡선이 생성됩니다",
         # 메뉴바 (예전엔 툴바였음 — 항목이 늘면서 카테고리별 메뉴로 재구성)
         "menu_file": "파일",
+        "menu_new_window": "새 창",
+        "menu_new_window_tip": "완전히 빈 새 창을 하나 더 엽니다.",
         "menu_western": "웨스턴블롯",
         "menu_western_open": "만들기",
         "menu_edit": "편집",
@@ -372,7 +374,7 @@ STRINGS = {
             "-> 마커 MW 입력 -> <b>분석</b>·<b>정량</b> 탭에서 결과 확인 -> 저장</p>"
 
             "<h3>메뉴 구성</h3>"
-            "<p><b>파일</b>(열기·붙여넣기·프로젝트 저장/새로 저장/현재 위치 열기·결과 이미지 "
+            "<p><b>파일</b>(새 창·열기·붙여넣기·프로젝트 저장/새로 저장/현재 위치 열기·결과 이미지 "
             "내보내기) · <b>웨스턴블롯</b>(합성 만들기·기존 합성 파일 불러오기) · "
             "<b>편집</b>(전체 초기화·되돌리기·다시하기) · <b>정보</b>(사용법·개발자 정보) · "
             "<b>언어</b>(한국어/English)</p>"
@@ -411,7 +413,10 @@ STRINGS = {
             "</p>"
 
             "<h3>펴기 탭</h3>"
-            "<p>기울어지거나 사다리꼴로 찍힌 젤을 직사각형으로 폅니다. "
+            "<p>이 탭(펴기·보정)에 있는 동안은 화면에 10% 간격 격자와 빨간 "
+            "중앙 십자선이 겹쳐 보여 수평/수직이 맞는지 눈으로 확인하기 "
+            "쉽습니다 — 화면 전용이라 저장/내보내기 이미지에는 안 나타납니다.<br>"
+            "기울어지거나 사다리꼴로 찍힌 젤을 직사각형으로 폅니다. "
             "자동 인식이 안 맞으면 코너 지정 모드를 켜고 이미지 위에서 드래그해 "
             "사각형을 만든 뒤 <b>네 모서리를 끌어</b> 맞추세요.<br>"
             "그래디언트 젤 특유의 부채꼴(가운데가 처지거나 솟는) 휨은 "
@@ -526,6 +531,8 @@ STRINGS = {
         "std_curve_empty_hint": "A standard curve appears once 2+ BSA standard lanes are analyzed",
         # Menu bar (used to be a toolbar -- reorganized into category menus as it grew)
         "menu_file": "File",
+        "menu_new_window": "New Window",
+        "menu_new_window_tip": "Open another completely blank window.",
         "menu_western": "Western Blot",
         "menu_western_open": "Create",
         "menu_edit": "Edit",
@@ -818,7 +825,7 @@ STRINGS = {
             "-> enter marker MW -> check results in <b>Analysis</b>/<b>Standard Curve</b> -> save</p>"
 
             "<h3>Menu Layout</h3>"
-            "<p><b>File</b> (Open, Paste, Save/Save As/Open Project Location, Export Result Image) · "
+            "<p><b>File</b> (New Window, Open, Paste, Save/Save As/Open Project Location, Export Result Image) · "
             "<b>Western Blot</b> (Create composite, Load existing composite file) · "
             "<b>Edit</b> (Reset All, Undo, Redo) · <b>Info</b> (Help, Developer Info) · "
             "<b>Language</b> (한국어/English)</p>"
@@ -858,7 +865,10 @@ STRINGS = {
             "</p>"
 
             "<h3>Warp Tab</h3>"
-            "<p>Straightens a tilted or trapezoidal gel photo into a rectangle. "
+            "<p>While this tab (Warp + Adjust) is active, a grid every 10% and a red "
+            "center crosshair overlay the canvas so you can visually check that "
+            "things are level — this is screen-only and never appears in saved/exported images.<br>"
+            "Straightens a tilted or trapezoidal gel photo into a rectangle. "
             "If auto-detection misses, turn on Corner Mode, drag a rectangle on the image, "
             "then <b>drag the 4 corners</b> to fit.<br>"
             "The bow (sag) typical of gradient gels — where the center dips or rises — can be corrected "
