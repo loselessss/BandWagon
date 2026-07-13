@@ -13,12 +13,13 @@ import csv
 import hashlib
 import io
 import json
+import os
 import zipfile
 from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageGrab
-from PyQt5.QtWidgets import QApplication, QDialog, QFileDialog, QMessageBox
+from PyQt5.QtWidgets import QApplication, QAction, QDialog, QFileDialog, QMessageBox
 
 from .i18n import tr
 from .theme import *
@@ -28,7 +29,84 @@ from .models import CurveModel, Lane
 from .dialogs import _dialog_style
 
 
+_RECENT_FILES_PATH = Path(os.path.expanduser("~")) / ".bandwagon_recent.json"
+_RECENT_FILES_MAX = 10
+
+
+def _load_recent_files():
+    """최근 연 파일 경로 목록(최신이 맨 앞)을 읽는다. 없거나 손상됐으면 빈 목록."""
+    try:
+        if _RECENT_FILES_PATH.exists():
+            data = json.loads(_RECENT_FILES_PATH.read_text(encoding="utf-8"))
+            if isinstance(data, list):
+                return [p for p in data if isinstance(p, str)]
+    except Exception:
+        pass
+    return []
+
+
+def _save_recent_files(paths):
+    try:
+        _RECENT_FILES_PATH.write_text(json.dumps(paths, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass  # 저장 실패해도(권한 등) 앱 동작에는 영향 없음
+
+
 class FileIOMixin:
+
+    def _add_recent_file(self, path):
+        """파일을 열 때마다 "최근 파일" 목록 맨 앞으로 옮긴다(이미 있으면
+        중복 없이 그 항목을 앞으로 이동). open_path_smart()가 그림/프로젝트/
+        합성 파일 구분 없이 여는 모든 경로에서 공통으로 호출하므로, 메뉴
+        클릭이든 탐색기 파일 연결로 실행됐든 똑같이 기록된다."""
+        path = str(Path(path).resolve())
+        recent = [p for p in _load_recent_files() if p != path]
+        recent.insert(0, path)
+        _save_recent_files(recent[:_RECENT_FILES_MAX])
+
+    def _open_recent_file(self, path):
+        """"최근 파일" 메뉴 항목 클릭 — 파일이 그새 지워지거나 옮겨졌으면
+        조용히 실패하지 않고 알려준 뒤 목록에서 빼준다."""
+        if not Path(path).exists():
+            self._warn(tr("recent_file_missing_title"), tr("recent_file_missing_msg", path=path))
+            recent = [p for p in _load_recent_files() if p != path]
+            _save_recent_files(recent)
+            return
+        self._open_path_here_or_new_window(path)
+
+    def _clear_recent_files(self):
+        _save_recent_files([])
+
+    def _rebuild_recent_menu(self):
+        """"최근 파일" 서브메뉴가 열리기 직전(aboutToShow)마다 항목을 새로
+        채운다 — 다른 창에서 방금 연 파일도 바로 반영되고, 파일 하나를
+        여러 창이 공유하니 캐싱보다 그때그때 다시 읽는 게 항상 정확하다."""
+        self.m_recent.clear()
+        recent = _load_recent_files()
+        if not recent:
+            a = QAction(tr("menu_recent_empty"), self); a.setEnabled(False)
+            self.m_recent.addAction(a)
+            return
+        for path in recent:
+            a = QAction(Path(path).name, self)
+            a.setToolTip(path)
+            a.triggered.connect(lambda _checked=False, p=path: self._open_recent_file(p))
+            self.m_recent.addAction(a)
+        self.m_recent.addSeparator()
+        a = QAction(tr("menu_recent_clear"), self); a.triggered.connect(self._clear_recent_files)
+        self.m_recent.addAction(a)
+
+    def _open_path_here_or_new_window(self, path):
+        """지금 창이 비어있으면 그 자리에 열고, 아니면(이미 뭔가 열려 있으면)
+        내용을 바꾸지 않고 새 창을 띄운다 — open_anything()과 "최근 파일"
+        메뉴가 공유하는 판단 로직."""
+        if self._orig is None:
+            self.open_path_smart(path)
+            return
+        win = self.__class__(None, splash=None)   # Analyzer를 여기서 직접 import하면 순환 참조가 생김
+        self.__class__._open_windows.append(win)
+        win.open_path_smart(path)
+        win.show()
 
     def new_window(self):
         """완전히 빈 새 창을 하나 더 연다 — 파일 선택 없이 그냥 새 세션을
@@ -57,13 +135,7 @@ class FileIOMixin:
         if not path:
             return
         self._last_dir = str(Path(path).parent)
-        if self._orig is None:
-            self.open_path_smart(path)
-            return
-        win = self.__class__(None, splash=None)   # Analyzer를 여기서 직접 import하면 순환 참조가 생김
-        self.__class__._open_windows.append(win)
-        win.open_path_smart(path)
-        win.show()
+        self._open_path_here_or_new_window(path)
 
     def open_path_smart(self, path):
         """확장자를 보고 그림/프로젝트/합성 파일을 알아서 연다.
@@ -72,7 +144,11 @@ class FileIOMixin:
         쓴다. .bwcomposite는 메인 창에서 바로 분석을 시작하면서, 빈 합성
         스튜디오도 비모달로 같이 띄운다(원본 가시광/UV 사진은 파일 안에
         없어 이 파일 자체를 스튜디오로 다시 불러올 순 없지만, 새로 합성을
-        만들거나 다른 합성 파일을 불러올 때 바로 쓸 수 있게)."""
+        만들거나 다른 합성 파일을 불러올 때 바로 쓸 수 있게).
+
+        어떤 경로로 열렸든(메뉴/파일 연결/"최근 파일") 여기 한 곳만 거치므로
+        "최근 파일" 기록도 여기서 공통으로 한다."""
+        self._add_recent_file(path)
         lower = path.lower()
         if lower.endswith(".bandwagon"):
             self.open_project(path)

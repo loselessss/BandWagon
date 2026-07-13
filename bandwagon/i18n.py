@@ -82,6 +82,11 @@ STRINGS = {
         "menu_file": "파일",
         "menu_new_window": "새 창",
         "menu_new_window_tip": "완전히 빈 새 창을 하나 더 엽니다.",
+        "menu_recent_files": "최근 파일",
+        "menu_recent_empty": "(최근 연 파일 없음)",
+        "menu_recent_clear": "목록 지우기",
+        "recent_file_missing_title": "파일을 찾을 수 없음",
+        "recent_file_missing_msg": "이 파일을 더 이상 찾을 수 없습니다(이동되었거나 삭제됨):\n{path}",
         "menu_western": "웨스턴블롯",
         "menu_western_open": "만들기",
         "menu_edit": "편집",
@@ -374,8 +379,8 @@ STRINGS = {
             "-> 마커 MW 입력 -> <b>분석</b>·<b>정량</b> 탭에서 결과 확인 -> 저장</p>"
 
             "<h3>메뉴 구성</h3>"
-            "<p><b>파일</b>(새 창·열기·붙여넣기·프로젝트 저장/새로 저장/현재 위치 열기·결과 이미지 "
-            "내보내기) · <b>웨스턴블롯</b>(합성 만들기·기존 합성 파일 불러오기) · "
+            "<p><b>파일</b>(새 창·열기·최근 파일·붙여넣기·프로젝트 저장/새로 저장/현재 위치 열기·"
+            "결과 이미지 내보내기) · <b>웨스턴블롯</b>(합성 만들기·기존 합성 파일 불러오기) · "
             "<b>편집</b>(전체 초기화·되돌리기·다시하기) · <b>정보</b>(사용법·개발자 정보) · "
             "<b>언어</b>(한국어/English)</p>"
 
@@ -533,6 +538,11 @@ STRINGS = {
         "menu_file": "File",
         "menu_new_window": "New Window",
         "menu_new_window_tip": "Open another completely blank window.",
+        "menu_recent_files": "Recent Files",
+        "menu_recent_empty": "(No recent files)",
+        "menu_recent_clear": "Clear List",
+        "recent_file_missing_title": "File Not Found",
+        "recent_file_missing_msg": "This file could no longer be found (it may have been moved or deleted):\n{path}",
         "menu_western": "Western Blot",
         "menu_western_open": "Create",
         "menu_edit": "Edit",
@@ -825,7 +835,8 @@ STRINGS = {
             "-> enter marker MW -> check results in <b>Analysis</b>/<b>Standard Curve</b> -> save</p>"
 
             "<h3>Menu Layout</h3>"
-            "<p><b>File</b> (New Window, Open, Paste, Save/Save As/Open Project Location, Export Result Image) · "
+            "<p><b>File</b> (New Window, Open, Recent Files, Paste, Save/Save As/Open Project Location, "
+            "Export Result Image) · "
             "<b>Western Blot</b> (Create composite, Load existing composite file) · "
             "<b>Edit</b> (Reset All, Undo, Redo) · <b>Info</b> (Help, Developer Info) · "
             "<b>Language</b> (한국어/English)</p>"

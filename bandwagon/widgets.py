@@ -917,7 +917,11 @@ class GelView(QWidget):
     def dropEvent(self, e):
         urls = e.mimeData().urls()
         if urls:
-            self.window().load_image(urls[0].toLocalFile())
+            # load_image()로 직접 부르면 확장자를 안 가려 .bandwagon/.bwcomposite를
+            # 끌어놔도 무조건 그림으로 열려던 문제가 있었다 — open_path_smart()를
+            # 거쳐야 다른 진입점(메뉴/파일 연결)과 똑같이 확장자별로 분기되고
+            # "최근 파일" 목록에도 기록된다.
+            self.window().open_path_smart(urls[0].toLocalFile())
 
 
 class ThumbView(QWidget):

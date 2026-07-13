@@ -181,6 +181,12 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, QMainWindow):
         a.setShortcut("Ctrl+N"); a.setToolTip(tr("menu_new_window_tip")); m_file.addAction(a)
         a = QAction(tr("dlg_open_title"), self); a.triggered.connect(self.open_anything)
         a.setShortcut("Ctrl+O"); m_file.addAction(a)
+        # "최근 파일"은 매번 다시 열 때(aboutToShow) 항목을 새로 채운다 —
+        # 다른 창에서 방금 연 파일이 바로 반영되어야 하고, 목록은 파일
+        # 하나로 공유되므로(레지스트리 아님, ~/.bandwagon_recent.json) 매번
+        # 디스크에서 다시 읽는 게 캐싱보다 간단하고 항상 최신이다.
+        self.m_recent = m_file.addMenu(tr("menu_recent_files"))
+        self.m_recent.aboutToShow.connect(self._rebuild_recent_menu)
         a = QAction(tr("toolbar_paste"), self); a.triggered.connect(self.paste_image)
         a.setShortcut("Ctrl+V"); m_file.addAction(a)  # 포커스 위젯에 먹히지 않게 단축키를 액션에 직접 건다
         m_file.addSeparator()
