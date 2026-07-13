@@ -760,6 +760,15 @@ class GeometryMixin:
         gray = self._edit_gray_pristine
         adjust_snapshot = None
         lanes_snapshot = None
+        # 회전/곡률/기울기는 각자 "가장 마지막으로 만난 값"을 따로 기억한다
+        # (adjust_snapshot과 동일한 원리) — 예전엔 '진짜 마지막 연산'일 때만
+        # 값을 보여줘서, 기울기 보정 뒤에 커브 하나만 더 만져도(마지막
+        # 연산이 'adjust'가 되어) 기울기 슬라이더가 0으로 보이는 버그가
+        # 있었다. 실제 이미지엔 기울기가 여전히 적용돼 있는데 슬라이더만
+        # 거짓으로 0을 보여주는 불일치였다(실사용 중 보고됨).
+        last_rot = None
+        last_bow = None
+        last_shear = None
         ops = self._edit_ops[: self._edit_pos + 1]
         pre_last_img = None
         n = len(ops)
@@ -773,36 +782,46 @@ class GeometryMixin:
                 lanes_snapshot = params
             elif op_name in self._GEOMETRY_OPS:
                 lanes_snapshot = None
+            if op_name == "fine_rotate":
+                last_rot = params
+            elif op_name == "bow_correct":
+                last_bow = params
+            elif op_name == "shear_correct":
+                last_shear = params
         self._orig = img
         self._wb_gray_override = gray
         self._apply_adjust_snapshot(adjust_snapshot)
         self._apply_lanes_snapshot(lanes_snapshot)
-        last_op, last_params = ops[-1] if ops else (None, None)
-        self._sync_geom_sliders(last_op, last_params, pre_last_img)
+        last_op = ops[-1][0] if ops else None
+        self._sync_geom_sliders(last_op, last_rot, last_bow, last_shear, pre_last_img)
 
-    def _sync_geom_sliders(self, last_op, last_params, pre_last_img):
-        """정밀회전/곡률/기울기 슬라이더 표시값 + 세션 상태(_rot_base 등)를
-        현재 위치의 실제 마지막 연산에 맞춘다. 그 셋 중 하나가 마지막
-        연산이면 슬라이더에 그 값을 보여주고 그 연산 직전 이미지를 세션
-        기준으로 세워 계속 드래그해도 정확히 이어지게 하고, 아니면(다른
-        종류의 연산이거나 편집 기록이 아예 없으면) 세션을 닫고 0으로
-        보여준다 — 라이브 드래그 커밋 때와 완전히 같은 상태가 되도록."""
+    def _sync_geom_sliders(self, last_op, last_rot, last_bow, last_shear, pre_last_img):
+        """정밀회전/곡률/기울기 슬라이더 표시값을 각자 마지막으로 적용된
+        값으로 맞춘다 — 다른 종류의 연산(색감 보정 등)을 나중에 해도 이미
+        적용된 값이 그대로 보여야 한다(입력값을 건드리면 안 됨).
+
+        '라이브로 이어서 드래그 가능한 세션' 상태(_rot_base 등)는 그 셋
+        중 하나가 진짜 마지막 연산일 때만 연다 — 그래야 드래그 기준
+        이미지(직전 상태)를 정확히 알 수 있다. 마지막이 아니면 표시값만
+        보여주고 세션은 닫아둔다(그 자리에서 다시 드래그하면 새 연산으로
+        기록됨 — 이미 다른 연산이 그 위에 쌓인 뒤라 이전 세션을 이어서
+        고쳐 쓸 수 없기 때문)."""
         if not hasattr(self, "rot_slider"):
             return   # UI가 아직 만들어지기 전(이론상 도달 안 함) 방어
 
-        rot_deg = last_params["deg"] if last_op == "fine_rotate" else 0
+        rot_deg = last_rot["deg"] if last_rot else 0
         self._rot_base = pre_last_img if last_op == "fine_rotate" else None
         self._rot_session_pushed = last_op == "fine_rotate"
         self.rot_slider.blockSignals(True); self.rot_slider.setValue(rot_deg); self.rot_slider.blockSignals(False)
         self.rot_spin.blockSignals(True); self.rot_spin.setValue(rot_deg); self.rot_spin.blockSignals(False)
 
-        bow_amt = last_params["amount"] if last_op == "bow_correct" else 0
+        bow_amt = last_bow["amount"] if last_bow else 0
         self._curve_base = pre_last_img if last_op == "bow_correct" else None
         self._bow_session_pushed = last_op == "bow_correct"
         self.bow_slider.blockSignals(True); self.bow_slider.setValue(bow_amt); self.bow_slider.blockSignals(False)
         self.bow_spin.blockSignals(True); self.bow_spin.setValue(bow_amt); self.bow_spin.blockSignals(False)
 
-        shear_amt = last_params["amount"] if last_op == "shear_correct" else 0
+        shear_amt = last_shear["amount"] if last_shear else 0
         self._shear_base = pre_last_img if last_op == "shear_correct" else None
         self._shear_session_pushed = last_op == "shear_correct"
         self.shear_slider.blockSignals(True); self.shear_slider.setValue(shear_amt); self.shear_slider.blockSignals(False)
