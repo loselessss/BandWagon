@@ -11,7 +11,7 @@ HAS_CV2 = importlib.util.find_spec("cv2") is not None
 
 # ── 릴리스 메타데이터 ────────────────────────────────────────────────
 APP_NAME     = "BandWagon"
-APP_VERSION  = "2.0.9"
+APP_VERSION  = "2.0.10"
 RELEASE_DATE = "2026-07-10"
 GELPROJ_FORMAT_VERSION = 2   # .bandwagon 내부 JSON 스키마 버전 (구조 바꾸면 올릴 것) — v2: "memo" 필드 추가
 

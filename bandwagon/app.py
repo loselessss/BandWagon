@@ -62,6 +62,10 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, QMainWindow):
         # 무관 — render_analysis_overlay()와 GelView.paintEvent() 양쪽이
         # 이 값을 참조해 그리는 방식을 바꾼다.
         self._band_display_style = "area"
+        # 보정 탭(회전/펴기)에서 격자+중앙 십자선 가이드를 켤지 — 체크박스로
+        # 사용자가 직접 끌 수 있다. 탭 자체가 다른 탭이면 이 값이 True여도
+        # 가이드는 안 보인다(_on_tab_changed가 둘 다 확인).
+        self._guides_enabled = True
         self._pristine_orig = None  # 불러온 직후의 원본 (전체 초기화 시 이 상태로 복귀)
         self._rot_base = None      # 정밀 회전 미리보기용 스냅샷 (세션 시작 시점 원본)
         self._curve_base = None    # 부채꼴(곡률) 보정 미리보기용 스냅샷 (세션 시작 시점 원본)
@@ -281,6 +285,12 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, QMainWindow):
         self.chk_overlay.setToolTip(tr("chk_show_overlay_tip"))
         self.chk_overlay.toggled.connect(self._on_overlay_toggled)
         zoom_row.addWidget(self.chk_overlay)
+        self.chk_guides = QCheckBox(tr("chk_show_guides"))
+        self.chk_guides.setChecked(True)
+        self.chk_guides.setStyleSheet(f"color:{MUTE};font-size:10px;" + self._checkbox_css())
+        self.chk_guides.setToolTip(tr("chk_show_guides_tip"))
+        self.chk_guides.toggled.connect(self._on_guides_toggled)
+        zoom_row.addWidget(self.chk_guides)
         lv.addLayout(zoom_row)
 
         self.gel = GelView()

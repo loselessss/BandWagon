@@ -129,6 +129,8 @@ STRINGS = {
         "zoom_hint": "마우스 휠로 확대/축소 · 드래그(좌클릭/휠버튼)로 이동",
         "chk_show_overlay": "분석 오버레이 표시",
         "chk_show_overlay_tip": "레인 박스·밴드 위치선·MW 값을 화면에서만 켜고 끕니다.\n저장/복사 시에는 그때 다시 묻습니다.",
+        "chk_show_guides": "가이드 표시",
+        "chk_show_guides_tip": "보정 탭(회전/펴기)에서 격자+중앙 십자선 가이드를 켜고 끕니다.\n저장/내보내기 이미지에는 어차피 안 나타나는 화면 전용 보조선입니다.",
         "status_ready": "이미지를 열어 시작하세요.   정량은 항상 원본 기준으로 계산됩니다.",
         # 보정 탭
         "group_rotate_flip": "회전 / 반전",
@@ -417,7 +419,8 @@ STRINGS = {
             "<p>"
             "· 마우스 휠: 확대/축소 (커서 위치 기준)<br>"
             "· 좌클릭 드래그(기본 상태) 또는 휠버튼 드래그: 화면 이동<br>"
-            "· '분석 오버레이 표시' 체크: 레인 박스·밴드선·MW 표시를 화면에서만 켜고 끄기"
+            "· '분석 오버레이 표시' 체크: 레인 박스·밴드선·MW 표시를 화면에서만 켜고 끄기<br>"
+            "· '가이드 표시' 체크: 보정 탭(회전/펴기)의 격자+중앙 십자선 가이드를 켜고 끄기"
             "</p>"
 
             "<h3>펴기 탭</h3>"
@@ -588,6 +591,8 @@ STRINGS = {
         "zoom_hint": "Mouse wheel to zoom · drag (left-click or middle button) to pan",
         "chk_show_overlay": "Show analysis overlay",
         "chk_show_overlay_tip": "Toggles lane boxes/band lines/MW labels on screen only.\nYou'll be asked again when saving/copying.",
+        "chk_show_guides": "Show guides",
+        "chk_show_guides_tip": "Toggles the grid + center crosshair guide on the Adjust tab (rotate/warp).\nScreen-only -- it never appears in saved/exported images anyway.",
         "status_ready": "Open an image to get started.   Quantification is always computed from the raw image.",
         # Adjust tab
         "group_rotate_flip": "Rotate / Flip",
@@ -879,7 +884,8 @@ STRINGS = {
             "<p>"
             "· Mouse wheel: zoom in/out (centered on the cursor)<br>"
             "· Left-click drag (default) or middle-button drag: pan<br>"
-            "· 'Show analysis overlay' checkbox: toggles lane boxes/band lines/MW labels on screen only"
+            "· 'Show analysis overlay' checkbox: toggles lane boxes/band lines/MW labels on screen only<br>"
+            "· 'Show guides' checkbox: toggles the grid + center crosshair guide on the Adjust tab (rotate/warp)"
             "</p>"
 
             "<h3>Warp Tab</h3>"

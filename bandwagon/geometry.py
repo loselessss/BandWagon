@@ -961,8 +961,18 @@ class GeometryMixin:
         # 통합 보정 탭(회전/펴기/곡률/기울기)이 항상 탭 목록의 첫 번째로
         # 추가되므로(_build() 참고) 인덱스 0으로 판별한다 — 이 탭에서만
         # 격자+중앙 십자선 가이드를 보여줘 수평/수직이 맞는지 확인하기
-        # 쉽게 한다.
-        self.gel.show_guides = (i == 0)
+        # 쉽게 한다. 사용자가 체크박스로 꺼뒀으면(_guides_enabled=False)
+        # 이 탭이어도 안 보인다.
+        self.gel.show_guides = self._guides_enabled and (i == 0)
+        self.gel.update()
+
+    def _on_guides_toggled(self, on):
+        """캔버스 위 격자+중앙 십자선 가이드 체크박스. 지금 탭이 보정 탭이
+        아니면 어차피 _on_tab_changed가 곧 다시 판단하지만, 보정 탭에
+        머문 채로 체크박스만 눌렀을 때도 바로 반영되도록 여기서 직접
+        갱신한다."""
+        self._guides_enabled = on
+        self.gel.show_guides = on and (self.tabs.currentIndex() == 0)
         self.gel.update()
 
     def _set_exclusive_mode(self, which: str, on: bool):
