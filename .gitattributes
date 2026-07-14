@@ -1,0 +1,12 @@
+# Python/문서 파일은 저장소 안에서 항상 LF로 통일한다 — 이 파일들이
+# core.autocrlf=true인 Windows에서 "다음에 손대면 CRLF로 바뀐다"는 git
+# 경고를 반복적으로 띄우던 대상이었다.
+#
+# .bat/.iss/.txt 등 다른 파일은 일부러 규칙을 안 둔다 — installer.iss는
+# CRLF+BOM을 유지해야 하고(CLAUDE.md 참고), .bat 파일도 원래 CRLF라
+# 손대면 오히려 불필요한 변환 diff만 생긴다.
+*.py text eol=lf
+*.md text eol=lf
+
+*.ico binary
+*.png binary
