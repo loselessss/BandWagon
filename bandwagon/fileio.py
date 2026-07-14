@@ -347,11 +347,11 @@ class FileIOMixin:
         self.setWindowTitle(f"* {base}" if dirty else base)
 
     def _ask_overlay_option(self):
-        """분석 결과가 있을 때 '사진만/분석 포함(합성)'을 묻는다.
-        반환값: True(분석 포함) / False(사진만) / None(취소)."""
+        """분석 결과가 있을 때 '사진만/분석 포함(합성)/오버레이만(투명 배경)'을
+        묻는다. 반환값: "overlay" / "plain" / "overlay_only" / None(취소)."""
         has_analysis = any(l.peaks is not None and len(l.peaks) > 0 for l in self.lanes)
         if not has_analysis:
-            return False
+            return "plain"
         box = QMessageBox(self)
         box.setIcon(QMessageBox.Question)
         box.setWindowTitle(tr("export_image_title"))
@@ -359,38 +359,53 @@ class FileIOMixin:
         box.setStyleSheet(_dialog_style())
         btn_plain = box.addButton(tr("export_plain"), QMessageBox.ActionRole)
         btn_overlay = box.addButton(tr("export_with_overlay"), QMessageBox.ActionRole)
+        btn_overlay_only = box.addButton(tr("export_overlay_only"), QMessageBox.ActionRole)
         box.addButton(tr("btn_cancel"), QMessageBox.RejectRole)
         box.exec_()
         clicked = box.clickedButton()
         if clicked is btn_overlay:
-            return True
+            return "overlay"
+        if clicked is btn_overlay_only:
+            return "overlay_only"
         if clicked is btn_plain:
-            return False
+            return "plain"
         return None
+
+    def _render_for_export(self, src, choice):
+        """_ask_overlay_option()의 선택에 따라 내보낼 이미지를 만든다.
+        "overlay_only"는 사진 없이 완전 투명 배경 위에 레인/밴드/MW만
+        그린다 — 다른 배경 위에 겹쳐 쓰거나 발표 자료에 붙여넣기 좋다."""
+        if choice == "overlay_only":
+            return render_analysis_overlay(src, self.lanes, band_style=self._band_display_style,
+                                           transparent_bg=True)
+        if choice == "overlay":
+            return render_analysis_overlay(src, self.lanes, band_style=self._band_display_style)
+        return src
 
     def copy_image(self):
         src = self._display or self._orig
         if src is None:
             self.status.showMessage(tr("nothing_to_copy_msg")); return
-        with_overlay = self._ask_overlay_option()
-        if with_overlay is None:
+        choice = self._ask_overlay_option()
+        if choice is None:
             return
-        out_img = render_analysis_overlay(src, self.lanes, band_style=self._band_display_style) if with_overlay else src
+        out_img = self._render_for_export(src, choice)
         QApplication.clipboard().setPixmap(pil_to_pixmap(out_img))
-        self.status.showMessage(tr("status_copied_to_clipboard") +
-                                (tr("overlay_included_suffix") if with_overlay else ""))
+        suffix = tr("overlay_included_suffix") if choice in ("overlay", "overlay_only") else ""
+        self.status.showMessage(tr("status_copied_to_clipboard") + suffix)
 
     def save_image(self):
         src = self._display or self._orig
         if src is None:
             self.status.showMessage(tr("nothing_to_save_msg")); return
 
-        with_overlay = self._ask_overlay_option()
-        if with_overlay is None:
+        choice = self._ask_overlay_option()
+        if choice is None:
             return
 
-        out_img = render_analysis_overlay(src, self.lanes, band_style=self._band_display_style) if with_overlay else src
-        default_name = tr("default_filename_with_overlay") if with_overlay else "gel_result.png"
+        out_img = self._render_for_export(src, choice)
+        default_name = {"overlay": tr("default_filename_with_overlay"),
+                        "overlay_only": tr("default_filename_overlay_only")}.get(choice, "gel_result.png")
         default_path = str(Path(self._last_dir) / default_name)
         path, _ = QFileDialog.getSaveFileName(self, tr("toolbar_save_result"), default_path, "PNG (*.png);;TIFF (*.tif)")
         if path:

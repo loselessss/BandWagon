@@ -43,7 +43,7 @@ def downscale_for_preview(img, canvas_w, canvas_h, margin=1.5):
 # ═══════════════════════════════════════════════════════════════════
 
 
-def render_analysis_overlay(base_img, lanes, band_style="area"):
+def render_analysis_overlay(base_img, lanes, band_style="area", transparent_bg=False):
     """base_img 위에 레인 경계·검출 밴드·MW 라벨을 그려 합성한 새 이미지를
     반환한다(화면 캡처가 아니라 원본 좌표 기준으로 직접 그림 — 저장 해상도가
     화면 크기에 좌우되지 않음).
@@ -55,10 +55,13 @@ def render_analysis_overlay(base_img, lanes, band_style="area"):
 
     band_style: "area"(경계 영역, 반투명 박스) 또는 "line"(피크 위치 한 줄).
 
+    transparent_bg=True면 base_img의 픽셀은 안 쓰고(크기만 참조) 완전
+    투명한 RGBA 캔버스 위에 오버레이만 그려서 반환한다 — 다른 배경 위에
+    겹쳐 쓰거나 발표 자료에 붙여 넣기 좋은 "오버레이만 복사/저장" 용도.
+
     3-패스로 그린다: 레인 박스/밴드선 → 레인 이름(헤더) → MW 라벨. 밴드보다
     레인 박스를 먼저 그려야 다음 레인 박스가 이전 레인 글자를 안 덮는다."""
-    img0 = base_img.convert("RGB")
-    W, H = img0.size
+    W, H = base_img.size
     measure = ImageDraw.Draw(Image.new("RGB", (1, 1)))
 
     def _font_to_fit(text, max_width, base_size=14, min_size=7):
@@ -123,10 +126,22 @@ def render_analysis_overlay(base_img, lanes, band_style="area"):
         lane_labels.append((lane, lines, font, line_h))
         header_h = max(header_h, line_h * len(lines) + 6)
 
-    # ── 헤더만큼 위로 늘린 새 캔버스에 원본을 붙여넣는다 ──
-    img = Image.new("RGB", (W, H + header_h), (13, 18, 23))
-    img.paste(img0, (0, header_h))
+    # ── 헤더만큼 위로 늘린 새 캔버스를 만든다 ──
+    # transparent_bg=False: 원본 사진을 헤더 아래에 붙여넣는다.
+    # transparent_bg=True: 사진은 안 쓰고 완전 투명(RGBA 알파=0) 캔버스로
+    # 시작 — 이후 그리는 것(레인 박스/밴드/글자)만 불투명하게 남는다.
+    if transparent_bg:
+        img = Image.new("RGBA", (W, H + header_h), (0, 0, 0, 0))
+    else:
+        img = Image.new("RGB", (W, H + header_h), (13, 18, 23))
+        img.paste(base_img.convert("RGB"), (0, header_h))
     draw = ImageDraw.Draw(img)
+
+    def _col(rgb):
+        """레인 색(RGB 3튜플)에, 투명 배경 모드면 완전 불투명 알파를 붙여
+        반환한다 — RGBA 캔버스에 그릴 땐 알파를 명시해야 확실히 불투명하게
+        나온다."""
+        return rgb + (255,) if transparent_bg else rgb
 
     # ── 1패스: 레인 박스 + 밴드 표시(이미지 영역 — header_h만큼 아래로 오프셋) ──
     # band_style="area": 위경계~아래경계 영역을 반투명 박스로 — '여기서부터
@@ -139,7 +154,7 @@ def render_analysis_overlay(base_img, lanes, band_style="area"):
     odraw = ImageDraw.Draw(overlay)
     for lane in lanes:
         col = (lane.color.red(), lane.color.green(), lane.color.blue())
-        draw.rectangle([lane.x1, header_h, lane.x2, header_h + H - 1], outline=col, width=2)
+        draw.rectangle([lane.x1, header_h, lane.x2, header_h + H - 1], outline=_col(col), width=2)
         if lane.peaks is not None:
             if band_style == "line":
                 for py in lane.peaks:
@@ -154,14 +169,17 @@ def render_analysis_overlay(base_img, lanes, band_style="area"):
                     odraw.rectangle([lane.x1, top, lane.x2, bot], fill=col + (55,))
                     odraw.line([(lane.x1, top), (lane.x2, top)], fill=col + (255,), width=1)
                     odraw.line([(lane.x1, bot), (lane.x2, bot)], fill=col + (255,), width=1)
-    img = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
+    if transparent_bg:
+        img = Image.alpha_composite(img, overlay)
+    else:
+        img = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
     draw = ImageDraw.Draw(img)  # 합성 후 이미지가 바뀌었으니 Draw 핸들도 새로 받음
 
     # ── 2패스: 레인 이름 — 헤더 띠 안에만 그려 이미지와 절대 안 겹친다 ──
     for lane, lines, font, line_h in lane_labels:
         col = (lane.color.red(), lane.color.green(), lane.color.blue())
         for i, line in enumerate(lines):
-            draw.text((lane.x1 + 5, 3 + i * line_h), line, fill=col, font=font)
+            draw.text((lane.x1 + 5, 3 + i * line_h), line, fill=_col(col), font=font)
 
     # ── 3패스: MW 값 — 이미지 영역 안(header_h만큼 오프셋)에 그린다 ──
     for lane in lanes:
@@ -189,7 +207,7 @@ def render_analysis_overlay(base_img, lanes, band_style="area"):
                     ty = last_ty + 12
                 last_ty = ty
                 draw.text((tx, ty), txt, font=font_small,
-                          fill=(255, 255, 255), stroke_width=2, stroke_fill=(0, 0, 0))
+                          fill=_col((255, 255, 255)), stroke_width=2, stroke_fill=_col((0, 0, 0)))
     return img
 
 

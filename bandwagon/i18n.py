@@ -284,6 +284,7 @@ STRINGS = {
         "export_image_question": "어떤 이미지를 내보낼까요?",
         "export_plain": "사진만",
         "export_with_overlay": "분석 포함(합성)",
+        "export_overlay_only": "오버레이만(투명 배경)",
         "btn_cancel": "취소",
         "nothing_to_copy_msg": "복사할 이미지가 없습니다.",
         "status_copied_to_clipboard": "결과를 클립보드에 복사했습니다.",
@@ -291,6 +292,7 @@ STRINGS = {
         "overlay_included_suffix": " (분석 포함)",
         "nothing_to_save_msg": "저장할 이미지가 없습니다.",
         "default_filename_with_overlay": "gel_result_분석포함.png",
+        "default_filename_overlay_only": "gel_result_오버레이만.png",
         "status_saved": "저장됨: {path}",
         "gelproj_filter": "BandWagon 프로젝트 (*.bandwagon)",
         "toolbar_project_save_as": "프로젝트 새로 저장",
@@ -392,8 +394,9 @@ STRINGS = {
             "비교할 수 있습니다. <b>붙여넣기(Ctrl+V)</b>는 예전처럼 지금 창에 바로 적용됩니다<br>"
             "· 설치본에서는 탐색기에서 .bandwagon/.bwcomposite 파일을 더블클릭해도 바로 열립니다"
             "(아이콘 색으로 두 종류가 구분됩니다)<br>"
-            "· <b>결과 이미지 내보내기</b> 메뉴 — 복사 / 저장: 분석 결과가 있으면 '사진만' / '분석 포함(합성)' 중 선택, "
-            "CSV 저장: 밴드별 MW·강도·Volume 표 저장<br>"
+            "· <b>결과 이미지 내보내기</b> 메뉴 — 복사 / 저장: 분석 결과가 있으면 '사진만' / '분석 포함(합성)' / "
+            "'오버레이만(투명 배경)' 중 선택 — 오버레이만은 사진 없이 레인/밴드/MW만 투명 배경 PNG로 내보내 "
+            "다른 배경 위에 겹쳐 쓰거나 발표 자료에 붙여넣기 좋습니다. CSV 저장: 밴드별 MW·강도·Volume 표 저장<br>"
             "· <b>되돌리기(Ctrl+Z)</b>: 회전·반전·자르기·펴기·색상반전·곡률보정을 한 단계씩 취소"
             "</p>"
 
@@ -740,6 +743,7 @@ STRINGS = {
         "export_image_question": "Which image would you like to export?",
         "export_plain": "Image Only",
         "export_with_overlay": "With Analysis Overlay",
+        "export_overlay_only": "Overlay Only (transparent)",
         "btn_cancel": "Cancel",
         "nothing_to_copy_msg": "No image to copy.",
         "status_copied_to_clipboard": "Result copied to clipboard.",
@@ -747,6 +751,7 @@ STRINGS = {
         "overlay_included_suffix": " (with overlay)",
         "nothing_to_save_msg": "No image to save.",
         "default_filename_with_overlay": "gel_result_with_overlay.png",
+        "default_filename_overlay_only": "gel_result_overlay_only.png",
         "status_saved": "Saved: {path}",
         "gelproj_filter": "BandWagon Project (*.bandwagon)",
         "toolbar_project_save_as": "Save Project As",
@@ -850,8 +855,10 @@ STRINGS = {
             "window as before<br>"
             "· In the installed app, double-clicking a .bandwagon or .bwcomposite file in Explorer "
             "opens it directly (the two file types have differently-colored icons)<br>"
-            "· <b>Export Result Image</b> menu — Copy/Save: if there are analysis results, choose 'image only' or "
-            "'with overlay'; Export CSV: save a table of MW/intensity/volume per band<br>"
+            "· <b>Export Result Image</b> menu — Copy/Save: if there are analysis results, choose 'image only', "
+            "'with overlay', or 'overlay only (transparent)' — overlay-only exports just the lanes/bands/MW "
+            "labels on a transparent PNG with no photo, handy for layering over another background or slides. "
+            "Export CSV: save a table of MW/intensity/volume per band<br>"
             "· <b>Undo (Ctrl+Z)</b>: undo rotate/flip/crop/warp/invert/bow-correction one step at a time"
             "</p>"
 
