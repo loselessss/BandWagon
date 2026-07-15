@@ -11,7 +11,7 @@ _replay_history)에 함께 기록된다 — _commit_lanes()가 "lanes" 연산을
 import numpy as np
 from PyQt5.QtWidgets import (
     QComboBox, QFormLayout, QGroupBox, QHBoxLayout, QHeaderView,
-    QInputDialog, QLabel, QPushButton, QSlider, QSpinBox, QTableWidget,
+    QInputDialog, QLabel, QPushButton, QSpinBox, QTableWidget,
     QTableWidgetItem, QTextEdit, QVBoxLayout, QWidget,
 )
 from PyQt5.QtCore import Qt
@@ -19,7 +19,7 @@ from PyQt5.QtCore import Qt
 from .i18n import tr
 from .theme import *
 from .models import Lane
-from .widgets import StdCurveView
+from .widgets import StdCurveView, FineSlider
 from .dialogs import MarkerDialog, MarkerPresetManager, _dialog_style, _no_help_button
 from .presets import load_marker_presets, save_marker_presets
 
@@ -93,7 +93,7 @@ class LanesMixin:
         # 보이는데, 값을 올리면 피크에 더 가깝게 끊어 경계가 좁아진다.
         # peak_area/peak_volume의 적분 범위 자체라 정량값도 함께 바뀐다.
         thresh_row = QHBoxLayout(); thresh_row.setSpacing(6)
-        self.sl_band_thresh = QSlider(Qt.Horizontal)
+        self.sl_band_thresh = FineSlider(Qt.Horizontal)
         self.sl_band_thresh.setRange(5, 80); self.sl_band_thresh.setValue(40)
         self.sl_band_thresh.setStyleSheet(
             f"QSlider::groove:horizontal{{height:4px;background:{INK3};border-radius:2px;}}"
@@ -116,7 +116,7 @@ class LanesMixin:
         # smear로 보아 결과(표/정량값/MW 계산)에서 통째로 뺀다. 상대적인
         # '뾰족함' 비율이 아니라 절대 길이(px) 제한이라 동작이 직관적이다.
         smear_row = QHBoxLayout(); smear_row.setSpacing(6)
-        self.sl_smear = QSlider(Qt.Horizontal)
+        self.sl_smear = FineSlider(Qt.Horizontal)
         self.sl_smear.setRange(0, 500); self.sl_smear.setValue(0)
         self.sl_smear.setStyleSheet(
             f"QSlider::groove:horizontal{{height:4px;background:{INK3};border-radius:2px;}}"

@@ -1075,6 +1075,63 @@ class StdCurveView(QWidget):
 
 
 # ═══════════════════════════════════════════════════════════════════
+#  Alt로 미세조정 가능한 슬라이더
+# ═══════════════════════════════════════════════════════════════════
+class FineSlider(QSlider):
+    """일반 QSlider와 완전히 똑같이 동작하되, Alt를 누른 채로 드래그를
+    "시작"하면 마우스 이동량을 FINE_FACTOR분의 1로 줄여 적용한다 —
+    회전/기울기/곡률처럼 1 단위 차이가 크게 갈리는 조정에서 손이 조금만
+    움직여도 값이 훅훅 뛰지 않게 하기 위함.
+
+    Alt 없이 누르면 이 클래스는 아무것도 가로채지 않고 그대로
+    super()에 넘긴다 — Qt 내부 드래그 상태(눌림 표시 등)를 건드릴
+    일이 전혀 없어 기존 동작과 100% 동일하다. 단순함을 위해 드래그
+    도중 Alt를 누르거나 떼는 전환은 지원하지 않는다(누른 채로
+    드래그를 시작해야 미세조정 모드로 들어간다)."""
+    FINE_FACTOR = 8
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._fine_mode = False
+        self._ref_pos = None
+        self._ref_val = None
+
+    def _axis_delta(self, e):
+        if self.orientation() == Qt.Horizontal:
+            return e.pos().x() - self._ref_pos.x()
+        return self._ref_pos.y() - e.pos().y()   # 세로는 위로 갈수록 값 증가
+
+    def mousePressEvent(self, e):
+        if e.button() == Qt.LeftButton and (e.modifiers() & Qt.AltModifier):
+            self._fine_mode = True
+            self._ref_pos = e.pos()
+            self._ref_val = self.value()
+            e.accept()
+            return
+        self._fine_mode = False
+        super().mousePressEvent(e)
+
+    def mouseMoveEvent(self, e):
+        if self._fine_mode and (e.buttons() & Qt.LeftButton):
+            length = max(1, self.width() if self.orientation() == Qt.Horizontal else self.height())
+            span = self.maximum() - self.minimum()
+            delta_val = self._axis_delta(e) / length * span / self.FINE_FACTOR
+            new_val = int(round(self._ref_val + delta_val))
+            self.setValue(max(self.minimum(), min(self.maximum(), new_val)))
+            e.accept()
+            return
+        super().mouseMoveEvent(e)
+
+    def mouseReleaseEvent(self, e):
+        if self._fine_mode:
+            self._fine_mode = False
+            e.accept()
+            self.sliderReleased.emit()
+            return
+        super().mouseReleaseEvent(e)
+
+
+# ═══════════════════════════════════════════════════════════════════
 #  슬라이더 행
 # ═══════════════════════════════════════════════════════════════════
 class SliderRow(QWidget):
@@ -1087,7 +1144,7 @@ class SliderRow(QWidget):
         lay = QHBoxLayout(self); lay.setContentsMargins(0, 0, 0, 0); lay.setSpacing(8)
         lb = QLabel(label); lb.setFixedWidth(34); lb.setStyleSheet(f"color:{MUTE};font-size:11px;")
         lay.addWidget(lb)
-        self.slider = QSlider(Qt.Horizontal)
+        self.slider = FineSlider(Qt.Horizontal)
         self.slider.setRange(lo, hi); self.slider.setValue(default)
         self.slider.setStyleSheet(
             f"QSlider::groove:horizontal{{height:4px;background:{INK3};border-radius:2px;}}"

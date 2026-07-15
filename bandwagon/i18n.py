@@ -434,7 +434,9 @@ STRINGS = {
             "'부채꼴(곡률) 보정' 슬라이더로 라이브 미리보기를 보며 조정합니다.<br>"
             "사진이 평행사변형으로 비스듬히 찍혀 위/아래 변의 좌우 위치가 어긋난 경우는 "
             "'기울기(전단) 보정' 슬라이더로 바로잡습니다 — 레인 경계선이 수직이 되는 "
-            "지점을 찾으면 됩니다.</p>"
+            "지점을 찾으면 됩니다.<br>"
+            "· 이 탭을 포함해 곳곳의 슬라이더는 <b>Alt를 누른 채로 드래그</b>하면 "
+            "이동량이 1/8로 줄어 미세 조정하기 쉽습니다.</p>"
 
             "<h3>보정 탭</h3>"
             "<p>회전(90°/180°/정밀회전) · 좌우·상하 반전 · 자르기 · 색상 반전 · 밝기/대비.<br>"
@@ -899,7 +901,9 @@ STRINGS = {
             "live with the 'Bow Correction' slider.<br>"
             "If the photo was shot at a slight angle (parallelogram-shaped, top and bottom edges "
             "horizontally offset), use the 'Shear Correction' slider — move it until the lane "
-            "boundaries look vertical.</p>"
+            "boundaries look vertical.<br>"
+            "· Sliders here and elsewhere support <b>Alt+drag</b> for fine control — movement "
+            "is scaled down to 1/8 speed.</p>"
 
             "<h3>Adjust Tab</h3>"
             "<p>Rotate (90°/180°/fine) · flip horizontal/vertical · crop · invert colors · brightness/contrast.<br>"

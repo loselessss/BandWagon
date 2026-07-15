@@ -32,7 +32,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QImage
 from PyQt5.QtWidgets import (
     QApplication, QDialog, QDialogButtonBox, QFileDialog, QGroupBox,
-    QHBoxLayout, QLabel, QMessageBox, QPushButton, QSizePolicy, QSlider,
+    QHBoxLayout, QLabel, QMessageBox, QPushButton, QSizePolicy,
     QVBoxLayout, QWidget,
 )
 
@@ -43,7 +43,7 @@ from .imaging import (
     blend_for_uv_canvas, blend_visible_uv, downscale_for_preview,
     pil_to_pixmap, uv_only_grayscale, warp_uv_to_visible, warp_visible_to_uv,
 )
-from .widgets import GelView, ThumbView
+from .widgets import GelView, ThumbView, FineSlider
 
 
 COMPOSITE_EXT = ".bwcomposite"
@@ -195,7 +195,7 @@ class CompositeStudio(QDialog):
         op_row = QHBoxLayout(); op_row.setSpacing(6)
         op_lbl = QLabel(tr("wb_opacity_label")); op_lbl.setStyleSheet(f"color:{MUTE};font-size:11px;")
         op_row.addWidget(op_lbl)
-        self.opacity_slider = QSlider(Qt.Horizontal)
+        self.opacity_slider = FineSlider(Qt.Horizontal)
         self.opacity_slider.setRange(0, 100); self.opacity_slider.setValue(60)
         self.opacity_slider.setStyleSheet(self._slider_css())
         self.opacity_slider.valueChanged.connect(lambda _v: self._refresh_canvas())
