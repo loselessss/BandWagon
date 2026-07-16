@@ -162,6 +162,9 @@ class LanesMixin:
         self.lane_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
         self.lane_table.setStyleSheet(self._table_css())
         self.lane_table.cellChanged.connect(self._on_lane_renamed)
+        # 레인이 많아 스크롤이 필요해지기 전에 최대한 한눈에 보이도록 15줄
+        # 정도 높이를 기본으로 확보한다(그 이상은 테이블 자체 스크롤).
+        self.lane_table.setMinimumHeight(420)
         v.addWidget(self.lane_table, 1)
         self._add_tab(page, tr("tab_lanes"))
 
@@ -400,6 +403,11 @@ class LanesMixin:
         self.status.showMessage(tr("status_lanes_cleared"))
 
     def _rebuild_lane_table(self):
+        """레인 목록을 통째로 다시 그린다 — 이름 변경 하나만 해도 매번
+        이 함수가 불려서(_commit_lanes -> _apply_lanes_snapshot), 스크롤
+        위치를 미리 저장해뒀다가 되돌리지 않으면 레인이 많을 때 편집할
+        때마다 맨 위로 튕겨서 매우 불편했다(실사용 중 보고됨)."""
+        scroll_pos = self.lane_table.verticalScrollBar().value()
         self.lane_table.blockSignals(True)
         self.lane_table.setRowCount(0)
         for row, lane in enumerate(self.lanes):
@@ -424,6 +432,7 @@ class LanesMixin:
             oh.addWidget(up); oh.addWidget(down); oh.addWidget(delbtn)
             self.lane_table.setCellWidget(r, 2, order)
         self.lane_table.blockSignals(False)
+        self.lane_table.verticalScrollBar().setValue(scroll_pos)
 
     def _renumber_lanes(self):
         """레인 목록 순서를 기준으로 idx(번호·색상)를 다시 매긴다.
