@@ -157,9 +157,17 @@ class LanesMixin:
         self.lane_table = QTableWidget(0, 3)
         self.lane_table.setHorizontalHeaderLabels([tr("lane_col_name"), tr("lane_col_type"), tr("lane_col_order_delete")])
         self.lane_table.verticalHeader().setVisible(False)
-        self.lane_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
-        self.lane_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        self.lane_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        # 세 칸 다 Interactive로 둬서 사용자가 경계를 드래그해 폭 비중을
+        # 직접 조절할 수 있게 한다(예전엔 이름=Stretch/유형·순서삭제=
+        # ResizeToContents로 고정돼 있어 아예 손으로 조절할 수 없었다).
+        # 시작 폭은 예전 자동 크기와 비슷하게 맞춰둔다.
+        header = self.lane_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.Interactive)
+        header.setSectionResizeMode(1, QHeaderView.Interactive)
+        header.setSectionResizeMode(2, QHeaderView.Interactive)
+        self.lane_table.setColumnWidth(0, 140)
+        self.lane_table.setColumnWidth(1, 90)
+        self.lane_table.setColumnWidth(2, 100)
         self.lane_table.setStyleSheet(self._table_css())
         self.lane_table.cellChanged.connect(self._on_lane_renamed)
         # 레인이 많아 스크롤이 필요해지기 전에 최대한 한눈에 보이도록 15줄

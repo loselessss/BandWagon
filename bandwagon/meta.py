@@ -11,8 +11,8 @@ HAS_CV2 = importlib.util.find_spec("cv2") is not None
 
 # ── 릴리스 메타데이터 ────────────────────────────────────────────────
 APP_NAME     = "BandWagon"
-APP_VERSION  = "2.0.12"
-RELEASE_DATE = "2026-07-10"
+APP_VERSION  = "2.0.13"
+RELEASE_DATE = "2026-07-16"
 GELPROJ_FORMAT_VERSION = 2   # .bandwagon 내부 JSON 스키마 버전 (구조 바꾸면 올릴 것) — v2: "memo" 필드 추가
 
 def resource_path(name):

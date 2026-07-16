@@ -234,7 +234,6 @@ class FileIOMixin:
         self._current_project_path = None
         self._clear_lanes()
         self.gel.clear_corners(); self.corner_label.setText(tr("corner_count", n=0))
-        self.gel.clear_crop()
         self.gel.clear_vrange()
         self._rot_base = None
         self._rot_session_pushed = False

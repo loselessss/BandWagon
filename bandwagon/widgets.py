@@ -261,7 +261,6 @@ class GelView(QWidget):
     laneAdded = pyqtSignal(int, int)
     laneEdgeChanged = pyqtSignal()   # 기존 레인의 x1/x2를 드래그로 조정 완료
     cornerChanged = pyqtSignal(int)
-    cropChanged = pyqtSignal(bool)   # 선택 영역 존재 여부
     vrangeChanged = pyqtSignal(bool)  # 세로 분석 범위가 (재)지정/조정 완료
     zoomChanged = pyqtSignal(float)  # 현재 줌 배율(1.0 = 100%)
 
@@ -288,9 +287,6 @@ class GelView(QWidget):
         self._corner_drag = None
         self._box_a = None          # 코너 모드 박스 드래그 시작점(이미지 좌표)
         self._box_b = None          # 코너 모드 박스 드래그 현재점
-        self.crop_rect = None       # (x1,y1,x2,y2) 이미지 좌표
-        self._crop_a = None
-        self._crop_b = None
         # 세로(이동거리) 분석 범위 — (y1,y2) 원본 이미지 행 좌표, None=전체.
         # 레인과 달리 젤 전체에 하나만 둔다(펴기로 이미 직사각형 좌표계라
         # 모든 레인이 같은 세로 기준을 공유하기 때문).
@@ -328,7 +324,7 @@ class GelView(QWidget):
         self._lane_move_drag = None
         self._vrange_a = self._vrange_b = None
         self._vrange_edge_drag = None
-        if m in ("lane", "corner", "crop", "vrange"):
+        if m in ("lane", "corner", "vrange"):
             self.setCursor(Qt.CrossCursor)
         else:
             self.setCursor(Qt.OpenHandCursor)  # view 모드: 좌클릭 드래그로 패닝 가능
@@ -336,12 +332,6 @@ class GelView(QWidget):
 
     def clear_corners(self):
         self.corners = []
-        self.update()
-
-    def clear_crop(self):
-        self.crop_rect = None
-        self._crop_a = self._crop_b = None
-        self.cropChanged.emit(False)
         self.update()
 
     def clear_vrange(self):
@@ -509,10 +499,6 @@ class GelView(QWidget):
                 self._box_a = self._wpos_to_img(e.x(), e.y())
                 self._box_b = self._box_a
             return
-        if self.mode == "crop":
-            self._crop_a = self._wpos_to_img(e.x(), e.y())
-            self._crop_b = self._crop_a
-            return
         if self.mode == "vrange":
             hit = self._vrange_edge_hit(e.y())
             if hit is not None:
@@ -617,9 +603,6 @@ class GelView(QWidget):
         if self.mode == "corner":
             self.setCursor(Qt.OpenHandCursor if self._corner_hit(e.x(), e.y()) is not None
                            else Qt.CrossCursor)
-        if self.mode == "crop" and self._crop_a is not None:
-            self._crop_b = self._wpos_to_img(e.x(), e.y())
-            self.update()
         if self.mode == "lane" and self._lane_a is not None:
             self._lane_b = self._wx_to_ix(e.x())
             self.update()
@@ -653,14 +636,6 @@ class GelView(QWidget):
             # '위치'에 반응하는 쪽이 다시 그려진다(개수만 보던 펴기 탭
             # 용도로는 안 보였던 빈틈).
             self.cornerChanged.emit(len(self.corners))
-            return
-        if self.mode == "crop" and self._crop_a is not None and e.button() == Qt.LeftButton:
-            (x1, y1), (x2, y2) = self._crop_a, self._crop_b
-            if abs(x2 - x1) > 3 and abs(y2 - y1) > 3:
-                self.crop_rect = (min(x1, x2), min(y1, y2), max(x1, x2), max(y1, y2))
-                self.cropChanged.emit(True)
-            self._crop_a = self._crop_b = None
-            self.update()
             return
         if self.mode == "vrange" and self._vrange_edge_drag is not None:
             self._vrange_edge_drag = None
@@ -718,7 +693,7 @@ class GelView(QWidget):
         # 크기·모드가 같으면 캐시된 스케일 픽스맵을 재사용해 재계산을 없앤다.
         dragging = (self._pan_drag is not None or self._lane_edge_drag is not None
                     or self._lane_move_drag is not None or self._corner_drag is not None
-                    or self._vrange_edge_drag is not None or self._crop_a is not None)
+                    or self._vrange_edge_drag is not None)
         mode = Qt.FastTransformation if dragging else Qt.SmoothTransformation
         key = (r.width(), r.height(), mode)
         if self._scaled_cache is None or self._scaled_cache[0] != key:
@@ -832,30 +807,6 @@ class GelView(QWidget):
             qp.setBrush(QColor(63, 180, 230, 35))
             qp.drawRect(QRectF(x1, r.top(), x2 - x1, r.height()))
 
-        # 크롭: 자르기 모드일 때만 표시(다른 모드로 전환해도 어둡게 덮이지 않도록).
-        # 선택 영역 자체는 모드를 바꿔도 보존되며, 자르기 모드로 돌아오면 다시 보인다.
-        crop_live = (self.mode == "crop" and self._crop_a is not None and self._crop_b is not None)
-        if self.mode == "crop" and (crop_live or self.crop_rect):
-            if crop_live:
-                (ix1, iy1), (ix2, iy2) = self._crop_a, self._crop_b
-            else:
-                ix1, iy1, ix2, iy2 = self.crop_rect
-            x1, y1 = self._ix_to_wx(min(ix1, ix2)), self._iy_to_wy(min(iy1, iy2))
-            x2, y2 = self._ix_to_wx(max(ix1, ix2)), self._iy_to_wy(max(iy1, iy2))
-            # 선택 영역 밖을 어둡게 덮어 잘릴 영역을 직관적으로 표시
-            full = QRectF(r)
-            qp.setPen(Qt.NoPen); qp.setBrush(QColor(13, 18, 23, 140))
-            qp.drawRect(QRectF(full.left(), full.top(), full.width(), y1 - full.top()))
-            qp.drawRect(QRectF(full.left(), y2, full.width(), full.bottom() - y2))
-            qp.drawRect(QRectF(full.left(), y1, x1 - full.left(), y2 - y1))
-            qp.drawRect(QRectF(x2, y1, full.right() - x2, y2 - y1))
-            qp.setPen(QPen(QColor(LIME), 2, Qt.DashLine if crop_live else Qt.SolidLine))
-            qp.setBrush(Qt.NoBrush)
-            qp.drawRect(QRectF(x1, y1, x2 - x1, y2 - y1))
-            qp.setPen(QColor(LIME)); qp.setFont(QFont("DejaVu Sans Mono", 8, QFont.Bold))
-            w_img = abs(ix2 - ix1); h_img = abs(iy2 - iy1)
-            qp.drawText(QRectF(x1, max(0, y1 - 16), 130, 16), Qt.AlignLeft,
-                        f"{w_img:.0f}×{h_img:.0f}px")
 
         # 세로 분석 범위: 범위 지정 모드일 때만 표시(자르기와 동일한 관례).
         # 다른 모드에서는 검출된 밴드 자체가 이미 이 범위 안에서만 나타나므로

@@ -514,11 +514,6 @@ def apply_edit_op(img, gray_override, op_name, params):
         # 패스스루 — 픽셀은 안 바꾸고, _replay_history()가 가장 최근
         # 'lanes'의 params를 읽어 레인 목록을 복원하는 데만 쓰인다.
         return img, gray_override
-    if op_name == "crop":
-        x1, y1, x2, y2 = params["box"]
-        out = img.crop((x1, y1, x2, y2))
-        new_gray = gray_override[y1:y2, x1:x2] if gray_override is not None else None
-        return out, new_gray
     if op_name == "warp":
         import cv2
         src = np.array(params["corners"], dtype=np.float32)

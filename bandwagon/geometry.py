@@ -665,7 +665,6 @@ class GeometryMixin:
         _GEOMETRY_OPS 리셋 규칙으로 그대로 재현된다). 화면 줌/팬은
         기본값으로 되돌린다."""
         self.gel.clear_corners()
-        self.gel.clear_crop()
         self.gel.clear_vrange()
         self.gel.reset_zoom()
         self.corner_label.setText(tr("corner_count", n=0))
@@ -887,8 +886,6 @@ class GeometryMixin:
         undone_op, undone_params = self._edit_ops[self._edit_pos]
         self._edit_pos -= 1
         self._replay_history()
-        self.gel.crop_rect = None
-        self.gel._crop_a = self.gel._crop_b = None
         if undone_op == "warp":
             # '펴기 실행'을 되돌린 거라면 백지로 보내지 않고 그때 쓴 코너
             # 지정 상태로 복귀시킨다 — 코너만 살짝 다듬어 바로 다시 펴기를
@@ -922,8 +919,6 @@ class GeometryMixin:
         self._edit_pos += 1
         self._replay_history()
         self.gel.corners = []
-        self.gel.crop_rect = None
-        self.gel._crop_a = self.gel._crop_b = None
         if hasattr(self, "corner_label"):
             self.corner_label.setText(tr("corner_count", n=0))
         self._after_geometry_change()
