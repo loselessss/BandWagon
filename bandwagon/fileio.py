@@ -19,12 +19,13 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageGrab
+from PyQt5.QtGui import QImage
 from PyQt5.QtWidgets import QApplication, QAction, QDialog, QFileDialog, QMessageBox
 
 from .i18n import tr
 from .theme import *
 from .meta import APP_NAME, APP_VERSION, GELPROJ_FORMAT_VERSION
-from .imaging import pil_to_pixmap, render_analysis_overlay
+from .imaging import copy_pil_image_to_clipboard, render_analysis_overlay
 from .models import CurveModel, Lane
 from .dialogs import _dialog_style
 
@@ -389,7 +390,7 @@ class FileIOMixin:
         if choice is None:
             return
         out_img = self._render_for_export(src, choice)
-        QApplication.clipboard().setPixmap(pil_to_pixmap(out_img))
+        copy_pil_image_to_clipboard(out_img, QApplication.clipboard())
         suffix = tr("overlay_included_suffix") if choice in ("overlay", "overlay_only") else ""
         self.status.showMessage(tr("status_copied_to_clipboard") + suffix)
 

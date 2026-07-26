@@ -26,7 +26,11 @@ build_exe.bat으로 만든 dist\BandWagon\ 폴더는 그 안의 BandWagon.exe를
    Program Files에 한 번 설치해서 모든 계정이 같이 쓰는 방식이 아닙니다.
    그 방식이 필요하면 installer.iss의 PrivilegesRequired 주석을 보세요.)
 
-버전을 올릴 때 (예: 1.2 -> 1.2.1):
+버전을 올릴 때:
+   - x.y.z에서 x=호환성이 깨지는 메이저 업데이트,
+     y=하위 호환되는 새 기능 추가, z=하위 호환되는 버그 수정
+   - 상위 자리를 올리면 오른쪽 자리는 0으로 초기화
+     (예: 2.3.7 -> 기능 추가 2.4.0 / 버그 수정 2.3.8)
    - bandwagon/meta.py 의 APP_VERSION
    - installer.iss 맨 위의 MyAppVersion
    두 곳을 같이 바꿔야 합니다(자동 동기화되지 않습니다). 바꾼 뒤

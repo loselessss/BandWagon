@@ -6,16 +6,166 @@ apply_edit_op(). 무거운 cv2/scipy는 함수 안에서 지연 로딩.
 
 (BandWagon v1.1을 모듈로 분할한 것 — 동작은 원본과 동일.)
 """
+import io
+import os
+import struct
+import time
+
 import numpy as np
 from PIL import Image, ImageOps, ImageDraw, ImageFont
+from PyQt5.QtCore import QByteArray, QMimeData
 from PyQt5.QtGui import QImage, QPixmap
 
 
-def pil_to_pixmap(img):
+def pil_to_qimage(img):
+    """PIL 이미지를 알파 채널 손실 없이 독립적인 QImage로 변환한다."""
     img = img.convert("RGBA")
     data = img.tobytes("raw", "RGBA")
-    qi = QImage(data, img.width, img.height, QImage.Format_RGBA8888).copy()
-    return QPixmap.fromImage(qi)
+    return QImage(data, img.width, img.height, QImage.Format_RGBA8888).copy()
+
+
+def pil_to_pixmap(img):
+    return QPixmap.fromImage(pil_to_qimage(img))
+
+
+def pil_to_clipboard_mime(img):
+    """투명도를 보존하는 이미지 클립보드 MIME 데이터를 만든다.
+
+    QPixmap만 클립보드에 넣으면 Windows의 비트맵 변환 과정에서 알파가
+    1비트 마스크로 축소되거나 사라질 수 있다. RGBA QImage와 무손실 PNG를
+    함께 제공하고, Windows에서는 여러 그래픽 앱이 사용하는 네이티브
+    ``PNG`` 클립보드 포맷도 추가한다.
+    """
+    rgba = img.convert("RGBA")
+    png_buffer = io.BytesIO()
+    rgba.save(png_buffer, format="PNG")
+    png_data = QByteArray(png_buffer.getvalue())
+
+    mime = QMimeData()
+    mime.setData("image/png", png_data)
+    if os.name == "nt":
+        mime.setData('application/x-qt-windows-mime;value="PNG"', png_data)
+    mime.setImageData(pil_to_qimage(rgba))
+    return mime
+
+
+def _rgba_to_dibv5(img):
+    """PIL 이미지를 알파 마스크가 포함된 Windows CF_DIBV5 바이트로 만든다."""
+    rgba = img.convert("RGBA")
+    width, height = rgba.size
+    pixels = rgba.tobytes("raw", "BGRA")
+
+    # BITMAPV5HEADER(124 bytes). 음수 높이는 픽셀을 위에서 아래 순서로
+    # 저장한다는 뜻이다. BI_BITFIELDS와 bV5AlphaMask를 함께 명시해야
+    # 받는 프로그램이 네 번째 채널을 패딩이 아닌 실제 알파로 해석한다.
+    header = struct.pack(
+        "<IiiHHIIii" "IIIIIII" "iiiiiiiii" "IIIIIII",
+        124, width, -height, 1, 32, 3, len(pixels), 0, 0,
+        0, 0,
+        0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000,
+        0x73524742,  # LCS_sRGB
+        *([0] * 9),  # CIEXYZTRIPLE
+        0, 0, 0,
+        4,           # LCS_GM_IMAGES
+        0, 0, 0,
+    )
+    return header + pixels
+
+
+def _set_windows_clipboard_image(img):
+    """CF_DIBV5와 PNG를 Windows 시스템 클립보드에 직접 넣는다."""
+    import ctypes
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    user32 = ctypes.WinDLL("user32", use_last_error=True)
+
+    kernel32.GlobalAlloc.argtypes = [wintypes.UINT, ctypes.c_size_t]
+    kernel32.GlobalAlloc.restype = wintypes.HGLOBAL
+    kernel32.GlobalLock.argtypes = [wintypes.HGLOBAL]
+    kernel32.GlobalLock.restype = ctypes.c_void_p
+    kernel32.GlobalUnlock.argtypes = [wintypes.HGLOBAL]
+    kernel32.GlobalUnlock.restype = wintypes.BOOL
+    kernel32.GlobalFree.argtypes = [wintypes.HGLOBAL]
+    kernel32.GlobalFree.restype = wintypes.HGLOBAL
+    user32.OpenClipboard.argtypes = [wintypes.HWND]
+    user32.OpenClipboard.restype = wintypes.BOOL
+    user32.EmptyClipboard.restype = wintypes.BOOL
+    user32.SetClipboardData.argtypes = [wintypes.UINT, wintypes.HANDLE]
+    user32.SetClipboardData.restype = wintypes.HANDLE
+    user32.CloseClipboard.restype = wintypes.BOOL
+    user32.RegisterClipboardFormatW.argtypes = [wintypes.LPCWSTR]
+    user32.RegisterClipboardFormatW.restype = wintypes.UINT
+
+    def _alloc(data):
+        handle = kernel32.GlobalAlloc(0x0002, len(data))  # GMEM_MOVEABLE
+        if not handle:
+            raise OSError(ctypes.get_last_error(), "GlobalAlloc failed")
+        pointer = kernel32.GlobalLock(handle)
+        if not pointer:
+            kernel32.GlobalFree(handle)
+            raise OSError(ctypes.get_last_error(), "GlobalLock failed")
+        ctypes.memmove(pointer, data, len(data))
+        kernel32.GlobalUnlock(handle)
+        return handle
+
+    rgba = img.convert("RGBA")
+    dib_data = _rgba_to_dibv5(rgba)
+    png_buffer = io.BytesIO()
+    rgba.save(png_buffer, format="PNG")
+
+    dibv5_handle = None
+    dib_handle = None
+    png_handle = None
+    opened = False
+    try:
+        dibv5_handle = _alloc(dib_data)
+        dib_handle = _alloc(dib_data)
+        png_handle = _alloc(png_buffer.getvalue())
+
+        for _ in range(10):
+            if user32.OpenClipboard(None):
+                opened = True
+                break
+            time.sleep(0.01)
+        if not opened:
+            raise OSError(ctypes.get_last_error(), "OpenClipboard failed")
+        if not user32.EmptyClipboard():
+            raise OSError(ctypes.get_last_error(), "EmptyClipboard failed")
+
+        # CF_DIBV5(17)는 알파 마스크를 이해하는 Windows 표준 포맷이다.
+        if not user32.SetClipboardData(17, dibv5_handle):
+            raise OSError(ctypes.get_last_error(), "SetClipboardData(CF_DIBV5) failed")
+        dibv5_handle = None  # 성공하면 메모리 소유권이 시스템으로 넘어간다.
+
+        # Windows가 자동 합성한 CF_DIB는 알파 마스크를 빼 버린다. 일부 앱이
+        # CF_DIBV5보다 CF_DIB를 먼저 고르므로 이 포맷에도 V5 헤더를 직접
+        # 넣어 어느 비트맵 경로를 선택해도 같은 알파 정보를 받게 한다.
+        if not user32.SetClipboardData(8, dib_handle):
+            raise OSError(ctypes.get_last_error(), "SetClipboardData(CF_DIB) failed")
+        dib_handle = None
+
+        png_format = user32.RegisterClipboardFormatW("PNG")
+        if not png_format or not user32.SetClipboardData(png_format, png_handle):
+            raise OSError(ctypes.get_last_error(), "SetClipboardData(PNG) failed")
+        png_handle = None
+    finally:
+        if opened:
+            user32.CloseClipboard()
+        if dibv5_handle:
+            kernel32.GlobalFree(dibv5_handle)
+        if dib_handle:
+            kernel32.GlobalFree(dib_handle)
+        if png_handle:
+            kernel32.GlobalFree(png_handle)
+
+
+def copy_pil_image_to_clipboard(img, clipboard):
+    """플랫폼에 맞는 방식으로 PIL 이미지를 시스템 클립보드에 복사한다."""
+    if os.name == "nt":
+        _set_windows_clipboard_image(img)
+    else:
+        clipboard.setMimeData(pil_to_clipboard_mime(img))
 
 
 def downscale_for_preview(img, canvas_w, canvas_h, margin=1.5):
