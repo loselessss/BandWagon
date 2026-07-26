@@ -84,6 +84,10 @@ class LanesMixin:
         self.sp_prom.setStyleSheet(self._spin_css())
         self.sp_prom.setToolTip(tr("sensitivity_tip"))
         self.sp_dist = QSpinBox(); self.sp_dist.setRange(1, 50); self.sp_dist.setValue(6); self.sp_dist.setStyleSheet(self._spin_css())
+        self.sp_prom.valueChanged.connect(self._on_document_value_changed)
+        self.sp_dist.valueChanged.connect(self._on_document_value_changed)
+        self.sp_prom.editingFinished.connect(self._commit_document_state)
+        self.sp_dist.editingFinished.connect(self._commit_document_state)
         f.addRow(tr("label_sensitivity"), self.sp_prom)
         f.addRow(tr("label_min_band_spacing"), self.sp_dist)
 
@@ -105,6 +109,8 @@ class LanesMixin:
         self.lbl_band_thresh.setFixedWidth(36)
         self.sl_band_thresh.valueChanged.connect(
             lambda v: self.lbl_band_thresh.setText(f"{v}%"))
+        self.sl_band_thresh.valueChanged.connect(self._on_document_value_changed)
+        self.sl_band_thresh.sliderReleased.connect(self._commit_document_state)
         thresh_row.addWidget(self.sl_band_thresh, 1)
         thresh_row.addWidget(self.lbl_band_thresh)
         thresh_label = QLabel(tr("label_band_threshold"))
@@ -128,6 +134,9 @@ class LanesMixin:
         self.sp_smear.setStyleSheet(self._spin_css())
         self.sl_smear.valueChanged.connect(self.sp_smear.setValue)
         self.sp_smear.valueChanged.connect(self.sl_smear.setValue)
+        self.sl_smear.valueChanged.connect(self._on_document_value_changed)
+        self.sl_smear.sliderReleased.connect(self._commit_document_state)
+        self.sp_smear.editingFinished.connect(self._commit_document_state)
         smear_row.addWidget(self.sl_smear, 1)
         smear_row.addWidget(self.sp_smear)
         smear_label = QLabel(tr("label_smear_thresh"))
@@ -221,6 +230,7 @@ class LanesMixin:
         self.memo_edit.setStyleSheet(
             f"QTextEdit{{background:{INK1};color:{INKT};border:1px solid {LINE};"
             f"border-radius:6px;padding:6px;font-size:11px;}}")
+        self.memo_edit.textChanged.connect(self._on_memo_changed)
         v.addWidget(self.memo_edit, 1)
         self._add_tab(page, tr("project_memo_label"))
 
@@ -547,6 +557,7 @@ class LanesMixin:
         self._band_display_style = "area" if idx == 0 else "line"
         self.gel.band_display_style = self._band_display_style
         self.gel.update()  # 화면 캔버스 즉시 다시 그리기 (분석을 다시 돌릴 필요 없음)
+        self._commit_document_state()
 
     def run_analysis(self):
         if self._gray_orig is None:

@@ -11,6 +11,8 @@ GeometryMixin — 색감 보정(밝기/대비/톤커브) + 기하변환(회전/�
 재생 중 만난 가장 최근 'lanes' 연산의 params를 self._apply_lanes_snapshot()
 (LanesMixin이 정의)에 넘기기만 하고, 그 내용은 모른다.
 """
+import copy
+
 import numpy as np
 from PIL import Image
 from PyQt5.QtWidgets import (
@@ -663,9 +665,9 @@ class GeometryMixin:
         맞춰놓은 뒤이므로, 여기서 또 비우면 막 복원한 레인을 덮어써 버린다
         (기하변환을 만나면 레인 기준선이 비워지는 동작 자체는
         _GEOMETRY_OPS 리셋 규칙으로 그대로 재현된다). 화면 줌/팬은
-        기본값으로 되돌린다."""
+        기본값으로 되돌린다. 세로 분석 범위는 _replay_history()가 그
+        시점의 document 상태 또는 기하변환에 따른 초기화를 복원한다."""
         self.gel.clear_corners()
-        self.gel.clear_vrange()
         self.gel.reset_zoom()
         self.corner_label.setText(tr("corner_count", n=0))
         # WB 합성 모드는 화면(_orig)엔 가시광+UV 블렌드가 보이지만 분석은
@@ -695,11 +697,15 @@ class GeometryMixin:
                 self._wb_gray_override.copy() if self._wb_gray_override is not None else None)
             self._edit_ops = []
             self._edit_pos = -1
+        new_op = (op_name, params)
+        if self._edit_pos == len(self._edit_ops) - 1 and self._edit_pos >= 0 \
+                and self._edit_ops[self._edit_pos] == new_op:
+            return  # 연결된 슬라이더/스핀박스가 같은 상태를 두 번 확정한 경우
         del self._edit_ops[self._edit_pos + 1:]   # 다시하기 가지 제거
         # 정밀회전/곡률보정의 세션 내 교체는 _apply_fine_rotation()/
         # _apply_bow_op()이 직접 처리하므로(_rot_session_pushed 등으로
         # 세션 경계 추적), 여기서는 모든 연산을 그냥 추가만 한다.
-        self._edit_ops.append((op_name, params))
+        self._edit_ops.append(new_op)
         self._edit_pos += 1
         if len(self._edit_ops) > self._EDIT_MAX:
             # 가장 오래된 연산을 pristine에 영구히 합쳐 리스트에서 제거한다
@@ -718,7 +724,19 @@ class GeometryMixin:
                 self._adjust_pristine = oldest_params
             elif oldest_op == "lanes":
                 self._lanes_pristine = oldest_params["lanes"]
-        self._replay_history()
+            elif oldest_op == "document":
+                self._document_pristine = copy.deepcopy(oldest_params)
+            elif oldest_op in self._GEOMETRY_OPS:
+                # 기하변환은 세로 좌표계를 바꾸므로, 이력이 기준 이미지에
+                # 합쳐질 때 document 기준의 세로 분석 범위도 전체로 돌린다.
+                self._document_pristine = copy.deepcopy(self._document_pristine)
+                self._document_pristine.setdefault("analysis_params", {})["vrange"] = None
+        # document 상태는 사용자가 방금 위젯에서 이미 적용한 값이다. 여기서
+        # 곧바로 재생해 memo_edit.setPlainText()까지 다시 하면 타이핑할 때
+        # 커서/선택이 매 글자마다 초기화된다. 픽셀·레인·색보정 연산만 즉시
+        # 재생하고 document는 undo/redo 때 복원한다.
+        if op_name != "document":
+            self._replay_history()
         if hasattr(self, "btn_undo"):
             self.btn_undo.setEnabled(self._edit_pos >= 0)
         if hasattr(self, "btn_redo"):
@@ -759,6 +777,7 @@ class GeometryMixin:
         gray = self._edit_gray_pristine
         adjust_snapshot = None
         lanes_snapshot = None
+        document_snapshot = None
         # 회전/곡률/기울기는 각자 "가장 마지막으로 만난 값"을 따로 기억한다
         # (adjust_snapshot과 동일한 원리) — 예전엔 '진짜 마지막 연산'일 때만
         # 값을 보여줘서, 기울기 보정 뒤에 커브 하나만 더 만져도(마지막
@@ -779,8 +798,17 @@ class GeometryMixin:
                 adjust_snapshot = params
             elif op_name == "lanes":
                 lanes_snapshot = params
+            elif op_name == "document":
+                document_snapshot = params
             elif op_name in self._GEOMETRY_OPS:
                 lanes_snapshot = None
+                # 실제 기하변환 직후 _refresh_after_pixels_changed가 하던
+                # 동작을 이력 상태로 표현한다. 그래야 그 변환을 되돌리면
+                # 이전 세로 범위도 정확히 돌아온다.
+                effective = document_snapshot if document_snapshot is not None \
+                    else self._document_pristine
+                document_snapshot = copy.deepcopy(effective)
+                document_snapshot.setdefault("analysis_params", {})["vrange"] = None
             if op_name == "fine_rotate":
                 last_rot = params
             elif op_name == "bow_correct":
@@ -789,6 +817,7 @@ class GeometryMixin:
                 last_shear = params
         self._orig = img
         self._wb_gray_override = gray
+        self._apply_document_snapshot(document_snapshot)
         self._apply_adjust_snapshot(adjust_snapshot)
         self._apply_lanes_snapshot(lanes_snapshot)
         last_op = ops[-1][0] if ops else None
@@ -850,6 +879,121 @@ class GeometryMixin:
             "curves": {ch: m.to_dict() for ch, m in self.curves.items()},
         }
 
+    def _current_document_snapshot(self):
+        """픽셀·색보정·레인 외의 프로젝트 편집 상태를 가벼운 dict로 묶는다."""
+        if not hasattr(self, "memo_edit"):
+            return copy.deepcopy(self._document_pristine)
+        return {
+            "channel": self._ch,
+            "memo": self.memo_edit.toPlainText(),
+            "band_display_style": self._band_display_style,
+            "analysis_params": {
+                "prominence": self.sp_prom.value(),
+                "distance": self.sp_dist.value(),
+                "band_threshold": self.sl_band_thresh.value(),
+                "smear_max_px": self.sp_smear.value(),
+                "vrange": list(self.gel.vrange) if self.gel.vrange else None,
+            },
+        }
+
+    def _snapshot_document_baseline(self):
+        """새 이미지/프로젝트를 연 직후의 비픽셀 편집 상태를 기준으로 저장."""
+        self._document_pristine = self._current_document_snapshot()
+
+    def _finish_memo_group(self):
+        self._memo_group_active = False
+
+    def _finish_document_group(self):
+        self._document_group_source = None
+
+    def _on_document_value_changed(self, *_args):
+        """스핀/슬라이더의 연속 변화는 즉시 기록하되 한 조작으로 합친다."""
+        if self._history_suspended or self._orig is None:
+            return
+        self._finish_memo_group()
+        self._memo_commit_timer.stop()
+        source = self.sender()
+        snapshot = self._current_document_snapshot()
+        if self._document_group_source is source \
+                and self._edit_pos == len(self._edit_ops) - 1 \
+                and self._edit_pos >= 0 and self._edit_ops[self._edit_pos][0] == "document":
+            self._edit_ops[self._edit_pos] = ("document", snapshot)
+        else:
+            self._record_op("document", snapshot)
+        self._document_group_source = source
+        self._document_commit_timer.start()
+
+    def _on_memo_changed(self):
+        """연속 타이핑은 한 단계로 묶되, 잠시 멈췄다가 쓰면 새 단계로 기록."""
+        if self._history_suspended or self._orig is None:
+            return
+        snapshot = self._current_document_snapshot()
+        if self._memo_group_active and self._edit_pos == len(self._edit_ops) - 1 \
+                and self._edit_pos >= 0 and self._edit_ops[self._edit_pos][0] == "document":
+            self._edit_ops[self._edit_pos] = ("document", snapshot)
+        else:
+            self._record_op("document", snapshot)
+        self._memo_group_active = True
+        self._memo_commit_timer.start()
+
+    def _commit_document_state(self):
+        """채널·분석 설정·세로 범위·표시 방식 변경을 한 단계로 기록한다."""
+        if self._history_suspended or self._orig is None:
+            return
+        self._finish_memo_group()
+        self._memo_commit_timer.stop()
+        self._finish_document_group()
+        self._document_commit_timer.stop()
+        self._record_op("document", self._current_document_snapshot())
+
+    def _apply_document_snapshot(self, snapshot):
+        """되돌리기 위치의 채널·메모·분석 관련 위젯 상태를 복원한다."""
+        if not hasattr(self, "memo_edit"):
+            return
+        snapshot = copy.deepcopy(
+            snapshot if snapshot is not None else self._document_pristine)
+        if not snapshot:
+            return
+        previous_suspended = self._history_suspended
+        self._history_suspended = True
+        try:
+            channel = snapshot.get("channel", "RGB")
+            if channel not in self.curves:
+                channel = "RGB"
+            self.curves[self._ch] = self.curve.model
+            self._ch = channel
+            self.channel_bar.current = channel
+            self.channel_bar.update()
+            self.curve.channel = channel
+            self.curve.model = self.curves[channel]
+            self.curve._sel = None
+
+            self.memo_edit.blockSignals(True)
+            self.memo_edit.setPlainText(snapshot.get("memo", ""))
+            self.memo_edit.blockSignals(False)
+
+            ap = snapshot.get("analysis_params") or {}
+            self.sp_prom.setValue(int(ap.get("prominence", 90)))
+            self.sp_dist.setValue(int(ap.get("distance", 6)))
+            self.sl_band_thresh.setValue(int(ap.get("band_threshold", 40)))
+            self.sp_smear.setValue(int(ap.get("smear_max_px", 0)))
+            vrange = ap.get("vrange")
+            self.gel.vrange = (
+                (int(vrange[0]), int(vrange[1]))
+                if vrange and len(vrange) == 2 else None)
+
+            style = snapshot.get("band_display_style", "area")
+            self._band_display_style = style if style in ("area", "line") else "area"
+            self.combo_band_style.setCurrentIndex(
+                0 if self._band_display_style == "area" else 1)
+            self.gel.band_display_style = self._band_display_style
+        finally:
+            self.memo_edit.blockSignals(False)
+            self._history_suspended = previous_suspended
+        self._update_vrange_label()
+        self.curve.set_histogram(self._hist_for(self._ch))
+        self.gel.update()
+
     def _apply_adjust_snapshot(self, snapshot):
         """되돌리기/다시하기로 적용 위치가 바뀐 뒤, 그 시점의 밝기/대비/
         톤커브 상태를 슬라이더·커브 위젯에 반영한다. snapshot이 None이면
@@ -877,12 +1021,16 @@ class GeometryMixin:
         스타크래프트 리플레이처럼 이미지를 저장해 둔 게 아니라, pristine부터
         그 지점까지 연산을 처음부터 다시 계산하는 것이라 약간의 시간이
         들지만, 매 단계의 이미지를 메모리에 쌓아두지 않아도 된다."""
-        if self._edit_pos < 0:
-            self.status.showMessage(tr("status_nothing_to_undo"))
-            return
+        self._finish_memo_group()
+        self._memo_commit_timer.stop()
+        self._finish_document_group()
+        self._document_commit_timer.stop()
         self._finalize_pending_rotation()  # 진행 중인 미리보기 회전을 먼저 확정/정리
         self._finalize_pending_bow()        # 진행 중인 미리보기 곡률보정도 정리
         self._finalize_pending_shear()
+        if self._edit_pos < 0:
+            self.status.showMessage(tr("status_nothing_to_undo"))
+            return
         undone_op, undone_params = self._edit_ops[self._edit_pos]
         self._edit_pos -= 1
         self._replay_history()
@@ -913,6 +1061,10 @@ class GeometryMixin:
         if self._edit_pos + 1 >= len(self._edit_ops):
             self.status.showMessage(tr("status_nothing_to_redo"))
             return
+        self._finish_memo_group()
+        self._memo_commit_timer.stop()
+        self._finish_document_group()
+        self._document_commit_timer.stop()
         self._finalize_pending_rotation()
         self._finalize_pending_bow()
         self._finalize_pending_shear()
@@ -1013,10 +1165,14 @@ class GeometryMixin:
         self.profile.set_lanes([])
         self.result_table.setRowCount(0)
         self.status.showMessage(tr("status_lane_changed_reanalyze"))
+        self._commit_document_state()
 
     def _clear_vrange(self):
+        had_range = self.gel.vrange is not None
         self.gel.clear_vrange()
         self._update_vrange_label()
+        if had_range:
+            self._on_vrange_changed(False)
 
     def _update_vrange_label(self):
         if not hasattr(self, "vrange_label"):

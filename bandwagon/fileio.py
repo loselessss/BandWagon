@@ -218,6 +218,8 @@ class FileIOMixin:
         호출부가 미리 설정). 편집 기록(_edit_pristine/_edit_ops/_edit_pos)도
         여기서 비운다 — 새 pristine은 다음 _record_op 때 현재 _orig 기준으로
         자동 재설정된다."""
+        previous_history_suspended = self._history_suspended
+        self._history_suspended = True
         self._edit_pristine = None
         self._edit_gray_pristine = None
         self._edit_ops = []
@@ -264,6 +266,8 @@ class FileIOMixin:
             self.curve.set_histogram(None)
         self._update_vrange_label()   # _gray_orig가 확정된 뒤라야 전체 높이(H)가 맞게 표시됨
         self._refresh_display()
+        self._snapshot_document_baseline()
+        self._history_suspended = previous_history_suspended
         # 방금 리셋한 상태를 "저장된 상태" 기준으로 잡는다 — 프로젝트를 연
         # 경우 open_project()가 자기 값들을 복원한 뒤 다시 한번 갱신한다.
         self._saved_snapshot = self._project_state_snapshot()
@@ -294,6 +298,7 @@ class FileIOMixin:
             "bright": self.sl_bright.value(),
             "contrast": self.sl_contrast.value(),
             "channel": self._ch,
+            "band_display_style": self._band_display_style,
             "curves": {ch: m.to_dict() for ch, m in self.curves.items()},
             "lanes": [lane.to_dict() for lane in self.lanes],
             "memo": self.memo_edit.toPlainText(),
@@ -446,6 +451,7 @@ class FileIOMixin:
                 "bright": self.sl_bright.value(),
                 "contrast": self.sl_contrast.value(),
                 "channel": self._ch,
+                "band_display_style": self._band_display_style,
                 "curves": {ch: m.to_dict() for ch, m in self.curves.items()},
                 "lanes": [lane.to_dict() for lane in self.lanes],
                 "memo": self.memo_edit.toPlainText(),
@@ -548,21 +554,20 @@ class FileIOMixin:
             self._rebuild_lane_table()
             self._snapshot_lanes_baseline()
 
-            self.memo_edit.setPlainText(project.get("memo", ""))
-
             ap = project.get("analysis_params") or {}
-            if "prominence" in ap:
-                self.sp_prom.setValue(int(ap["prominence"]))
-            if "distance" in ap:
-                self.sp_dist.setValue(int(ap["distance"]))
-            if "band_threshold" in ap:
-                self.sl_band_thresh.setValue(int(ap["band_threshold"]))
-            if "smear_max_px" in ap:
-                self.sp_smear.setValue(int(ap["smear_max_px"]))
-            vr = ap.get("vrange")
-            if vr and len(vr) == 2:
-                self.gel.vrange = (int(vr[0]), int(vr[1]))
-                self._update_vrange_label()
+            self._apply_document_snapshot({
+                "channel": project.get("channel", "RGB"),
+                "memo": project.get("memo", ""),
+                "band_display_style": project.get("band_display_style", "area"),
+                "analysis_params": {
+                    "prominence": ap.get("prominence", 90),
+                    "distance": ap.get("distance", 6),
+                    "band_threshold": ap.get("band_threshold", 40),
+                    "smear_max_px": ap.get("smear_max_px", 0),
+                    "vrange": ap.get("vrange"),
+                },
+            })
+            self._snapshot_document_baseline()
 
             self._refresh_display()
             if self.lanes and project.get("has_results"):

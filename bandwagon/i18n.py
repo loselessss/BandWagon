@@ -109,7 +109,7 @@ STRINGS = {
         "toolbar_export_csv": "CSV 내보내기",
         "toolbar_reset_all": "전체 초기화",
         "toolbar_undo": "되돌리기",
-        "toolbar_undo_tip": "마지막 회전/반전/자르기/펴기를 되돌립니다 (Ctrl+Z)",
+        "toolbar_undo_tip": "마지막 이미지·레인·보정·분석 설정·메모 변경을 되돌립니다 (최대 200단계, Ctrl+Z)",
         "toolbar_redo": "다시하기",
         "toolbar_redo_tip": "되돌리기를 취소하고 다시 적용합니다 (Ctrl+Y)",
         "status_nothing_to_redo": "다시 적용할 작업이 없습니다.",
@@ -392,7 +392,8 @@ STRINGS = {
             "· <b>결과 이미지 내보내기</b> 메뉴 — 복사 / 저장: 분석 결과가 있으면 '사진만' / '분석 포함(합성)' / "
             "'오버레이만(투명 배경)' 중 선택 — 오버레이만은 사진 없이 레인/밴드/MW만 투명 배경 PNG로 내보내 "
             "다른 배경 위에 겹쳐 쓰거나 발표 자료에 붙여넣기 좋습니다. CSV 저장: 밴드별 MW·강도·Volume 표 저장<br>"
-            "· <b>되돌리기(Ctrl+Z)</b>: 회전·반전·자르기·펴기·색상반전·곡률보정을 한 단계씩 취소"
+            "· <b>되돌리기(Ctrl+Z)</b>: 이미지 보정뿐 아니라 레인·분석 설정·세로 범위·채널·"
+            "밴드 표시 방식·메모 변경까지 최근 200단계를 작업 순서대로 취소"
             "</p>"
 
             "<h3>프로젝트 저장 / 불러오기 (.bandwagon)</h3>"
@@ -566,7 +567,7 @@ STRINGS = {
         "toolbar_export_csv": "Export CSV",
         "toolbar_reset_all": "Reset All",
         "toolbar_undo": "Undo",
-        "toolbar_undo_tip": "Undo the last rotate/flip/crop/warp (Ctrl+Z)",
+        "toolbar_undo_tip": "Undo the last image, lane, adjustment, analysis-setting, or memo change (up to 200 steps, Ctrl+Z)",
         "toolbar_redo": "Redo",
         "toolbar_redo_tip": "Cancel the undo and reapply it (Ctrl+Y)",
         "status_nothing_to_redo": "Nothing to redo.",
@@ -852,7 +853,8 @@ STRINGS = {
             "'with overlay', or 'overlay only (transparent)' — overlay-only exports just the lanes/bands/MW "
             "labels on a transparent PNG with no photo, handy for layering over another background or slides. "
             "Export CSV: save a table of MW/intensity/volume per band<br>"
-            "· <b>Undo (Ctrl+Z)</b>: undo rotate/flip/crop/warp/invert/bow-correction one step at a time"
+            "· <b>Undo (Ctrl+Z)</b>: undo up to 200 image, lane, adjustment, analysis-setting, "
+            "vertical-range, channel, band-display, and memo changes in exact working order"
             "</p>"
 
             "<h3>Save / Open Project (.bandwagon)</h3>"

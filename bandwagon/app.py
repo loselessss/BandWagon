@@ -96,7 +96,18 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, QMainWindow):
         self._edit_pristine = None
         self._edit_ops = []        # [(op_name, params_dict), ...]
         self._edit_pos = -1        # edit_ops[:edit_pos+1]까지가 '현재 적용된' 연산들
-        self._EDIT_MAX = 20        # 최대 20단계까지만 기록(그 이상은 가장 오래된 것 폐기)
+        self._EDIT_MAX = 200       # 연산 파라미터만 저장하므로 세부 작업을 넉넉히 200단계 기록
+        self._history_suspended = True  # 초기 UI 구성/프로젝트 복원 중 자동 기록 방지
+        self._memo_group_active = False
+        self._memo_commit_timer = QTimer(self)
+        self._memo_commit_timer.setSingleShot(True)
+        self._memo_commit_timer.setInterval(600)
+        self._memo_commit_timer.timeout.connect(self._finish_memo_group)
+        self._document_group_source = None
+        self._document_commit_timer = QTimer(self)
+        self._document_commit_timer.setSingleShot(True)
+        self._document_commit_timer.setInterval(400)
+        self._document_commit_timer.timeout.connect(self._finish_document_group)
         # edit_ops 안에 'lanes'(레인 구성) 기록이 전혀 없는 지점까지
         # 되돌렸을 때 복원할 기준값 — _adjust_pristine과 같은 역할.
         self._lanes_pristine = []
@@ -109,6 +120,9 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, QMainWindow):
         # 불러오면 그 안에 저장된 값이 이 세션의 출발점이 된다(_snapshot_
         # adjust_baseline이 _reset_session_state/open_project에서 갱신).
         self._adjust_pristine = {"bright": 0, "contrast": 0, "curves": {}}
+        # 채널·메모·분석 파라미터·세로 범위·밴드 표시 방식의 이력 기준.
+        # 실제 위젯이 만들어진 뒤 _snapshot_document_baseline()이 채운다.
+        self._document_pristine = {}
         self._last_dir = QStandardPaths.writableLocation(QStandardPaths.DocumentsLocation) \
                          or os.path.expanduser("~")  # 파일 열기/저장 기본 폴더 (System32 등으로 안 떨어지게)
         # 현재 작업 중인 .bandwagon 프로젝트 파일 경로 — 있으면 "프로젝트 저장"이
@@ -124,6 +138,7 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, QMainWindow):
         self.lanes = []
 
         self._build()
+        self._history_suspended = False
         if path:
             # 그림 경로뿐 아니라, 탐색기에서 .bandwagon 파일을 더블클릭해
             # 실행된 경우(파일 연결)에도 여기로 경로가 넘어온다 — 확장자를
@@ -475,6 +490,8 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, QMainWindow):
         self.curve.model = self.curves[ch]
         self.curve._sel = None
         self.curve.set_histogram(self._hist_for(ch))
+        self._refresh_display()
+        self._commit_document_state()
 
 
 
@@ -564,6 +581,3 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, QMainWindow):
     # 레인/분석 파라미터)만 둔다. 분석 결과는 저장하지 않고, 불러온 뒤 같은
     # 입력으로 run_analysis()를 다시 돌려 재계산한다(포맷을 가볍게, 둘 사이
     # 불일치 여지 없이 — 코드가 항상 진리의 원천).
-
-
-

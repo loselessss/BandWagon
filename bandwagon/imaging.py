@@ -653,11 +653,11 @@ def apply_edit_op(img, gray_override, op_name, params):
     if op_name == "shear_correct":
         out = apply_shear_correction(img, params["amount"])
         return out, gray_override  # bow_correct와 동일하게 gray_override는 그대로 통과(기존 관례 유지)
-    if op_name == "adjust":
+    if op_name in ("adjust", "document"):
         # 밝기/대비/톤커브는 화면 표시용 파라미터일 뿐 픽셀 자체를 바꾸지
         # 않으므로 그대로 통과시킨다. 이 op가 되돌리기 기록에 남는 이유는
-        # _replay_history()가 재생 중 만난 가장 최근 'adjust'의 params를
-        # 읽어 슬라이더/커브 위젯에 되돌려 놓기 위함뿐이다.
+        # _replay_history()가 재생 중 만난 가장 최근 상태 params를 읽어
+        # 관련 위젯에 되돌려 놓기 위함뿐이다.
         return img, gray_override
     if op_name == "lanes":
         # 레인 구성(개수/경계/이름/종류/마커)도 'adjust'와 같은 이유로
