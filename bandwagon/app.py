@@ -29,6 +29,8 @@ from .style import StyleMixin
 from .geometry import GeometryMixin
 from .lanes import LanesMixin
 from .fileio import FileIOMixin
+from .updater import GitHubUpdateService
+from .update_dialog import UpdateCheckWorker, UpdateDialog
 
 
 class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, QMainWindow):
@@ -137,6 +139,10 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, QMainWindow):
         self._ch = "RGB"
         self.lanes = []
 
+        self._update_service = GitHubUpdateService(APP_VERSION)
+        self._update_worker = None
+        self._available_update = None
+
         self._build()
         self._history_suspended = False
         if path:
@@ -156,6 +162,9 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, QMainWindow):
         self._title_timer = QTimer(self)
         self._title_timer.timeout.connect(self._refresh_title)
         self._title_timer.start(2000)
+        # 개발 실행 때마다 GitHub를 호출하지 않고 실제 배포본에서만 자동 확인한다.
+        if getattr(sys, "frozen", False):
+            QTimer.singleShot(5000, lambda: self.check_for_updates(False))
 
     def _prewarm_heavy_imports(self):
         """데몬 스레드에서 scipy·cv2를 미리 import해 첫 분석/펴기 클릭 때의
@@ -257,6 +266,10 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, QMainWindow):
 
         # ── 정보 ─────────────────────────────────────────────────────
         m_info = mb.addMenu(tr("menu_info"))
+        a = QAction(tr("toolbar_check_updates"), self)
+        a.triggered.connect(lambda _checked=False: self.check_for_updates(True))
+        m_info.addAction(a)
+        m_info.addSeparator()
         a = QAction(tr("toolbar_help"), self); a.triggered.connect(self._show_help)
         m_info.addAction(a)
         a = QAction(tr("toolbar_about"), self); a.triggered.connect(self._show_about)
@@ -435,6 +448,63 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, QMainWindow):
         bb.accepted.connect(dlg.accept)
         lay.addWidget(bb)
         dlg.exec_()
+
+    def check_for_updates(self, manual=True):
+        if self._update_worker is not None and self._update_worker.isRunning():
+            if manual:
+                self.status.showMessage(tr("update_checking"), 4000)
+            return
+        if manual:
+            self.status.showMessage(tr("update_checking"))
+        worker = UpdateCheckWorker(self._update_service, self)
+        worker.completed.connect(
+            lambda update: self._update_check_completed(update, manual))
+        worker.failed.connect(
+            lambda message: self._update_check_failed(message, manual))
+        worker.finished.connect(self._update_check_finished)
+        self._update_worker = worker
+        worker.start()
+
+    def _update_check_completed(self, update, manual):
+        if update is None:
+            if manual:
+                self._info(tr("update_title"),
+                           tr("update_current", version=APP_VERSION))
+            return
+        self._available_update = update
+        self.status.showMessage(
+            tr("update_available", version=update.version), 10000)
+        self._show_available_update()
+
+    def _update_check_failed(self, message, manual):
+        if manual:
+            self._warn(tr("update_check_failed"), message)
+
+    def _update_check_finished(self):
+        worker = self._update_worker
+        self._update_worker = None
+        if worker is not None:
+            worker.deleteLater()
+
+    def _show_available_update(self):
+        update = self._available_update
+        if update is None:
+            return
+        self._available_update = None
+        dialog = UpdateDialog(self._update_service, update, self)
+        dialog.install_requested.connect(self._install_update)
+        dialog.exec_()
+
+    def _install_update(self, path):
+        if not self._ask(tr("update_install_title"), tr("update_install_prompt")):
+            self.status.showMessage(tr("update_ready_later"), 7000)
+            return
+        try:
+            self._update_service.launch_installer(path)
+        except Exception as error:
+            self._warn(tr("update_launch_failed"), str(error))
+            return
+        QApplication.instance().quit()
 
     def _ask(self, t, x):
         m = self._box(QMessageBox.Question, t, x, QMessageBox.Yes | QMessageBox.No)
