@@ -499,9 +499,14 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, QMainWindow):
         if not self._ask(tr("update_install_title"), tr("update_install_prompt")):
             self.status.showMessage(tr("update_ready_later"), 7000)
             return
+        # closeEvent가 저장 여부를 먼저 묻는다. 취소했다면 업데이트 도우미도
+        # 실행하지 않아 현재 프로세스를 기다리는 고아 프로세스가 남지 않는다.
+        if not self.close():
+            return
         try:
-            self._update_service.launch_installer(path)
+            self._update_service.launch_update(path)
         except Exception as error:
+            self.show()
             self._warn(tr("update_launch_failed"), str(error))
             return
         QApplication.instance().quit()

@@ -74,7 +74,7 @@ class UpdateDialog(QDialog):
         form = QFormLayout()
         form.addRow(tr("update_current_version"), QLabel(service.current_version))
         form.addRow(tr("update_new_version"), QLabel(update.version))
-        form.addRow(tr("update_installer"), QLabel(
+        form.addRow(tr("update_package"), QLabel(
             f"{update.asset.name} ({_size_text(update.asset.size)})"
             if update.asset else tr("update_asset_pending")))
         layout.addLayout(form)
@@ -100,7 +100,8 @@ class UpdateDialog(QDialog):
 
         if update.asset is None:
             self.install_button.setEnabled(False)
-            self.status_label.setText(tr("update_no_installer"))
+            self.status_label.setText(tr(
+                "update_no_portable" if service.portable else "update_no_installer"))
         elif not update.asset.sha256:
             self.install_button.setEnabled(False)
             self.status_label.setText(tr("update_no_checksum"))

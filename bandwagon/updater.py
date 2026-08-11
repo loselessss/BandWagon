@@ -4,6 +4,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import tempfile
 import time
 from dataclasses import dataclass
@@ -18,6 +19,8 @@ GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_REPOSITORY}/releases/lat
 _VERSION_RE = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$")
 _INSTALLER_RE = re.compile(
     r"^BandWagon_Setup_(\d+\.\d+\.\d+)\.exe$", re.IGNORECASE)
+_PORTABLE_RE = re.compile(
+    r"^BandWagon_Portable_(\d+\.\d+\.\d+)\.zip$", re.IGNORECASE)
 _SHA256_RE = re.compile(r"^sha256:([0-9a-fA-F]{64})$")
 _MAX_RELEASE_JSON_BYTES = 2 * 1024 * 1024
 
@@ -72,11 +75,28 @@ def _trusted_github_url(value, release_asset=False):
     return not release_asset or "/download/" in parsed.path.casefold()
 
 
+def is_portable_runtime(executable=None, frozen=None):
+    """Inno 설치본에는 실행 파일 옆에 unins*.exe가 있다는 점으로 구분한다."""
+    is_frozen = getattr(sys, "frozen", False) if frozen is None else frozen
+    if not is_frozen:
+        return False
+    app_dir = Path(executable or sys.executable).resolve().parent
+    return not any(app_dir.glob("unins*.exe"))
+
+
 class GitHubUpdateService:
-    def __init__(self, current_version, opener=urlopen, download_root=None):
+    def __init__(self, current_version, opener=urlopen, download_root=None,
+                 portable=None, app_dir=None, popen=subprocess.Popen,
+                 script_root=None):
         self.current_version = current_version
         self._open = opener
         self._download_root = download_root
+        self.portable = is_portable_runtime() if portable is None else portable
+        self.app_dir = Path(app_dir or sys.executable).resolve()
+        if self.app_dir.is_file():
+            self.app_dir = self.app_dir.parent
+        self._popen = popen
+        self._script_root = Path(script_root) if script_root else None
 
     def check(self):
         request = Request(
@@ -114,13 +134,14 @@ class GitHubUpdateService:
             release_name=str(data.get("name") or tag_name),
             release_notes=str(data.get("body") or ""),
             release_url=release_url,
-            asset=self._select_installer(data.get("assets"), latest_version),
+            asset=self._select_asset(data.get("assets"), latest_version),
         )
 
-    def _select_installer(self, assets, version):
+    def _select_asset(self, assets, version):
         if not isinstance(assets, list):
             return None
-        expected = f"BandWagon_Setup_{version}.exe"
+        expected = (f"BandWagon_Portable_{version}.zip" if self.portable
+                    else f"BandWagon_Setup_{version}.exe")
         candidates = [
             item for item in assets if isinstance(item, dict)
             and str(item.get("name", "")).casefold() == expected.casefold()
@@ -130,7 +151,8 @@ class GitHubUpdateService:
         item = candidates[0]
         name = str(item.get("name", ""))
         download_url = str(item.get("browser_download_url", ""))
-        if (Path(name).name != name or not _INSTALLER_RE.fullmatch(name)
+        name_pattern = _PORTABLE_RE if self.portable else _INSTALLER_RE
+        if (Path(name).name != name or not name_pattern.fullmatch(name)
                 or not _trusted_github_url(download_url, release_asset=True)):
             raise UpdateError("릴리스 설치 파일 정보가 안전하지 않습니다.")
         digest = str(item.get("digest") or "")
@@ -145,7 +167,8 @@ class GitHubUpdateService:
     def download(self, update, progress=None, cancel=None):
         asset = update.asset
         if asset is None:
-            raise UpdateError("이 릴리스에는 Windows 설치 파일이 없습니다.")
+            package = "포터블 ZIP" if self.portable else "Windows 설치 파일"
+            raise UpdateError(f"이 릴리스에는 {package}이 없습니다.")
         if not asset.sha256:
             raise UpdateError("설치 파일의 SHA-256 정보가 없어 자동 업데이트할 수 없습니다.")
         root = self._download_root or Path(tempfile.gettempdir()) / "BandWagon" / "updates"
@@ -198,10 +221,90 @@ class GitHubUpdateService:
                 or not _INSTALLER_RE.fullmatch(installer.name)):
             raise UpdateError("실행할 업데이트 설치 파일이 올바르지 않습니다.")
         try:
-            subprocess.Popen(
+            self._popen(
                 [str(installer), "/SP-", "/CLOSEAPPLICATIONS"],
                 close_fds=True,
                 creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
             )
         except (OSError, subprocess.SubprocessError) as error:
             raise UpdateError(f"업데이트 설치 파일을 실행하지 못했습니다: {error}")
+
+    def launch_update(self, path):
+        if self.portable:
+            self.launch_portable_update(path)
+        else:
+            self.launch_installer(path)
+
+    def launch_portable_update(self, path):
+        archive = Path(path).resolve()
+        if (not archive.is_file() or archive.suffix.casefold() != ".zip"
+                or not _PORTABLE_RE.fullmatch(archive.name)):
+            raise UpdateError("실행할 포터블 업데이트 파일이 올바르지 않습니다.")
+        executable = self.app_dir / "BandWagon.exe"
+        if not executable.is_file():
+            raise UpdateError("현재 포터블 실행 파일 위치를 확인할 수 없습니다.")
+        parent = self.app_dir.parent
+        try:
+            parent.mkdir(parents=True, exist_ok=True)
+            script_root = self._script_root or Path(tempfile.gettempdir()) / "BandWagon" / "updates"
+            script_root.mkdir(parents=True, exist_ok=True)
+            script = script_root / f"apply-portable-{os.getpid()}.ps1"
+            script.write_text(_PORTABLE_UPDATE_SCRIPT, encoding="utf-8-sig")
+        except OSError as error:
+            raise UpdateError(f"포터블 업데이트 도우미를 준비하지 못했습니다: {error}")
+        powershell = Path(os.environ.get("WINDIR", r"C:\Windows")) / \
+            "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
+        command = [
+            str(powershell), "-NoProfile", "-ExecutionPolicy", "Bypass",
+            "-File", str(script), "-Archive", str(archive),
+            "-InstallDir", str(self.app_dir), "-ProcessId", str(os.getpid()),
+        ]
+        try:
+            self._popen(
+                command, close_fds=True,
+                creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
+            )
+        except (OSError, subprocess.SubprocessError) as error:
+            script.unlink(missing_ok=True)
+            raise UpdateError(f"포터블 업데이트 도우미를 실행하지 못했습니다: {error}")
+
+
+_PORTABLE_UPDATE_SCRIPT = r'''param(
+    [Parameter(Mandatory=$true)][string]$Archive,
+    [Parameter(Mandatory=$true)][string]$InstallDir,
+    [Parameter(Mandatory=$true)][int]$ProcessId
+)
+$ErrorActionPreference = "Stop"
+$parent = Split-Path -Parent $InstallDir
+$token = [Guid]::NewGuid().ToString("N")
+$staging = Join-Path $parent (".BandWagon-update-" + $token)
+$backup = Join-Path $parent (".BandWagon-backup-" + $token)
+$movedOld = $false
+try {
+    Wait-Process -Id $ProcessId -ErrorAction SilentlyContinue
+    Expand-Archive -LiteralPath $Archive -DestinationPath $staging -Force
+    $payload = Join-Path $staging "BandWagon"
+    $newExe = Join-Path $payload "BandWagon.exe"
+    if (-not (Test-Path -LiteralPath $newExe -PathType Leaf)) {
+        throw "Portable archive does not contain BandWagon/BandWagon.exe"
+    }
+    Move-Item -LiteralPath $InstallDir -Destination $backup
+    $movedOld = $true
+    Move-Item -LiteralPath $payload -Destination $InstallDir
+    $started = Start-Process -FilePath (Join-Path $InstallDir "BandWagon.exe") -PassThru
+    Start-Sleep -Seconds 5
+    if ($started.HasExited) { throw "Updated BandWagon exited during startup" }
+    Remove-Item -LiteralPath $backup -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $Archive -Force -ErrorAction SilentlyContinue
+} catch {
+    if ($movedOld) {
+        Remove-Item -LiteralPath $InstallDir -Recurse -Force -ErrorAction SilentlyContinue
+        Move-Item -LiteralPath $backup -Destination $InstallDir -ErrorAction SilentlyContinue
+        Start-Process -FilePath (Join-Path $InstallDir "BandWagon.exe") -ErrorAction SilentlyContinue
+    }
+    Add-Content -LiteralPath (Join-Path $parent "BandWagon-update-error.log") -Value $_
+} finally {
+    Remove-Item -LiteralPath $staging -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue
+}
+'''
