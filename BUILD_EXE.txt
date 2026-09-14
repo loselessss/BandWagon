@@ -3,11 +3,12 @@
 개발 중에는 run.pyw 를 더블클릭해 실행합니다(스플래시 없음).
 배포용 .exe 를 만들 때만 스플래시(bandwagon_splash.png)가 들어갑니다.
 
-1) 최초 1회: 명령 프롬프트에서  pip install pyinstaller
-   ('pyinstaller'은(는) 내부 또는 외부 명령이 아닙니다 오류가 나면 이 단계를
-   건너뛴 것입니다 -- build_exe.bat이 이제 이걸 미리 확인하고 알려줍니다.)
+1) CPython 3.14.6 x64 설치. 전용 .venv-build에 requirements-build.lock의
+   고정 의존성을 자동 설치합니다(최초 실행 시 인터넷 연결 필요).
 2) build_exe.bat 더블클릭  (run.py, bandwagon_splash.png 와 같은 폴더에 있어야 함)
-3) 완료되면  dist\BandWagon.exe  가 생깁니다.
+3) 완료되면  dist\BandWagon\BandWagon.exe  가 생깁니다.
+   다른 Python 버전이나 추가 패키지가 있는 빌드 환경은 거부합니다.
+   직접 실행: py -3.14 scripts\build_windows.py
 
 설명:
 - --splash bandwagon_splash.png : PyInstaller 네이티브 스플래시.

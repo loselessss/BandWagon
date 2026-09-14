@@ -29,11 +29,12 @@ from .style import StyleMixin
 from .geometry import GeometryMixin
 from .lanes import LanesMixin
 from .fileio import FileIOMixin
+from .recovery import RecoveryMixin
 from .updater import GitHubUpdateService
 from .update_dialog import UpdateCheckWorker, UpdateDialog
 
 
-class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, QMainWindow):
+class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, RecoveryMixin, QMainWindow):
     # "파일 > 열기"가 새로 띄우는 창들의 참조를 여기 계속 들고 있는다 —
     # 파이썬이 지역 변수로만 들고 있으면 GC가 곧바로 회수해 Qt가 창을
     # 닫아버린다. QApplication은 기본이 quitOnLastWindowClosed=True라
@@ -145,6 +146,7 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, QMainWindow):
 
         self._build()
         self._history_suspended = False
+        self._init_recovery()
         if path:
             # 그림 경로뿐 아니라, 탐색기에서 .bandwagon 파일을 더블클릭해
             # 실행된 경우(파일 연결)에도 여기로 경로가 넘어온다 — 확장자를

@@ -72,6 +72,7 @@ def main():
     # 메인 창이 준비되면 여기서 닫는다(그래서 "스플래시가 늦게 뜨는" 문제도 없다).
     win = Analyzer(sys.argv[1] if len(sys.argv) > 1 else None, splash=None)
     win.show()
+    QTimer.singleShot(0, win.offer_recovery)
     try:
         import pyi_splash            # PyInstaller 번들 안에서만 존재하는 모듈
         pyi_splash.close()

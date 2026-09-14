@@ -491,18 +491,28 @@ def find_gel_quad(img_rgb):
 # 캔버스 전체에 퍼스펙티브 변환으로 맞춘다. 화면/저장용은 둘을 섞은 블렌드,
 # 실제 밴드 검출(analyze())엔 UV 단독 그레이스케일을 쓴다 — 가시광의 밝은
 # 종이/마커 글자가 가짜 밴드로 오검출되는 것을 막기 위함.
-def warp_uv_to_visible(uv_img, uv_corners, vis_size):
+def _validated_composite_corners(corners):
+    import cv2
+    points = np.asarray(corners, dtype=np.float32)
+    if (points.shape != (4, 2) or not np.isfinite(points).all()
+            or not cv2.isContourConvex(points)
+            or abs(cv2.contourArea(points)) < 1):
+        raise ValueError("Select four distinct corners forming a convex quadrilateral in perimeter order.")
+    return points
+
+
+def warp_uv_to_visible(uv_img, uv_corners, vis_size, background=0):
     """UV 이미지를 4개 코너 기준으로 가시광 이미지 크기(vis_size)에 맞게 편다.
     uv_corners: [(x,y) x4] 순서는 좌상→우상→우하→좌하 (기존 펴기 탭과 동일 규약).
     반환: vis_size 크기로 변환된 PIL RGB 이미지."""
     import cv2
     w, h = vis_size
-    src = np.array(uv_corners, dtype=np.float32)
+    src = _validated_composite_corners(uv_corners)
     dst = np.array([[0, 0], [w - 1, 0], [w - 1, h - 1], [0, h - 1]], dtype=np.float32)
     M = cv2.getPerspectiveTransform(src, dst)
     arr = np.array(uv_img.convert("RGB"))
     out = cv2.warpPerspective(arr, M, (w, h), flags=cv2.INTER_LINEAR,
-                               borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0))
+                               borderMode=cv2.BORDER_CONSTANT, borderValue=(background,) * 3)
     return Image.fromarray(out, "RGB")
 
 
@@ -513,7 +523,7 @@ def warp_visible_to_uv(vis_img, uv_corners, uv_size):
     import cv2
     w, h = uv_size
     vw, vh = vis_img.size
-    dst = np.array(uv_corners, dtype=np.float32)
+    dst = _validated_composite_corners(uv_corners)
     src = np.array([[0, 0], [vw - 1, 0], [vw - 1, vh - 1], [0, vh - 1]], dtype=np.float32)
     M = cv2.getPerspectiveTransform(src, dst)
     arr = np.array(vis_img.convert("RGB"))
@@ -522,13 +532,15 @@ def warp_visible_to_uv(vis_img, uv_corners, uv_size):
     return Image.fromarray(out, "RGB")
 
 
-def blend_visible_uv(vis_img, uv_warped, uv_opacity=0.6):
+def blend_visible_uv(vis_img, uv_warped, uv_opacity=0.6, bright_bands=True):
     """화면/저장용 블렌드. UV가 어두운(=신호 없는) 영역일수록 가시광이 더
     비쳐 보이도록, UV 밝기를 알파값으로도 같이 써서 자연스러운 합성을 만든다.
     uv_opacity: UV 레이어 전체의 최대 불투명도(0~1) — 슬라이더로 조절."""
     vis = np.array(vis_img.convert("RGB"), dtype=np.float32)
     uv = np.array(uv_warped.convert("RGB"), dtype=np.float32)
     uv_gray = uv.mean(axis=2, keepdims=True) / 255.0   # UV 밝기를 0~1 알파로
+    if not bright_bands:
+        uv_gray = 1.0 - uv_gray
     alpha = np.clip(uv_gray * uv_opacity, 0, 1)
     out = vis * (1 - alpha) + uv * alpha
     return Image.fromarray(np.clip(out, 0, 255).astype(np.uint8), "RGB")
@@ -544,10 +556,12 @@ def blend_for_uv_canvas(uv_img, vis_warped_to_uv, vis_opacity=0.6):
     return Image.fromarray(np.clip(out, 0, 255).astype(np.uint8), "RGB")
 
 
-def uv_only_grayscale(uv_warped):
+def uv_only_grayscale(uv_warped, bright_bands=True):
     """분석(밴드 검출)에 쓸 그레이스케일 — UV 강도만, 가시광 정보는 전혀 섞지
     않는다. analyze()가 기대하는 형태(np.uint8 2D 배열)와 동일하게 만든다."""
-    return np.array(uv_warped.convert("L"), dtype=np.uint8)
+    gray = np.array(uv_warped.convert("L"), dtype=np.uint8)
+    # Lane.analyze expects dark bands on a light background.
+    return 255 - gray if bright_bands else gray
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -646,13 +660,19 @@ def apply_edit_op(img, gray_override, op_name, params):
     if op_name == "fine_rotate":
         deg = params["deg"]
         out = img.rotate(-deg, resample=Image.BICUBIC, expand=False, fillcolor=(255, 255, 255))
-        return out, gray_override  # 정밀회전은 미세 보간이라 그레이스케일 오버라이드까지 재계산하지 않음(근사 허용)
+        gray = _reapply_gray_geom(gray_override, lambda a: np.array(
+            Image.fromarray(a).rotate(-deg, resample=Image.BICUBIC, expand=False, fillcolor=255)))
+        return out, gray
     if op_name == "bow_correct":
         out = apply_bow_correction(img, params["amount"])
-        return out, gray_override
+        gray = _reapply_gray_geom(gray_override, lambda a: np.array(
+            apply_bow_correction(Image.fromarray(a), params["amount"]).convert("L")))
+        return out, gray
     if op_name == "shear_correct":
         out = apply_shear_correction(img, params["amount"])
-        return out, gray_override  # bow_correct와 동일하게 gray_override는 그대로 통과(기존 관례 유지)
+        gray = _reapply_gray_geom(gray_override, lambda a: np.array(
+            apply_shear_correction(Image.fromarray(a), params["amount"]).convert("L")))
+        return out, gray
     if op_name in ("adjust", "document"):
         # 밝기/대비/톤커브는 화면 표시용 파라미터일 뿐 픽셀 자체를 바꾸지
         # 않으므로 그대로 통과시킨다. 이 op가 되돌리기 기록에 남는 이유는
@@ -680,7 +700,7 @@ def apply_edit_op(img, gray_override, op_name, params):
         if gray_override is not None:
             gray_rgb = np.stack([gray_override] * 3, axis=-1).astype(np.uint8)
             warped_gray = cv2.warpPerspective(gray_rgb, M, (ow, oh), flags=cv2.INTER_LINEAR,
-                                              borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0))
+                                              borderMode=cv2.BORDER_CONSTANT, borderValue=(255, 255, 255))
             new_gray = warped_gray[:, :, 0]
         return Image.fromarray(out_arr, "RGB"), new_gray
     raise ValueError(f"알 수 없는 편집 연산: {op_name}")
@@ -690,7 +710,7 @@ def _np_rotate90(arr, deg):
     """90/180/-90도 회전을 그레이스케일 numpy 배열(분석용 오버라이드)에
     적용한다. PIL의 Image.rotate(expand=True)와 동일한 의미가 되도록
     np.rot90을 쓴다(반시계 기준이라 부호를 PIL과 맞춰 보정)."""
-    k = {90: 1, -90: -1, 180: 2, -180: 2}.get(deg, 0)
+    k = {90: -1, -90: 1, 180: 2, -180: 2}.get(deg, 0)
     if k == 0:
         return arr
     return np.rot90(arr, k=k)

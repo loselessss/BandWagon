@@ -15,6 +15,7 @@ import io
 import json
 import os
 import zipfile
+import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -218,6 +219,7 @@ class FileIOMixin:
         호출부가 미리 설정). 편집 기록(_edit_pristine/_edit_ops/_edit_pos)도
         여기서 비운다 — 새 pristine은 다음 _record_op 때 현재 _orig 기준으로
         자동 재설정된다."""
+        self._detach_recovery()
         previous_history_suspended = self._history_suspended
         self._history_suspended = True
         self._edit_pristine = None
@@ -233,7 +235,8 @@ class FileIOMixin:
         # 불린다. 항상 평소 모드로 되돌리고, 합성 임포트는 import_composite()가
         # 이 초기화 뒤에 UV 오버라이드를 다시 설정한다(open_project의 WB
         # 오버라이드 분기와 동일).
-        self._wb_gray_override = None
+        pristine_gray = getattr(self, "_pristine_wb_gray_override", None)
+        self._wb_gray_override = pristine_gray.copy() if pristine_gray is not None else None
         self._current_project_path = None
         self._clear_lanes()
         self.gel.clear_corners(); self.corner_label.setText(tr("corner_count", n=0))
@@ -259,7 +262,8 @@ class FileIOMixin:
         self.result_table.setRowCount(0)
         self.memo_edit.setPlainText("")
         if self._orig is not None:
-            self._gray_orig = np.array(self._orig.convert("L"), dtype=np.uint8)
+            self._gray_orig = (self._wb_gray_override if self._wb_gray_override is not None
+                               else np.array(self._orig.convert("L"), dtype=np.uint8))
             self.curve.set_histogram(self._hist_for(self._ch))
         else:
             self._gray_orig = None
@@ -316,6 +320,8 @@ class FileIOMixin:
     def closeEvent(self, event):
         """창을 닫기 전에, 마지막 저장 이후 바뀐 게 있으면 저장할지 물어본다."""
         if self._project_state_snapshot() == getattr(self, "_saved_snapshot", None):
+            self._clear_recovery()
+            self._recovery_timer.stop()
             event.accept(); return
         box = QMessageBox(self)
         box.setIcon(QMessageBox.Question)
@@ -327,7 +333,7 @@ class FileIOMixin:
         btn_cancel = box.addButton(tr("btn_cancel"), QMessageBox.RejectRole)
         box.exec_()
         clicked = box.clickedButton()
-        if clicked is btn_cancel:
+        if clicked is btn_cancel or clicked is None:
             event.ignore(); return
         if clicked is btn_save:
             self.save_project()
@@ -335,10 +341,13 @@ class FileIOMixin:
             # 됐는지(스냅샷이 최신과 일치하는지) 확인하고 안 됐으면 닫지 않는다.
             if self._project_state_snapshot() != self._saved_snapshot:
                 event.ignore(); return
+        self._clear_recovery()
+        self._recovery_timer.stop()
         event.accept()
 
     def _after_load(self, name):
-        self._base_title = f"{APP_NAME} v{APP_VERSION} — {name}"
+        self._pristine_wb_gray_override = None
+        self._base_title = f"{name} — {APP_NAME} v{APP_VERSION}"
         self._pristine_orig = self._orig.copy()   # 전체 초기화 시 복귀할 기준
         self._reset_session_state()   # _saved_snapshot을 방금 리셋한 상태 기준으로 갱신
         self._refresh_title()
@@ -443,7 +452,8 @@ class FileIOMixin:
             path += ".bandwagon"
         self._write_project_file(path)
 
-    def _write_project_file(self, path):
+    def _write_project_file(self, path, recovery=False):
+        temporary = None
         try:
             project = {
                 "format_version": GELPROJ_FORMAT_VERSION,
@@ -465,9 +475,13 @@ class FileIOMixin:
                 "has_results": any(l.peaks is not None for l in self.lanes),
                 "has_wb_override": self._wb_gray_override is not None,
             }
+            if recovery:
+                project["recovery_source"] = self._base_title
             buf = io.BytesIO()
             self._orig.save(buf, format="PNG")
-            with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
+            fd, temporary = tempfile.mkstemp(prefix=".bandwagon-", suffix=".tmp", dir=str(Path(path).parent))
+            os.close(fd)
+            with zipfile.ZipFile(temporary, "w", zipfile.ZIP_DEFLATED) as z:
                 z.writestr("image.png", buf.getvalue())
                 z.writestr("project.json", json.dumps(project, ensure_ascii=False, indent=2))
                 # WB 합성 모드(_orig가 화면용 블렌드일 때)는 실제 분석에 쓰던
@@ -478,16 +492,37 @@ class FileIOMixin:
                     gbuf = io.BytesIO()
                     Image.fromarray(self._wb_gray_override, "L").save(gbuf, format="PNG")
                     z.writestr("wb_gray_override.png", gbuf.getvalue())
+            with open(temporary, "rb+") as durable:
+                os.fsync(durable.fileno())
+            os.replace(temporary, path)
+            temporary = None
+            if recovery:
+                return True
+            self._clear_recovery()
             self._last_dir = str(Path(path).parent)
             self._current_project_path = path
             # 제목표시줄이 클립보드/이전 이미지 이름에 머물러 있지 않도록,
             # 저장 성공 시 지금 작업 중인 프로젝트 파일 이름으로 갱신한다.
-            self._base_title = f"{APP_NAME} v{APP_VERSION} — {Path(path).name}"
+            self._base_title = f"{Path(path).name} — {APP_NAME} v{APP_VERSION}"
             self._saved_snapshot = self._project_state_snapshot()
             self._refresh_title()
             self.status.showMessage(tr("status_project_saved", path=path))
+            return True
         except Exception as ex:
-            self._warn(tr("project_save_failed_title"), str(ex))
+            if recovery:
+                import logging
+                logging.exception("Unable to write recovery snapshot")
+                self.status.showMessage(tr("autosave_failed"), 10000)
+            else:
+                self._warn(tr("project_save_failed_title"), str(ex))
+            return False
+        finally:
+            if temporary:
+                try:
+                    Path(temporary).unlink(missing_ok=True)
+                except OSError:
+                    import logging
+                    logging.exception("Unable to remove incomplete project temporary file")
 
     def open_project_location(self):
         """프로젝트 현재 위치 열기 — 탐색기(맥은 Finder)로 지금 파일을
@@ -534,6 +569,7 @@ class FileIOMixin:
                 self._wb_gray_override = np.array(
                     Image.open(io.BytesIO(wb_gray_bytes)).convert("L"), dtype=np.uint8)
                 self._gray_orig = self._wb_gray_override
+                self._pristine_wb_gray_override = self._wb_gray_override.copy()
                 self.curve.set_histogram(self._hist_for(self._ch))
 
             # _after_load > _reset_session_state 가 밝기/대비/커브/레인을 전부
@@ -580,6 +616,7 @@ class FileIOMixin:
             self._saved_snapshot = self._project_state_snapshot()
             self._refresh_title()
             self.status.showMessage(tr("status_project_loaded", path=path, n=len(self.lanes)))
+            return True
         except KeyError:
             self._warn(tr("open_failed_title"), tr("gelproj_invalid_msg"))
         except Exception as ex:
@@ -623,6 +660,7 @@ class FileIOMixin:
         # _reset_session_state가 방금 자동 계산한 그레이스케일(블렌드에서 파생 —
         # 가시광이 섞여 부정확)을 저장된 UV 단독 그레이스케일로 덮어쓴다.
         self._wb_gray_override = gray
+        self._pristine_wb_gray_override = gray.copy()
         self._gray_orig = gray
         self.curve.set_histogram(self._hist_for(self._ch))
         self._last_dir = str(Path(path).parent)

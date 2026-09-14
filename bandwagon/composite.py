@@ -33,7 +33,7 @@ from PyQt5.QtGui import QImage
 from PyQt5.QtWidgets import (
     QApplication, QDialog, QDialogButtonBox, QFileDialog, QGroupBox,
     QHBoxLayout, QLabel, QMessageBox, QPushButton, QSizePolicy,
-    QVBoxLayout, QWidget,
+    QVBoxLayout, QWidget, QCheckBox,
 )
 
 from .i18n import tr
@@ -204,6 +204,10 @@ class CompositeStudio(QDialog):
         op_hint = QLabel(tr("wb_opacity_hint"))
         op_hint.setStyleSheet(f"color:{MUTE};font-size:9px;"); op_hint.setWordWrap(True)
         root.addWidget(op_hint)
+        self.bright_bands = QCheckBox(tr("wb_bright_bands"))
+        self.bright_bands.setChecked(True)
+        self.bright_bands.setToolTip(tr("wb_bright_bands_hint"))
+        root.addWidget(self.bright_bands)
 
         # 4) 내보내기 / 닫기
         btn_export = QPushButton(tr("composite_btn_export")); btn_export.clicked.connect(self._export)
@@ -340,10 +344,12 @@ class CompositeStudio(QDialog):
         """현재 정렬 상태로 (블렌드 RGB, UV 단독 그레이스케일)을 원본 해상도로
         계산해 반환한다. apply 전 검증과 실제 내보내기가 공유한다."""
         uv_corners = np.array(self.gel.corners, dtype=np.float32)
-        warped = warp_uv_to_visible(self._uv_img, uv_corners, self._visible_img.size)
+        bright = self.bright_bands.isChecked()
+        warped = warp_uv_to_visible(self._uv_img, uv_corners, self._visible_img.size,
+                                    background=0 if bright else 255)
         opacity = self.opacity_slider.value() / 100.0
-        blend = blend_visible_uv(self._visible_img, warped, opacity)
-        gray = uv_only_grayscale(warped)   # UV 강도만 — 분석용
+        blend = blend_visible_uv(self._visible_img, warped, opacity, bright_bands=bright)
+        gray = uv_only_grayscale(warped, bright_bands=bright)
         return blend, gray
 
     def _export(self):
@@ -367,6 +373,8 @@ class CompositeStudio(QDialog):
         try:
             export_composite(path, blend, gray, meta={
                 "opacity": self.opacity_slider.value() / 100.0,
+                "bright_bands": self.bright_bands.isChecked(),
+                "analysis_polarity": "dark_bands",
                 "corners": [[float(x), float(y)] for x, y in self.gel.corners],
             })
         except Exception as ex:

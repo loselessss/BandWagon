@@ -43,6 +43,12 @@ CURRENT_LANG = load_lang_setting()  # "ko" 또는 "en" — tr()이 참조하는 
 
 STRINGS = {
     "ko": {
+        "wb_bright_bands": "UV: 어두운 배경의 밝은 밴드",
+        "wb_bright_bands_hint": "UV 밴드가 밝으면 체크하세요. 흰 배경의 검은 밴드 사진은 해제하세요. 분석 영상만 어두운 밴드 기준으로 변환합니다.",
+        "autosave_failed": "자동 저장에 실패했습니다. Ctrl+S로 작업을 저장해 주세요.",
+        "recovery_title": "저장하지 않은 작업 복구",
+        "recovery_question": "{source}\n{time}에 자동 저장한 작업이 있습니다. 복구할까요?\n예: 복구 / 아니요: 사본 삭제 / 취소: 다음에 결정",
+        "recovery_window_title": "복구한 작업 (새로 저장 필요)",
         # MarkerDialog
         "marker_dialog_title": "마커 MW 입력 (kDa)",
         "preset_label": "프리셋:",
@@ -530,6 +536,12 @@ STRINGS = {
             "</p>",
     },
     "en": {
+        "wb_bright_bands": "UV: bright bands on a dark background",
+        "wb_bright_bands_hint": "Check for bright UV bands; uncheck for dark bands on white. Only the analysis image is normalized to dark bands.",
+        "autosave_failed": "Autosave failed. Please save your work with Ctrl+S.",
+        "recovery_title": "Recover unsaved work",
+        "recovery_question": "{source}\nAn autosaved session from {time} is available. Recover it?\nYes: recover / No: delete copy / Cancel: decide next time",
+        "recovery_window_title": "Recovered work (save required)",
         # MarkerDialog
         "marker_dialog_title": "Enter Marker MW (kDa)",
         "preset_label": "Preset:",
