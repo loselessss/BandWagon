@@ -143,6 +143,8 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, RecoveryMixin
         self._update_service = GitHubUpdateService(APP_VERSION)
         self._update_worker = None
         self._available_update = None
+        self._closing = False
+        self._installing_update = False
 
         self._build()
         self._history_suspended = False
@@ -487,6 +489,8 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, RecoveryMixin
         worker.start()
 
     def _update_check_completed(self, update, manual):
+        if self._closing:
+            return
         if update is None:
             if manual:
                 self._info(tr("update_title"),
@@ -498,6 +502,8 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, RecoveryMixin
         self._show_available_update()
 
     def _update_check_failed(self, message, manual):
+        if self._closing:
+            return
         if manual:
             self._warn(tr("update_check_failed"), message)
 
@@ -506,6 +512,31 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, RecoveryMixin
         self._update_worker = None
         if worker is not None:
             worker.deleteLater()
+        if self._closing and self._recovery_worker is None:
+            self.deleteLater()
+
+    def _dispose_closed_window(self):
+        """Release accepted closes; wait for any running update check."""
+        self._closing = True
+        for timer in self.findChildren(QTimer):
+            timer.stop()
+        windows = self.__class__._open_windows
+        if self in windows:
+            windows.remove(self)
+        for name in ("_orig", "_display", "_gray_orig", "_pristine_orig",
+                     "_wb_gray_override", "_pristine_wb_gray_override",
+                     "_edit_pristine", "_edit_gray_pristine", "_rot_base",
+                     "_curve_base", "_shear_base", "_preview_small",
+                     "_color_preview_base"):
+            setattr(self, name, None)
+        self._img_hash_cache = (None, None)
+        self._edit_ops.clear()
+        self.lanes.clear()
+        self.gel.set_image(None, (0, 0))
+        self.gel.set_lanes([])
+        self.profile.set_lanes([])
+        if self._update_worker is None and self._recovery_worker is None:
+            self.deleteLater()
 
     def _show_available_update(self):
         update = self._available_update
@@ -522,14 +553,20 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, RecoveryMixin
             return
         # closeEvent가 저장 여부를 먼저 묻는다. 취소했다면 업데이트 도우미도
         # 실행하지 않아 현재 프로세스를 기다리는 고아 프로세스가 남지 않는다.
+        self._installing_update = True
         if not self.close():
+            self._installing_update = False
             return
         try:
             self._update_service.launch_update(path)
         except Exception as error:
+            self._installing_update = False
+            self._recovery_timer.start(30000)
             self.show()
             self._warn(tr("update_launch_failed"), str(error))
             return
+        self._installing_update = False
+        self._dispose_closed_window()
         QApplication.instance().quit()
 
     def _ask(self, t, x):

@@ -170,6 +170,9 @@ class FileIOMixin:
         dlg = CompositeStudio(self, last_dir=self._last_dir)
 
         def _on_finished(result):
+            if dlg in self.__class__._open_windows:
+                self.__class__._open_windows.remove(dlg)
+            dlg.deleteLater()
             if dlg._last_dir:
                 self._last_dir = dlg._last_dir
             if result == QDialog.Accepted and dlg.last_export_path:
@@ -322,6 +325,8 @@ class FileIOMixin:
         if self._project_state_snapshot() == getattr(self, "_saved_snapshot", None):
             self._clear_recovery()
             self._recovery_timer.stop()
+            if not self._installing_update:
+                self._dispose_closed_window()
             event.accept(); return
         box = QMessageBox(self)
         box.setIcon(QMessageBox.Question)
@@ -343,6 +348,8 @@ class FileIOMixin:
                 event.ignore(); return
         self._clear_recovery()
         self._recovery_timer.stop()
+        if not self._installing_update:
+            self._dispose_closed_window()
         event.accept()
 
     def _after_load(self, name):
@@ -452,46 +459,51 @@ class FileIOMixin:
             path += ".bandwagon"
         self._write_project_file(path)
 
+    def _capture_project_metadata(self, recovery=False):
+        project = {
+            "format_version": GELPROJ_FORMAT_VERSION,
+            "app_version": APP_VERSION,
+            "bright": self.sl_bright.value(),
+            "contrast": self.sl_contrast.value(),
+            "channel": self._ch,
+            "band_display_style": self._band_display_style,
+            "curves": {ch: m.to_dict() for ch, m in self.curves.items()},
+            "lanes": [lane.to_dict() for lane in self.lanes],
+            "memo": self.memo_edit.toPlainText(),
+            "analysis_params": {
+                "prominence": self.sp_prom.value(),
+                "distance": self.sp_dist.value(),
+                "band_threshold": self.sl_band_thresh.value(),
+                "smear_max_px": self.sp_smear.value(),
+                "vrange": list(self.gel.vrange) if self.gel.vrange else None,
+            },
+            "has_results": any(l.peaks is not None for l in self.lanes),
+            "has_wb_override": self._wb_gray_override is not None,
+        }
+        if recovery:
+            project["recovery_source"] = self._base_title
+        return project
+
     def _write_project_file(self, path, recovery=False):
         temporary = None
         try:
-            project = {
-                "format_version": GELPROJ_FORMAT_VERSION,
-                "app_version": APP_VERSION,
-                "bright": self.sl_bright.value(),
-                "contrast": self.sl_contrast.value(),
-                "channel": self._ch,
-                "band_display_style": self._band_display_style,
-                "curves": {ch: m.to_dict() for ch, m in self.curves.items()},
-                "lanes": [lane.to_dict() for lane in self.lanes],
-                "memo": self.memo_edit.toPlainText(),
-                "analysis_params": {
-                    "prominence": self.sp_prom.value(),
-                    "distance": self.sp_dist.value(),
-                    "band_threshold": self.sl_band_thresh.value(),
-                    "smear_max_px": self.sp_smear.value(),
-                    "vrange": list(self.gel.vrange) if self.gel.vrange else None,
-                },
-                "has_results": any(l.peaks is not None for l in self.lanes),
-                "has_wb_override": self._wb_gray_override is not None,
-            }
-            if recovery:
-                project["recovery_source"] = self._base_title
-            buf = io.BytesIO()
-            self._orig.save(buf, format="PNG")
+            project = self._capture_project_metadata(recovery)
             fd, temporary = tempfile.mkstemp(prefix=".bandwagon-", suffix=".tmp", dir=str(Path(path).parent))
             os.close(fd)
             with zipfile.ZipFile(temporary, "w", zipfile.ZIP_DEFLATED) as z:
-                z.writestr("image.png", buf.getvalue())
+                # PNG is already compressed; stream it without a second full buffer.
+                entry = zipfile.ZipInfo("image.png")
+                with z.open(entry, "w", force_zip64=True) as stream:
+                    self._orig.save(stream, format="PNG")
                 z.writestr("project.json", json.dumps(project, ensure_ascii=False, indent=2))
                 # WB 합성 모드(_orig가 화면용 블렌드일 때)는 실제 분석에 쓰던
                 # UV 단독 그레이스케일을 따로 저장해야 한다. 안 그러면 다시
                 # 열었을 때 블렌드 이미지에서 그레이스케일을 자동 재계산하게
                 # 되어, 가시광의 마커 글자가 분석에 다시 섞여 들어간다.
                 if self._wb_gray_override is not None:
-                    gbuf = io.BytesIO()
-                    Image.fromarray(self._wb_gray_override, "L").save(gbuf, format="PNG")
-                    z.writestr("wb_gray_override.png", gbuf.getvalue())
+                    with z.open(zipfile.ZipInfo("wb_gray_override.png"), "w",
+                                force_zip64=True) as stream:
+                        Image.fromarray(self._wb_gray_override, "L").save(stream, format="PNG")
             with open(temporary, "rb+") as durable:
                 os.fsync(durable.fileno())
             os.replace(temporary, path)

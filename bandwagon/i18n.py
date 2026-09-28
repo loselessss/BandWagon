@@ -165,6 +165,7 @@ STRINGS = {
         "chk_show_overlay": "분석 오버레이 표시",
         "chk_show_overlay_tip": "레인 박스·밴드 위치선·MW 값을 화면에서만 켜고 끕니다.\n저장/복사 시에는 그때 다시 묻습니다.",
         "chk_show_guides": "가이드 표시",
+        "memory_edit_failed": "메모리가 부족해 보정을 취소하고 이전 작업을 유지했습니다. 다른 이미지 창을 닫은 뒤 다시 시도하세요.",
         "chk_show_guides_tip": "보정 탭(회전/펴기)에서 격자+중앙 십자선 가이드를 켜고 끕니다.\n저장/내보내기 이미지에는 어차피 안 나타나는 화면 전용 보조선입니다.",
         "status_ready": "이미지를 열어 시작하세요.   정량은 항상 원본 기준으로 계산됩니다.",
         # 보정 탭
@@ -658,6 +659,7 @@ STRINGS = {
         "chk_show_overlay": "Show analysis overlay",
         "chk_show_overlay_tip": "Toggles lane boxes/band lines/MW labels on screen only.\nYou'll be asked again when saving/copying.",
         "chk_show_guides": "Show guides",
+        "memory_edit_failed": "Not enough memory. The edit was cancelled and the previous work was retained. Close other image windows and try again.",
         "chk_show_guides_tip": "Toggles the grid + center crosshair guide on the Adjust tab (rotate/warp).\nScreen-only -- it never appears in saved/exported images anyway.",
         "status_ready": "Open an image to get started.   Quantification is always computed from the raw image.",
         # Adjust tab

@@ -12,7 +12,7 @@ import numpy as np
 from PyQt5.QtWidgets import (
     QComboBox, QFormLayout, QGroupBox, QHBoxLayout, QHeaderView,
     QInputDialog, QLabel, QPushButton, QSpinBox, QTableWidget,
-    QTableWidgetItem, QTextEdit, QVBoxLayout, QWidget,
+    QTableWidgetItem, QTextEdit, QVBoxLayout, QWidget, QScrollArea, QToolButton,
 )
 from PyQt5.QtCore import Qt
 
@@ -28,6 +28,14 @@ class LanesMixin:
 
     def _build_tab_lanes(self):
         page = self._new_page(); v = QVBoxLayout(page); v.setContentsMargins(10, 10, 10, 10); v.setSpacing(8)
+        container = self._new_page()
+        outer = QVBoxLayout(container)
+        outer.setContentsMargins(4, 4, 4, 4)
+        settings_scroll = QScrollArea()
+        settings_scroll.setWidgetResizable(True)
+        settings_scroll.setFrameShape(QScrollArea.NoFrame)
+        settings_scroll.setWidget(page)
+        outer.addWidget(settings_scroll, 1)
         box = QGroupBox(tr("group_lane_assign")); box.setStyleSheet(self._group_css())
         h = QVBoxLayout(box)
 
@@ -78,7 +86,19 @@ class LanesMixin:
         vrv.addWidget(vr_reset)
         v.addWidget(vr_box)
 
-        det_box = QGroupBox(tr("group_band_detect")); det_box.setStyleSheet(self._group_css())
+        details_toggle = QToolButton()
+        details_toggle.setText(tr("group_band_detect"))
+        details_toggle.setCheckable(True)
+        details_toggle.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        details_toggle.setArrowType(Qt.RightArrow)
+        details_toggle.setStyleSheet(self._btn_css())
+        self.band_settings_toggle = details_toggle
+        v.addWidget(details_toggle)
+        det_box = QWidget()
+        det_box.setVisible(False)
+        details_toggle.toggled.connect(det_box.setVisible)
+        details_toggle.toggled.connect(
+            lambda expanded: details_toggle.setArrowType(Qt.DownArrow if expanded else Qt.RightArrow))
         f = QFormLayout(det_box)
         self.sp_prom = QSpinBox(); self.sp_prom.setRange(1, 100); self.sp_prom.setValue(90)
         self.sp_prom.setStyleSheet(self._spin_css())
@@ -158,10 +178,10 @@ class LanesMixin:
         v.addLayout(style_row)
 
         run = QPushButton(tr("btn_run_analysis")); run.clicked.connect(self.run_analysis); run.setStyleSheet(self._btn_accent_css())
-        v.addWidget(run)
+        self.btn_run_analysis = run
         run_hint = QLabel(tr("run_analysis_hint"))
         run_hint.setStyleSheet(f"color:{MUTE};font-size:10px;"); run_hint.setWordWrap(True)
-        v.addWidget(run_hint)
+        v.addStretch()
 
         self.lane_table = QTableWidget(0, 3)
         self.lane_table.setHorizontalHeaderLabels([tr("lane_col_name"), tr("lane_col_type"), tr("lane_col_order_delete")])
@@ -179,11 +199,12 @@ class LanesMixin:
         self.lane_table.setColumnWidth(2, 100)
         self.lane_table.setStyleSheet(self._table_css())
         self.lane_table.cellChanged.connect(self._on_lane_renamed)
-        # 레인이 많아 스크롤이 필요해지기 전에 최대한 한눈에 보이도록 15줄
-        # 정도 높이를 기본으로 확보한다(그 이상은 테이블 자체 스크롤).
-        self.lane_table.setMinimumHeight(420)
-        v.addWidget(self.lane_table, 1)
-        self._add_tab(page, tr("tab_lanes"))
+        # Keep the table outside the settings scroll area to avoid nested scrolling.
+        self.lane_table.setMinimumHeight(150)
+        outer.addWidget(self.lane_table, 1)
+        outer.addWidget(run)
+        outer.addWidget(run_hint)
+        self.tabs.addTab(container, tr("tab_lanes"))
 
     def _build_tab_analysis(self):
         page = self._new_page(); v = QVBoxLayout(page); v.setContentsMargins(10, 10, 10, 10); v.setSpacing(8)

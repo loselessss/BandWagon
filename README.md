@@ -183,6 +183,8 @@ macOS 앱은 실제 macOS 환경에서만 빌드할 수 있습니다.
 - [BUILD_EXE.txt](BUILD_EXE.txt): Windows 실행 파일 빌드
 - [BUILD_INSTALLER.txt](BUILD_INSTALLER.txt): Windows 설치 프로그램 빌드
 - [BUILD_MAC.txt](BUILD_MAC.txt): macOS 앱 빌드
+- [RELEASE_PROCESS.md](RELEASE_PROCESS.md): 정식 릴리스 Assets 구성과 게시 절차
+- [RELEASE_DEPENDENCIES.md](RELEASE_DEPENDENCIES.md): 의존성 출처와 소스·빌드 정보
 
 ## 로컬 처리
 

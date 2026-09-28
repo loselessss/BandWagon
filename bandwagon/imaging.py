@@ -21,11 +21,17 @@ def pil_to_qimage(img):
     """PIL 이미지를 알파 채널 손실 없이 독립적인 QImage로 변환한다."""
     img = img.convert("RGBA")
     data = img.tobytes("raw", "RGBA")
-    return QImage(data, img.width, img.height, QImage.Format_RGBA8888).copy()
+    result = QImage(data, img.width, img.height, QImage.Format_RGBA8888).copy()
+    if result.isNull():
+        raise MemoryError("Unable to allocate display image")
+    return result
 
 
 def pil_to_pixmap(img):
-    return QPixmap.fromImage(pil_to_qimage(img))
+    result = QPixmap.fromImage(pil_to_qimage(img))
+    if result.isNull():
+        raise MemoryError("Unable to allocate display pixmap")
+    return result
 
 
 def pil_to_clipboard_mime(img):
@@ -594,18 +600,7 @@ def apply_bow_correction(img, amount):
     순환 의존이 생김)."""
     if amount == 0:
         return img
-    arr = np.array(img.convert("RGB"))
-    h, w = arr.shape[:2]
-    cx = w / 2.0
-    xs = np.arange(w, dtype=np.float32)
-    shift = float(amount) * ((xs - cx) / cx) ** 2
-    map_x, map_y = np.meshgrid(np.arange(w, dtype=np.float32),
-                                np.arange(h, dtype=np.float32))
-    map_y = map_y - shift[np.newaxis, :]
-    import cv2
-    out = cv2.remap(arr, map_x, map_y, interpolation=cv2.INTER_LINEAR,
-                     borderMode=cv2.BORDER_REFLECT)
-    return Image.fromarray(out, "RGB")
+    return _strip_remap(img, amount, bow=True)
 
 
 def apply_shear_correction(img, amount):
@@ -626,17 +621,29 @@ def apply_shear_correction(img, amount):
     클래스 안에 두면 순환 의존이 생긴다."""
     if amount == 0:
         return img
-    arr = np.array(img.convert("RGB"))
-    h, w = arr.shape[:2]
-    cy = h / 2.0
-    ys = np.arange(h, dtype=np.float32)
-    shift = float(amount) * ((ys - cy) / max(h - 1, 1))  # 위(-)~아래(+) 선형
-    map_x, map_y = np.meshgrid(np.arange(w, dtype=np.float32),
-                                np.arange(h, dtype=np.float32))
-    map_x = map_x - shift[:, np.newaxis]
+    return _strip_remap(img, amount, bow=False)
+
+
+def _strip_remap(img, amount, bow, rows=128):
+    """Bound coordinate buffers to a strip; retain full-source border semantics."""
     import cv2
-    out = cv2.remap(arr, map_x, map_y, interpolation=cv2.INTER_LINEAR,
-                     borderMode=cv2.BORDER_REFLECT)
+    arr = np.asarray(img if img.mode == "RGB" else img.convert("RGB"))
+    h, w = arr.shape[:2]
+    out = np.empty_like(arr)
+    xs = np.arange(w, dtype=np.float32)
+    if bow:
+        shift = float(amount) * ((xs - w / 2.0) / (w / 2.0)) ** 2
+    for start in range(0, h, rows):
+        end = min(start + rows, h)
+        ys = np.arange(start, end, dtype=np.float32)
+        map_x, map_y = np.meshgrid(xs, ys)
+        if bow:
+            map_y -= shift[np.newaxis, :]
+        else:
+            shift = float(amount) * ((ys - h / 2.0) / max(h - 1, 1))
+            map_x -= shift[:, np.newaxis]
+        cv2.remap(arr, map_x, map_y, interpolation=cv2.INTER_LINEAR,
+                  dst=out[start:end], borderMode=cv2.BORDER_REFLECT)
     return Image.fromarray(out, "RGB")
 
 

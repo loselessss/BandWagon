@@ -12,6 +12,7 @@ GeometryMixin — 색감 보정(밝기/대비/톤커브) + 기하변환(회전/�
 (LanesMixin이 정의)에 넘기기만 하고, 그 내용은 모른다.
 """
 import copy
+from .memory import memory_safe_edit
 
 import numpy as np
 from PIL import Image
@@ -19,7 +20,7 @@ from PyQt5.QtWidgets import (
     QGroupBox, QHBoxLayout, QVBoxLayout, QLabel, QPushButton,
     QSpinBox, QWidget,
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QSignalBlocker
 
 from .i18n import tr
 from .theme import *
@@ -250,6 +251,7 @@ class GeometryMixin:
         self.curves[self._ch] = self.curve.model
         self._refresh_display(preview=True)
 
+    @memory_safe_edit
     def _reset_curve(self):
         self.curves[self._ch].reset()
         self.curve.model = self.curves[self._ch]
@@ -258,8 +260,11 @@ class GeometryMixin:
         self._refresh_display()
         self._commit_adjust()
 
+    @memory_safe_edit
     def _reset_adjust(self):
+        blockers = [QSignalBlocker(self.sl_bright), QSignalBlocker(self.sl_contrast)]
         self.sl_bright.setValue(0); self.sl_contrast.setValue(0)
+        del blockers
         for m in self.curves.values(): m.reset()
         self.curve.model = self.curves[self._ch]; self.curve._sel = None
         self.curve.update()
@@ -269,12 +274,15 @@ class GeometryMixin:
     def _hist_for(self, ch):
         if self._orig is None:
             return None
-        arr = np.array(self._orig.convert("RGB"))
-        if ch == "RGB": flat = arr.mean(axis=2).ravel()
-        elif ch == "Red": flat = arr[:, :, 0].ravel()
-        elif ch == "Green": flat = arr[:, :, 1].ravel()
-        else: flat = arr[:, :, 2].ravel()
-        h, _ = np.histogram(flat.astype(np.uint8), bins=256, range=(0, 256))
+        h = np.zeros(256, dtype=np.int64)
+        for top in range(0, self._orig.height, 128):
+            arr = np.asarray(self._orig.crop((0, top, self._orig.width,
+                                            min(top + 128, self._orig.height))))
+            if ch == "RGB":
+                flat = (arr.sum(axis=2, dtype=np.uint16) // 3).astype(np.uint8)
+            else:
+                flat = arr[:, :, ("Red", "Green", "Blue").index(ch)]
+            h += np.bincount(flat.ravel(), minlength=256)
         mx = h.max()
         return h.astype(float) / mx if mx else h.astype(float)
 
@@ -282,16 +290,18 @@ class GeometryMixin:
         """base_img(PIL RGB)에 현재 밝기/대비/톤커브를 적용한 새 PIL 이미지를
         반환한다. 순수 함수 — self._display 등 상태를 건드리지 않으므로
         원본 해상도(확정)와 축소본(드래그 미리보기) 양쪽에 그대로 쓴다."""
-        arr = np.asarray(base_img.convert("RGB"), dtype=np.float32)
+        # Pixel operations are pointwise: calculate only the 256 possible inputs.
+        arr = np.arange(256, dtype=np.float32)
         arr = arr + float(self.sl_bright.value())
         c = float(self.sl_contrast.value())
         f = (259 * (c + 255)) / (255 * (259 - c)) if c != 255 else 10.0
         arr = np.clip(f * (arr - 128) + 128, 0, 255).astype(np.uint8)
         arr = self.curves["RGB"].lut()[arr]
-        for i, ch in enumerate(("Red", "Green", "Blue")):
-            arr[:, :, i] = self.curves[ch].lut()[arr[:, :, i]]
-        return Image.fromarray(arr, "RGB")
+        table = np.concatenate([self.curves[ch].lut()[arr]
+                                for ch in ("Red", "Green", "Blue")])
+        return base_img.point(table.tolist())
 
+    @memory_safe_edit
     def _refresh_display(self, preview=False):
         """색보정 결과를 캔버스에 반영한다.
 
@@ -319,6 +329,7 @@ class GeometryMixin:
             tr("status_image_info", w=self._orig.width, h=self._orig.height,
                bright=self.sl_bright.value(), contrast=self.sl_contrast.value()))
 
+    @memory_safe_edit
     def _rotate(self, deg):
         if self._orig is None: return
         self._finalize_pending_rotation()
@@ -327,6 +338,7 @@ class GeometryMixin:
         self._record_op("rotate", {"deg": deg})
         self._after_geometry_change()
 
+    @memory_safe_edit
     def _flip(self, d):
         if self._orig is None: return
         self._finalize_pending_rotation()
@@ -335,6 +347,7 @@ class GeometryMixin:
         self._record_op("flip", {"dir": d})
         self._after_geometry_change()
 
+    @memory_safe_edit
     def _invert_colors(self):
         """색상을 반전한다(예: 어두운 배경 위 밝은 밴드로 스캔된 이미지를
         통상적인 밝은 배경/짙은 밴드 형태로 바꿀 때 사용). 밝기·대비와는
@@ -348,6 +361,7 @@ class GeometryMixin:
         self._after_geometry_change()
         self.status.showMessage(tr("status_color_inverted"))
 
+    @memory_safe_edit
     def _on_rot_value_changed(self, v):
         """슬라이더/스핀박스 동기화 + 라이브 미리보기. v는 세션 기준
         이미지(_rot_base) 대비 절대각 — release해도 슬라이더가 0으로
@@ -426,6 +440,7 @@ class GeometryMixin:
         self._preview_small = None
         self._preview_scale = 1.0
 
+    @memory_safe_edit
     def _commit_fine_rotation(self):
         """슬라이더 release(또는 입력 완료) 시 호출. 고품질로 다시 렌더해
         _orig/분석 데이터에 반영한다. 세션은 끝내지 않아 슬라이더가 현재
@@ -449,6 +464,7 @@ class GeometryMixin:
         else:
             self.status.showMessage(tr("status_fine_rotation_applied"))
 
+    @memory_safe_edit
     def _reset_fine_rotation(self):
         """정밀 회전을 0°로 되돌린다 — 드래그 중이든 커밋을 마쳤든 세션
         시작 시점(_rot_base)으로 완전히 복귀한다."""
@@ -469,6 +485,7 @@ class GeometryMixin:
     def _apply_bow_correction(img, amount):
         return apply_bow_correction(img, amount)
 
+    @memory_safe_edit
     def _on_bow_value_changed(self, v):
         """_on_rot_value_changed와 동일한 패턴(곡률보정판). v는 세션
         기준(_curve_base) 대비 절대 휨 정도(px)이며, release해도 유지된다."""
@@ -526,6 +543,7 @@ class GeometryMixin:
         self._preview_small = None
         self._preview_scale = 1.0
 
+    @memory_safe_edit
     def _commit_bow_correction(self):
         """_commit_fine_rotation과 동일한 역할(곡률보정판) — 세션을
         끝내지 않아 슬라이더가 현재 값을 계속 보여준다."""
@@ -546,6 +564,7 @@ class GeometryMixin:
         else:
             self.status.showMessage(tr("status_bow_applied"))
 
+    @memory_safe_edit
     def _reset_bow_correction(self):
         """_reset_fine_rotation과 동일한 역할(곡률보정판)."""
         if self._curve_base is None:
@@ -565,6 +584,7 @@ class GeometryMixin:
     def _apply_shear_correction(img, amount):
         return apply_shear_correction(img, amount)
 
+    @memory_safe_edit
     def _on_shear_value_changed(self, v):
         """_on_bow_value_changed와 동일한 패턴(기울기보정판). v는 세션
         기준(_shear_base) 대비 절대 이동량(px)이며, release해도 유지된다."""
@@ -622,6 +642,7 @@ class GeometryMixin:
         self._preview_small = None
         self._preview_scale = 1.0
 
+    @memory_safe_edit
     def _commit_shear_correction(self):
         """_commit_bow_correction과 동일한 역할(기울기보정판) — 세션을
         끝내지 않아 슬라이더가 현재 값을 계속 보여준다."""
@@ -642,6 +663,7 @@ class GeometryMixin:
         else:
             self.status.showMessage(tr("status_shear_applied"))
 
+    @memory_safe_edit
     def _reset_shear_correction(self):
         """_reset_bow_correction과 동일한 역할(기울기보정판)."""
         if self._shear_base is None:
@@ -855,6 +877,7 @@ class GeometryMixin:
         self.shear_slider.blockSignals(True); self.shear_slider.setValue(shear_amt); self.shear_slider.blockSignals(False)
         self.shear_spin.blockSignals(True); self.shear_spin.setValue(shear_amt); self.shear_spin.blockSignals(False)
 
+    @memory_safe_edit
     def _commit_adjust(self):
         """밝기/대비/톤커브 조정을 되돌리기 스택에 한 단계로 기록한다.
         슬라이더를 놓거나(release) 커브 점 편집을 끝냈을 때만 호출되므로
@@ -1006,8 +1029,10 @@ class GeometryMixin:
         bright = snapshot.get("bright", 0)
         contrast = snapshot.get("contrast", 0)
         curve_dicts = snapshot.get("curves", {})
+        blockers = [QSignalBlocker(self.sl_bright), QSignalBlocker(self.sl_contrast)]
         self.sl_bright.setValue(bright)
         self.sl_contrast.setValue(contrast)
+        del blockers
         for ch in self.curves:
             cdict = curve_dicts.get(ch)
             self.curves[ch] = CurveModel.from_dict(cdict) if cdict else CurveModel()
@@ -1016,6 +1041,7 @@ class GeometryMixin:
         self.curve.set_histogram(self._hist_for(self._ch))
         self._refresh_display()
 
+    @memory_safe_edit
     def _undo(self):
         """한 단계 이전 상태로 이동한다(연산 포인터를 한 칸 뒤로 옮기고 재생).
         스타크래프트 리플레이처럼 이미지를 저장해 둔 게 아니라, pristine부터
@@ -1054,6 +1080,7 @@ class GeometryMixin:
             self.btn_redo.setEnabled(self._edit_pos < len(self._edit_ops) - 1)
         self.status.showMessage(tr("status_undo_done", n=self._edit_pos + 1))
 
+    @memory_safe_edit
     def _redo(self):
         """되돌리기로 거슬러 올라갔던 걸 한 단계 다시 앞으로 이동한다(연산
         포인터를 한 칸 앞으로 옮기고 처음부터 재생). 이미 적용했던 연산을
@@ -1210,6 +1237,7 @@ class GeometryMixin:
     def _clear_corners(self):
         self.gel.clear_corners(); self.corner_label.setText(tr("corner_count", n=0))
 
+    @memory_safe_edit
     def _manual_warp(self):
         if not HAS_CV2:
             self._warn(tr("opencv_required_title"), tr("opencv_required_warp_msg")); return
@@ -1223,6 +1251,7 @@ class GeometryMixin:
         self._finalize_pending_shear()
         self._warp(np.array(self.gel.corners, dtype=np.float32))
 
+    @memory_safe_edit
     def _auto_warp(self):
         if not HAS_CV2:
             self._warn(tr("opencv_required_title"), tr("opencv_required_autodetect_msg")); return

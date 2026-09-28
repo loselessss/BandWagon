@@ -1,0 +1,188 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  prepare-source:
+    name: Prepare source assets
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Check out the tagged source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate release tag
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          if [[ ! "$tag" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            echo "Unsupported release tag: $tag" >&2
+            exit 1
+          fi
+          echo "version=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+
+      - name: Build source ZIP, checksum, and dependency document
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          source_zip="release-assets/BandWagon_Source_${VERSION}.zip"
+          git archive --format=zip --prefix="BandWagon-${VERSION}/" \
+            --output="$source_zip" "$GITHUB_REF_NAME"
+          (cd release-assets && sha256sum "BandWagon_Source_${VERSION}.zip" \
+            > "BandWagon_Source_${VERSION}.zip.sha256")
+          sed "s/@VERSION@/${VERSION}/g" RELEASE_DEPENDENCIES.md \
+            > "release-assets/BandWagon_Dependencies_Build_${VERSION}.md"
+          test -s "$source_zip"
+          test -s "${source_zip}.sha256"
+          test -s "release-assets/BandWagon_Dependencies_Build_${VERSION}.md"
+
+      - name: Upload source assets for the dependent build
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-source-assets
+          path: release-assets/
+          if-no-files-found: error
+          retention-days: 7
+
+  build-windows:
+    name: Build Windows installers
+    needs: prepare-source
+    runs-on: windows-latest
+    steps:
+      - name: Check out the tagged source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14.6'
+          architecture: x64
+
+      - name: Build the application directory
+        shell: pwsh
+        run: |
+          python scripts/build_windows.py
+
+      - name: Build the versioned installer
+        shell: pwsh
+        env:
+          VERSION: ${{ needs['prepare-source'].outputs.version }}
+        run: |
+          $meta = Get-Content bandwagon\meta.py -Raw
+          if ($meta -notmatch ('APP_VERSION\s*=\s*"' + [regex]::Escape($env:VERSION) + '"')) {
+            throw "bandwagon/meta.py does not declare APP_VERSION $env:VERSION"
+          }
+          $iss = Get-Content installer.iss -Raw
+          if ($iss -notmatch ('#define\s+MyAppVersion\s+"' + [regex]::Escape($env:VERSION) + '"')) {
+            throw "installer.iss does not declare MyAppVersion $env:VERSION"
+          }
+          $iscc = @(
+            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+            "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
+          ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+          if (-not $iscc) { throw 'Inno Setup 6 (ISCC.exe) was not found.' }
+          & $iscc installer.iss
+          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup failed.' }
+          $setup = "Output\BandWagon_Setup_${env:VERSION}.exe"
+          if (-not (Test-Path -LiteralPath $setup)) { throw "Missing $setup" }
+
+      - name: Package versioned and latest assets
+        shell: pwsh
+        env:
+          VERSION: ${{ needs['prepare-source'].outputs.version }}
+        run: |
+          $portable = "Output\BandWagon_Portable_${env:VERSION}.zip"
+          Compress-Archive -Path dist\BandWagon -DestinationPath $portable -Force
+          Copy-Item "Output\BandWagon_Setup_${env:VERSION}.exe" 'Output\BandWagon_Setup_latest.exe' -Force
+          Copy-Item $portable 'Output\BandWagon_Portable_latest.zip' -Force
+          if (-not (Test-Path -LiteralPath $portable)) { throw "Missing $portable" }
+
+      - name: Upload binary assets for the release
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-windows-assets
+          path: Output/
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish one stable release
+    needs:
+      - prepare-source
+      - build-windows
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download source assets
+        uses: actions/download-artifact@v4
+        with:
+          name: release-source-assets
+          path: release-assets
+
+      - name: Download Windows assets
+        uses: actions/download-artifact@v4
+        with:
+          name: release-windows-assets
+          path: release-assets
+
+      - name: Verify the complete release set
+        shell: bash
+        env:
+          VERSION: ${{ needs['prepare-source'].outputs.version }}
+        run: |
+          set -euo pipefail
+          required=(
+            "BandWagon_Setup_${VERSION}.exe"
+            "BandWagon_Setup_latest.exe"
+            "BandWagon_Portable_${VERSION}.zip"
+            "BandWagon_Portable_latest.zip"
+            "BandWagon_Source_${VERSION}.zip"
+            "BandWagon_Source_${VERSION}.zip.sha256"
+            "BandWagon_Dependencies_Build_${VERSION}.md"
+          )
+          for asset in "${required[@]}"; do
+            test -s "release-assets/$asset" || { echo "Missing asset: $asset" >&2; exit 1; }
+          done
+          (cd release-assets && sha256sum -c "BandWagon_Source_${VERSION}.zip.sha256")
+
+      - name: Create the stable release with all assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: BandWagon v${{ needs['prepare-source'].outputs.version }}
+          prerelease: false
+          draft: false
+          generate_release_notes: false
+          fail_on_unmatched_files: true
+          body: |
+            ## v${{ needs['prepare-source'].outputs.version }} 변경 사항
+
+            - 자동 복구 저장의 이미지 압축과 파일 기록을 백그라운드로 이동
+            - 측면 패널 크기 저장, 밴드 분석 화면 정리, 젤 영역 Enter 안내 개선
+            - 큰 이미지 편집 시 메모리 사용량과 창 닫기 동작 개선
+
+            ## Downloads
+
+            Windows 설치 파일과 이 버전에 대응하는 소스는 별도 릴리스가 아니라 이 정식 버전 릴리스의 **Assets**에서 함께 받을 수 있습니다.
+
+            - `BandWagon_Setup_${{ needs['prepare-source'].outputs.version }}.exe`: 버전 고정 설치 파일
+            - `BandWagon_Setup_latest.exe`: 최신 버전 별칭 설치 파일
+            - `BandWagon_Portable_${{ needs['prepare-source'].outputs.version }}.zip`: 버전 고정 포터블 패키지
+            - `BandWagon_Portable_latest.zip`: 최신 버전 별칭 포터블 패키지
+            - `BandWagon_Source_${{ needs['prepare-source'].outputs.version }}.zip`: 같은 태그의 대응 소스
+            - `BandWagon_Source_${{ needs['prepare-source'].outputs.version }}.zip.sha256`: 소스 ZIP SHA-256 체크섬
+            - `BandWagon_Dependencies_Build_${{ needs['prepare-source'].outputs.version }}.md`: 의존성 출처와 빌드 정보
+          files: release-assets/*
