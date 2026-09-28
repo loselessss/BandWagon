@@ -2,6 +2,9 @@
 
 새 버전은 `vX.Y.Z` 태그를 `main`에 푸시하면 `.github/workflows/release.yml`이
 자동으로 릴리스를 만듭니다.
+Windows 빌드는 CPython 3.14.6과 `requirements-build.lock`의 고정된 의존성을
+전용 가상환경에 설치해 진행합니다. GitHub push와 pull request에서는 Windows
+자동 테스트와 의존성 검증을 실행합니다.
 
 ## 하나의 정식 릴리스
 
