@@ -9,6 +9,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt5.QtWidgets import QApplication
 from bandwagon.app import Analyzer
 from bandwagon.imaging import apply_bow_correction, apply_shear_correction
+from bandwagon.i18n import tr
 
 
 class MemoryOptimizationsTest(unittest.TestCase):
@@ -70,7 +71,7 @@ class MemoryOptimizationsTest(unittest.TestCase):
         self.assertIs(win._orig, before)
         self.assertEqual(win._edit_ops, history)
         self.assertEqual(win._edit_pos, pos)
-        self.assertIn("메모리", win.status.currentMessage())
+        self.assertEqual(win.status.currentMessage(), tr("memory_edit_failed"))
         win._rotate(90)
         self.assertEqual(win._orig.size, before.size[::-1])
 
