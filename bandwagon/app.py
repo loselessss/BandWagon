@@ -17,7 +17,7 @@ from PyQt5.QtWidgets import (
     QStatusBar, QMenu, QTabWidget, QDialog, QDialogButtonBox,
     QScrollArea, QCheckBox,
 )
-from PyQt5.QtCore import Qt, QTimer, QStandardPaths
+from PyQt5.QtCore import Qt, QTimer, QStandardPaths, QSettings, QByteArray
 from . import i18n
 from .i18n import tr
 from .theme import *
@@ -289,6 +289,10 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, RecoveryMixin
         central = QWidget(); self.setCentralWidget(central)
         root = QHBoxLayout(central); root.setContentsMargins(10, 10, 10, 10); root.setSpacing(10)
         split = QSplitter(Qt.Horizontal); root.addWidget(split)
+        self._main_splitter = split
+        self._layout_settings = QSettings(
+            QSettings.IniFormat, QSettings.UserScope, "BandWagon", "BandWagon")
+        split.setChildrenCollapsible(False)
 
         left = QWidget()
         lv = QVBoxLayout(left); lv.setContentsMargins(0, 0, 0, 0); lv.setSpacing(8)
@@ -334,7 +338,7 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, RecoveryMixin
         lv.addWidget(self.profile)
         split.addWidget(left)
 
-        right = QWidget(); right.setMinimumWidth(330); right.setMaximumWidth(380)
+        right = QWidget(); right.setMinimumWidth(330)
         rv = QVBoxLayout(right); rv.setContentsMargins(4, 4, 4, 4); rv.setSpacing(8)
         self.tabs = QTabWidget(); self.tabs.setStyleSheet(self._tabs_css())
         self.tabs.setUsesScrollButtons(False)
@@ -366,6 +370,21 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, RecoveryMixin
         self.status = QStatusBar(); self.status.setStyleSheet(f"background:{INK1};color:{MUTE};")
         self.setStatusBar(self.status)
         self.status.showMessage(tr("status_ready"))
+
+        split.setSizes([980, 360])
+        saved_layout = self._layout_settings.value("layout/main_splitter")
+        if isinstance(saved_layout, QByteArray):
+            # Restore after the first layout pass, when the splitter has its
+            # actual width; restoring earlier lets stretch factors distort it.
+            QTimer.singleShot(0, lambda: split.restoreState(saved_layout))
+        split.setChildrenCollapsible(False)
+        split.splitterMoved.connect(self._save_panel_layout)
+
+    def _save_panel_layout(self, *_args):
+        """Remember the user's panel split across windows and app restarts."""
+        self._layout_settings.setValue(
+            "layout/main_splitter", self._main_splitter.saveState())
+        self._layout_settings.sync()
 
     def _new_page(self):
         # 탭 콘텐츠 위젯 자체에 배경을 직접 줌 — QScrollArea 안에 들어가면
