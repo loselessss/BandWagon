@@ -228,6 +228,7 @@ class LanesMixin:
         self.result_table.cellClicked.connect(self._on_result_cell_clicked)
         v.addWidget(self.result_table, 1)
         self._add_tab(page, tr("tab_analysis"))
+        self.analysis_tab = self.tabs.widget(self.tabs.count() - 1)
 
     def _build_tab_std(self):
         page = self._new_page(); v = QVBoxLayout(page); v.setContentsMargins(10, 10, 10, 10); v.setSpacing(8)
@@ -717,3 +718,14 @@ class LanesMixin:
         it = self.result_table.item(row, 0)
         self.gel.selected_band = it.data(Qt.UserRole) if it else None
         self.gel.update()
+
+    def _on_gel_band_selected(self, lane, band_index):
+        """Jump from a canvas band to its intensity in the analysis table."""
+        for row in range(self.result_table.rowCount()):
+            item = self.result_table.item(row, 3)
+            if item is not None and item.data(Qt.UserRole) == (lane, band_index):
+                self.tabs.setCurrentWidget(self.analysis_tab)
+                self.result_table.selectRow(row)
+                self.result_table.setCurrentCell(row, 3)
+                self.result_table.scrollToItem(item)
+                return

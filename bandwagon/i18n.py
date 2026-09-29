@@ -222,7 +222,7 @@ STRINGS = {
         "lane_col_order_delete": "순서/삭제",
         "tab_lanes": "레인",
         # 분석 탭
-        "analysis_tab_note": "정량은 보정 전 원본에서 계산합니다.\n커브·밝기·대비는 결과에 영향을 주지 않습니다.\n밴드 검출/분석 실행은 '레인' 탭으로 옮겼습니다.",
+        "analysis_tab_note": "정량은 보정 전 원본에서 계산합니다.\n커브·밝기·대비는 결과에 영향을 주지 않습니다.\n이미지에서 밴드를 클릭하면 이 표의 해당 강도로 이동합니다. 밴드 분석 실행은 '레인' 탭에 있습니다.",
         "mw_regression_placeholder": "MW 회귀: 마커 레인 2개 이상 + MW 입력 필요",
         "col_lane": "레인",
         "col_band": "밴드",
@@ -450,7 +450,7 @@ STRINGS = {
             "· 마우스 휠: 확대/축소 (커서 위치 기준)<br>"
             "· 좌클릭 드래그(기본 상태) 또는 휠버튼 드래그: 화면 이동<br>"
             "· '분석 오버레이 표시' 체크: 레인 박스·밴드선·MW 표시를 화면에서만 켜고 끄기<br>"
-            "· '가이드 표시' 체크: 보정 탭(회전/펴기)의 격자+중앙 십자선 가이드를 켜고 끄기"
+            "· 보정 탭의 '가이드 표시' 체크: 격자+중앙 십자선 가이드를 켜고 끄기"
             "</p>"
 
             "<h3>펴기 탭</h3>"
@@ -716,7 +716,7 @@ STRINGS = {
         "lane_col_order_delete": "Order/Delete",
         "tab_lanes": "Lanes",
         # Analysis tab
-        "analysis_tab_note": "Quantification is always computed from the raw image, before adjustments.\nCurve/brightness/contrast do not affect results.\nBand detection/analysis now lives in the 'Lanes' tab.",
+        "analysis_tab_note": "Quantification is always computed from the raw image, before adjustments.\nCurve/brightness/contrast do not affect results.\nClick a band on the image to jump to its intensity here. Run band analysis on the Lanes tab.",
         "mw_regression_placeholder": "MW regression: needs 2+ marker lanes with MW values entered",
         "col_lane": "Lane",
         "col_band": "Band",
@@ -947,7 +947,7 @@ STRINGS = {
             "· Mouse wheel: zoom in/out (centered on the cursor)<br>"
             "· Left-click drag (default) or middle-button drag: pan<br>"
             "· 'Show analysis overlay' checkbox: toggles lane boxes/band lines/MW labels on screen only<br>"
-            "· 'Show guides' checkbox: toggles the grid + center crosshair guide on the Adjust tab (rotate/warp)"
+            "· 'Show guides' on the Adjust tab: toggles the grid + center crosshair guide (rotate/warp)"
             "</p>"
 
             "<h3>Warp Tab</h3>"

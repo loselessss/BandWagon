@@ -458,36 +458,48 @@ def find_gel_quad(img_rgb):
     """사진(np.ndarray, RGB)에서 젤 영역의 네 모서리를 자동으로 찾는다.
     반환: 4점(np.ndarray, (4,2), 순서 무관 — 호출부가 정렬) 또는 실패 시 None.
 
-    그레이스케일 하나만으로는 조명이 한쪽으로 기운 사진(젤 촬영장비에서
-    흔함)이나 어두운/밝은 배경이 뒤섞인 경우(UV 형광 사진 vs 라이트박스
-    사진) 둘 다에 안정적으로 맞추기 어렵다. 그래서 조명보정 채널을 먼저
-    시도하고, 원본 채널은 그게 실패했을 때만 보조로 쓴다.
-
-    채널들을 전부 시도해서 '성공한 것 중 면적이 가장 큰 것'을 고르는
-    방식을 처음에 썼었는데, 그건 틀렸다 — 조명이 기울면 보정 안 된
-    원본 채널의 threshold가 배경 일부까지 같이 삼켜서 실제 젤보다 더
-    넓은(하지만 틀린) 영역을 만들어내는 경우가 있고, 그게 '면적이 크다'는
-    이유로 올바른 결과보다 우선 선택돼 버렸다(합성 데이터로 직접 확인한
-    문제). 그래서 지금은 면적 비교 없이, 조명 불균일을 직접 상쇄하는
-    채널을 항상 먼저 믿고, 그게 아예 실패(면적 10% 미만)할 때만 다음
-    순위로 넘어간다."""
+    파란 젤에서는 B-R 색 차이가 회색 조명/비네팅을 상쇄하므로 먼저
+    사용한다. 흑백 젤은 평탄화한 명도 채널로 이어서 찾는다. 사진 테두리를
+    사각형으로 잘못 인식한 결과는 거르고, 확실한 후보가 없으면 None을
+    반환해 사용자가 코너를 지정하게 한다."""
     import cv2
     h, w = img_rgb.shape[:2]
     gray = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2GRAY)
+    blue_minus_red = img_rgb[:, :, 2].astype(np.int16) - img_rgb[:, :, 0]
+    # Difference is signed; center at 128 to retain both weak and strong stains.
+    if int(blue_minus_red.max()) - int(blue_minus_red.min()) >= 16:
+        for difference in (blue_minus_red, -blue_minus_red):
+            ch = np.clip(difference + 128, 0, 255).astype(np.uint8)
+            quad, _area = _best_quad_from_channel(ch, w, h)
+            if quad is not None and _usable_gel_quad(quad, w, h):
+                return quad
     hsv = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2HSV)
-    # 우선순위: 조명보정 채널(그레이/명도) 먼저, 원본 그레이스케일·채도는
-    # 그게 실패했을 때만 쓰는 보조 수단.
-    channels_in_priority = [
-        _flatten_illumination(gray),
-        _flatten_illumination(hsv[:, :, 2]),
-        gray,
-        hsv[:, :, 1],
-    ]
-    for ch in channels_in_priority:
+    for ch in (_flatten_illumination(gray), _flatten_illumination(hsv[:, :, 2]),
+               gray, hsv[:, :, 1]):
         quad, _area = _best_quad_from_channel(ch, w, h)
-        if quad is not None:
+        if quad is not None and _usable_gel_quad(quad, w, h):
             return quad
     return None
+
+
+def _usable_gel_quad(quad, w, h):
+    """Reject a contour that is effectively the camera frame or a thin strip."""
+    import cv2
+    points = np.asarray(quad, dtype=np.float32)
+    if points.shape != (4, 2) or not np.isfinite(points).all():
+        return False
+    x0, y0 = points.min(axis=0)
+    x1, y1 = points.max(axis=0)
+    if x1 - x0 < 0.2 * w or y1 - y0 < 0.2 * h:
+        return False
+    if cv2.contourArea(cv2.convexHull(points)) < 0.1 * w * h:
+        return False
+    edges = sum((x0 <= 0.015 * w, y0 <= 0.015 * h,
+                 x1 >= 0.985 * w, y1 >= 0.985 * h))
+    area_fraction = cv2.contourArea(cv2.convexHull(points)) / (w * h)
+    # A partial threshold mask in an already cropped gel often hugs two image
+    # edges while missing the faint lanes on the other side. Do not crop those.
+    return edges < 3 and area_fraction < 0.85 and not (edges >= 2 and area_fraction > 0.4)
 
 
 # ═══════════════════════════════════════════════════════════════════

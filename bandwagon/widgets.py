@@ -263,6 +263,7 @@ class GelView(QWidget):
     cornerChanged = pyqtSignal(int)
     vrangeChanged = pyqtSignal(bool)  # 세로 분석 범위가 (재)지정/조정 완료
     zoomChanged = pyqtSignal(float)  # 현재 줌 배율(1.0 = 100%)
+    bandSelected = pyqtSignal(object, int)  # 이미지에서 선택한 (레인, 밴드 번호)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -480,6 +481,33 @@ class GelView(QWidget):
             return "bottom"
         return None
 
+    def _band_hit(self, wx, wy):
+        """Return the visible band under a canvas click, using screen-space tolerance."""
+        if not self.show_overlay or not self._rect.contains(int(wx), int(wy)):
+            return None
+        best = None
+        best_distance = float("inf")
+        for lane in self.lanes:
+            if lane.peaks is None:
+                continue
+            x1, x2 = sorted((self._ix_to_wx(lane.x1), self._ix_to_wx(lane.x2)))
+            if not x1 <= wx <= x2:
+                continue
+            for index, peak in enumerate(lane.peaks):
+                peak_y = self._iy_to_wy(float(peak))
+                if self.band_display_style == "line":
+                    hit = abs(wy - peak_y) <= 7
+                else:
+                    bounds = lane.peak_bounds
+                    top, bottom = (bounds[index] if bounds and index < len(bounds)
+                                   else (peak - 5, peak + 5))
+                    top_y, bottom_y = self._iy_to_wy(float(top)), self._iy_to_wy(float(bottom))
+                    hit = min(top_y, bottom_y) - 3 <= wy <= max(top_y, bottom_y) + 3
+                distance = abs(wy - peak_y)
+                if hit and distance < best_distance:
+                    best, best_distance = (lane, index), distance
+        return best
+
     def mousePressEvent(self, e):
         if self._pm is None:
             return
@@ -609,6 +637,14 @@ class GelView(QWidget):
 
     def mouseReleaseEvent(self, e):
         if self._pan_drag is not None and e.button() in (Qt.MiddleButton, Qt.LeftButton):
+            start_x, start_y = self._pan_drag[:2]
+            if (self.mode == "view" and e.button() == Qt.LeftButton
+                    and abs(e.x() - start_x) <= 4 and abs(e.y() - start_y) <= 4):
+                band = self._band_hit(e.x(), e.y())
+                if band is not None:
+                    self.selected_band = band
+                    self.update()
+                    self.bandSelected.emit(*band)
             self._pan_drag = None
             self.setCursor(Qt.CrossCursor if self.mode in ("lane", "corner", "crop", "vrange") else Qt.OpenHandCursor)
             return

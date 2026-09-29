@@ -18,7 +18,7 @@ import numpy as np
 from PIL import Image
 from PyQt5.QtWidgets import (
     QGroupBox, QHBoxLayout, QVBoxLayout, QLabel, QPushButton,
-    QSpinBox, QWidget,
+    QSpinBox, QWidget, QCheckBox,
 )
 from PyQt5.QtCore import Qt, QSignalBlocker
 
@@ -52,6 +52,13 @@ class GeometryMixin:
         먼저, 색감 보정(밝기/대비·반전·커브)을 나중에 배치 — 작업 순서가
         자연스럽게 '기하 먼저, 색감 나중'이 되도록."""
         page = self._new_page(); v = QVBoxLayout(page); v.setContentsMargins(10, 10, 10, 10); v.setSpacing(8)
+
+        self.chk_guides = QCheckBox(tr("chk_show_guides"))
+        self.chk_guides.setChecked(True)
+        self.chk_guides.setStyleSheet(f"color:{MUTE};font-size:10px;" + self._checkbox_css())
+        self.chk_guides.setToolTip(tr("chk_show_guides_tip"))
+        self.chk_guides.toggled.connect(self._on_guides_toggled)
+        v.addWidget(self.chk_guides)
 
         # ===== 기하 보정 =====
         v.addWidget(self._section_label(tr("section_geometry")))
