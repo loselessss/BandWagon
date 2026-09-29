@@ -199,7 +199,8 @@ def downscale_for_preview(img, canvas_w, canvas_h, margin=1.5):
 # ═══════════════════════════════════════════════════════════════════
 
 
-def render_analysis_overlay(base_img, lanes, band_style="area", transparent_bg=False, show_mw=True):
+def render_analysis_overlay(base_img, lanes, band_style="area", transparent_bg=False,
+                            show_mw=True, marker_and_border_only=False):
     """base_img 위에 레인 경계·검출 밴드·MW 라벨을 그려 합성한 새 이미지를
     반환한다(화면 캡처가 아니라 원본 좌표 기준으로 직접 그림 — 저장 해상도가
     화면 크기에 좌우되지 않음).
@@ -214,6 +215,8 @@ def render_analysis_overlay(base_img, lanes, band_style="area", transparent_bg=F
     transparent_bg=True면 base_img의 픽셀은 안 쓰고(크기만 참조) 완전
     투명한 RGBA 캔버스 위에 오버레이만 그려서 반환한다 — 다른 배경 위에
     겹쳐 쓰거나 발표 자료에 붙여 넣기 좋은 "오버레이만 복사/저장" 용도.
+    marker_and_border_only=True면 헤더·이름·일반 레인 밴드를 빼고 모든
+    레인 테두리와 마커 레인의 밴드·MW 숫자만 그린다.
 
     3-패스로 그린다: 레인 박스/밴드선 → 레인 이름(헤더) → MW 라벨. 밴드보다
     레인 박스를 먼저 그려야 다음 레인 박스가 이전 레인 글자를 안 덮는다."""
@@ -270,8 +273,8 @@ def render_analysis_overlay(base_img, lanes, band_style="area", transparent_bg=F
 
     # ── 헤더 높이 계산: 모든 레인 이름 중 가장 많이 줄바꿈된 것 기준 ──
     lane_labels = []  # (lane, lines, font, line_h)
-    header_h = 16
-    for lane in lanes:
+    header_h = 0 if marker_and_border_only else 16
+    for lane in ([] if marker_and_border_only else lanes):
         label = lane.name
         if lane.kind == "marker": label += " [M]"
         elif lane.kind == "bsa": label += " [BSA]"
@@ -311,7 +314,7 @@ def render_analysis_overlay(base_img, lanes, band_style="area", transparent_bg=F
     for lane in lanes:
         col = (lane.color.red(), lane.color.green(), lane.color.blue())
         draw.rectangle([lane.x1, header_h, lane.x2, header_h + H - 1], outline=_col(col), width=2)
-        if lane.peaks is not None:
+        if lane.peaks is not None and (not marker_and_border_only or lane.kind == "marker"):
             if band_style == "line":
                 for py in lane.peaks:
                     py = int(py) + header_h
@@ -342,7 +345,7 @@ def render_analysis_overlay(base_img, lanes, band_style="area", transparent_bg=F
 
     # ── 3패스: MW 값 — 이미지 영역 안(header_h만큼 오프셋)에 그린다 ──
     for lane in lanes:
-        if not show_mw:
+        if not show_mw or (marker_and_border_only and lane.kind != "marker"):
             continue
         if lane.peaks is None:
             continue

@@ -14,6 +14,7 @@ from PyQt5.QtWidgets import QApplication
 from bandwagon.app import Analyzer
 from bandwagon.geometry import GeometryMixin
 from bandwagon.imaging import find_gel_quad
+from bandwagon.i18n import tr
 from bandwagon.models import Lane
 
 
@@ -55,6 +56,25 @@ class GelInteractionsTest(unittest.TestCase):
             self.assertEqual(win.lane_table.focusWidget().selectedText(), "Lane 2")
         finally:
             win._saved_snapshot = win._project_state_snapshot()
+            win.close()
+
+    def test_copy_dialog_offers_marker_and_border_overlay(self):
+        win = Analyzer()
+        try:
+            lane = Lane(0, 10, 50)
+            lane.kind = "marker"
+            lane.peaks = [40]
+            win.lanes = [lane]
+
+            def choose_marker_overlay(box):
+                button = next(b for b in box.buttons()
+                              if b.text() == tr("export_marker_border_only"))
+                button.click()
+                return 0
+
+            with patch("bandwagon.fileio.QMessageBox.exec_", choose_marker_overlay):
+                self.assertEqual(win._ask_overlay_option(clipboard=True), "marker_border_only")
+        finally:
             win.close()
 
     def test_canvas_band_opens_matching_intensity_row(self):

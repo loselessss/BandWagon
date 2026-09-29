@@ -367,9 +367,10 @@ class FileIOMixin:
         base = getattr(self, "_base_title", f"{APP_NAME} v{APP_VERSION}")
         self.setWindowTitle(f"* {base}" if dirty else base)
 
-    def _ask_overlay_option(self):
+    def _ask_overlay_option(self, clipboard=False):
         """분석 결과가 있을 때 '사진만/분석 포함(합성)/오버레이만(투명 배경)'을
-        묻는다. 반환값: "overlay" / "plain" / "overlay_only" / None(취소)."""
+        묻는다. 클립보드 복사에는 마커 밴드와 레인 테두리만 남기는 선택지도
+        표시한다."""
         has_analysis = any(l.peaks is not None and len(l.peaks) > 0 for l in self.lanes)
         if not has_analysis:
             return "plain"
@@ -381,6 +382,8 @@ class FileIOMixin:
         btn_plain = box.addButton(tr("export_plain"), QMessageBox.ActionRole)
         btn_overlay = box.addButton(tr("export_with_overlay"), QMessageBox.ActionRole)
         btn_overlay_only = box.addButton(tr("export_overlay_only"), QMessageBox.ActionRole)
+        btn_marker_border = (box.addButton(tr("export_marker_border_only"), QMessageBox.ActionRole)
+                             if clipboard else None)
         box.addButton(tr("btn_cancel"), QMessageBox.RejectRole)
         box.exec_()
         clicked = box.clickedButton()
@@ -388,6 +391,8 @@ class FileIOMixin:
             return "overlay"
         if clicked is btn_overlay_only:
             return "overlay_only"
+        if btn_marker_border is not None and clicked is btn_marker_border:
+            return "marker_border_only"
         if clicked is btn_plain:
             return "plain"
         return None
@@ -395,7 +400,12 @@ class FileIOMixin:
     def _render_for_export(self, src, choice, clipboard=False):
         """_ask_overlay_option()의 선택에 따라 내보낼 이미지를 만든다.
         "overlay_only"는 사진 없이 완전 투명 배경 위에 레인/밴드/MW만
-        그린다 — 다른 배경 위에 겹쳐 쓰거나 발표 자료에 붙여넣기 좋다."""
+        그린다. "marker_border_only"는 복사용 투명 배경에 레인 테두리와
+        마커 레인의 밴드와 MW 숫자만 그린다."""
+        if choice == "marker_border_only":
+            return render_analysis_overlay(src, self.lanes, band_style=self._band_display_style,
+                                           transparent_bg=True,
+                                           marker_and_border_only=True)
         if choice == "overlay_only":
             return render_analysis_overlay(src, self.lanes, band_style=self._band_display_style,
                                            transparent_bg=True, show_mw=not clipboard)
@@ -408,12 +418,13 @@ class FileIOMixin:
         src = self._display or self._orig
         if src is None:
             self.status.showMessage(tr("nothing_to_copy_msg")); return
-        choice = self._ask_overlay_option()
+        choice = self._ask_overlay_option(clipboard=True)
         if choice is None:
             return
         out_img = self._render_for_export(src, choice, clipboard=True)
         copy_pil_image_to_clipboard(out_img, QApplication.clipboard())
-        suffix = tr("overlay_included_suffix") if choice in ("overlay", "overlay_only") else ""
+        suffix = tr("overlay_included_suffix") if choice in (
+            "overlay", "overlay_only", "marker_border_only") else ""
         self.status.showMessage(tr("status_copied_to_clipboard") + suffix)
 
     def save_image(self):

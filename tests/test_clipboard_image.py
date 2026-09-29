@@ -45,6 +45,31 @@ class ClipboardImageTest(unittest.TestCase):
         self.assertEqual(without_numbers.getpixel((20, header_height + 80))[3], 255)
         self.assertEqual(without_numbers.getpixel((50, header_height + 50))[3], 55)
 
+    def test_marker_and_border_only_keeps_marker_mw_and_all_lane_outlines(self):
+        source = Image.new("RGB", (120, 100), "white")
+        marker = Lane(0, 10, 50)
+        marker.kind = "marker"
+        marker.peaks = [40]
+        marker.peak_bounds = [(35, 45)]
+        marker.mw = [50.0]
+        sample = Lane(1, 70, 110)
+        sample.peaks = [70]
+        sample.peak_bounds = [(65, 75)]
+
+        overlay = render_analysis_overlay(
+            source, [marker, sample], transparent_bg=True,
+            marker_and_border_only=True)
+
+        self.assertEqual(overlay.size, source.size)
+        self.assertEqual(overlay.getpixel((10, 90))[3], 255)
+        self.assertEqual(overlay.getpixel((70, 90))[3], 255)
+        self.assertEqual(overlay.getpixel((30, 40))[3], 55)
+        self.assertEqual(overlay.getpixel((90, 70))[3], 0)
+        no_mw = render_analysis_overlay(
+            source, [marker, sample], transparent_bg=True,
+            marker_and_border_only=True, show_mw=False)
+        self.assertNotEqual(overlay.tobytes(), no_mw.tobytes())
+
     def test_rgba_survives_png_and_qimage_clipboard_formats(self):
         source = Image.new("RGBA", (2, 2))
         source.putdata([
