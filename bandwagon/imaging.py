@@ -199,7 +199,7 @@ def downscale_for_preview(img, canvas_w, canvas_h, margin=1.5):
 # ═══════════════════════════════════════════════════════════════════
 
 
-def render_analysis_overlay(base_img, lanes, band_style="area", transparent_bg=False):
+def render_analysis_overlay(base_img, lanes, band_style="area", transparent_bg=False, show_mw=True):
     """base_img 위에 레인 경계·검출 밴드·MW 라벨을 그려 합성한 새 이미지를
     반환한다(화면 캡처가 아니라 원본 좌표 기준으로 직접 그림 — 저장 해상도가
     화면 크기에 좌우되지 않음).
@@ -335,10 +335,15 @@ def render_analysis_overlay(base_img, lanes, band_style="area", transparent_bg=F
     for lane, lines, font, line_h in lane_labels:
         col = (lane.color.red(), lane.color.green(), lane.color.blue())
         for i, line in enumerate(lines):
-            draw.text((lane.x1 + 5, 3 + i * line_h), line, fill=_col(col), font=font)
+            bbox = draw.textbbox((0, 0), line, font=font)
+            line_w = bbox[2] - bbox[0]
+            draw.text((lane.x1 + (lane.x2 - lane.x1 - line_w) / 2, 3 + i * line_h),
+                      line, fill=_col(col), font=font)
 
     # ── 3패스: MW 값 — 이미지 영역 안(header_h만큼 오프셋)에 그린다 ──
     for lane in lanes:
+        if not show_mw:
+            continue
         if lane.peaks is None:
             continue
         lane_w = max(1, lane.x2 - lane.x1)

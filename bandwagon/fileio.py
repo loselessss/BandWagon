@@ -392,15 +392,16 @@ class FileIOMixin:
             return "plain"
         return None
 
-    def _render_for_export(self, src, choice):
+    def _render_for_export(self, src, choice, clipboard=False):
         """_ask_overlay_option()의 선택에 따라 내보낼 이미지를 만든다.
         "overlay_only"는 사진 없이 완전 투명 배경 위에 레인/밴드/MW만
         그린다 — 다른 배경 위에 겹쳐 쓰거나 발표 자료에 붙여넣기 좋다."""
         if choice == "overlay_only":
             return render_analysis_overlay(src, self.lanes, band_style=self._band_display_style,
-                                           transparent_bg=True)
+                                           transparent_bg=True, show_mw=not clipboard)
         if choice == "overlay":
-            return render_analysis_overlay(src, self.lanes, band_style=self._band_display_style)
+            return render_analysis_overlay(src, self.lanes, band_style=self._band_display_style,
+                                           show_mw=not clipboard)
         return src
 
     def copy_image(self):
@@ -410,7 +411,7 @@ class FileIOMixin:
         choice = self._ask_overlay_option()
         if choice is None:
             return
-        out_img = self._render_for_export(src, choice)
+        out_img = self._render_for_export(src, choice, clipboard=True)
         copy_pil_image_to_clipboard(out_img, QApplication.clipboard())
         suffix = tr("overlay_included_suffix") if choice in ("overlay", "overlay_only") else ""
         self.status.showMessage(tr("status_copied_to_clipboard") + suffix)

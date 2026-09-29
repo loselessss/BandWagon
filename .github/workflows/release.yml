@@ -32,7 +32,7 @@ jobs:
           fi
           echo "version=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
 
-      - name: Build source ZIP, checksum, and dependency document
+      - name: Build one source ZIP with dependency document
         shell: bash
         env:
           VERSION: ${{ steps.version.outputs.version }}
@@ -42,13 +42,13 @@ jobs:
           source_zip="release-assets/BandWagon_Source_${VERSION}.zip"
           git archive --format=zip --prefix="BandWagon-${VERSION}/" \
             --output="$source_zip" "$GITHUB_REF_NAME"
-          (cd release-assets && sha256sum "BandWagon_Source_${VERSION}.zip" \
-            > "BandWagon_Source_${VERSION}.zip.sha256")
+          mkdir -p "source-extra/BandWagon-${VERSION}"
           sed "s/@VERSION@/${VERSION}/g" RELEASE_DEPENDENCIES.md \
-            > "release-assets/BandWagon_Dependencies_Build_${VERSION}.md"
+            > "source-extra/BandWagon-${VERSION}/DEPENDENCIES_BUILD.md"
+          (cd source-extra && zip -q "../$source_zip" "BandWagon-${VERSION}/DEPENDENCIES_BUILD.md")
           test -s "$source_zip"
-          test -s "${source_zip}.sha256"
-          test -s "release-assets/BandWagon_Dependencies_Build_${VERSION}.md"
+          unzip -tq "$source_zip"
+          unzip -p "$source_zip" "BandWagon-${VERSION}/DEPENDENCIES_BUILD.md" | grep -q "$VERSION"
 
       - name: Upload source assets for the dependent build
         uses: actions/upload-artifact@v4
@@ -126,6 +126,9 @@ jobs:
       - build-windows
     runs-on: ubuntu-latest
     steps:
+      - name: Check out release notes
+        uses: actions/checkout@v4
+
       - name: Download source assets
         uses: actions/download-artifact@v4
         with:
@@ -150,13 +153,20 @@ jobs:
             "BandWagon_Portable_${VERSION}.zip"
             "BandWagon_Portable_latest.zip"
             "BandWagon_Source_${VERSION}.zip"
-            "BandWagon_Source_${VERSION}.zip.sha256"
-            "BandWagon_Dependencies_Build_${VERSION}.md"
           )
           for asset in "${required[@]}"; do
             test -s "release-assets/$asset" || { echo "Missing asset: $asset" >&2; exit 1; }
           done
-          (cd release-assets && sha256sum -c "BandWagon_Source_${VERSION}.zip.sha256")
+          unzip -tq "release-assets/BandWagon_Source_${VERSION}.zip"
+          unzip -p "release-assets/BandWagon_Source_${VERSION}.zip" \
+            "BandWagon-${VERSION}/DEPENDENCIES_BUILD.md" | grep -q "$VERSION"
+
+      - name: Use user-facing changelog as release notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed '/^---$/,$d' CHANGELOG.md > release-body.md
+          test -s release-body.md
 
       - name: Create the stable release with all assets
         uses: softprops/action-gh-release@v2
@@ -167,22 +177,5 @@ jobs:
           draft: false
           generate_release_notes: false
           fail_on_unmatched_files: true
-          body: |
-            ## v${{ needs['prepare-source'].outputs.version }} 변경 사항
-
-            - 젤 화면에서 밴드를 클릭하면 분석 탭의 해당 intensity 행으로 이동
-            - 가이드 표시 설정을 보정 탭으로 이동
-            - 파란 젤·조명 차이를 고려해 젤 영역 자동 인식 개선
-
-            ## Downloads
-
-            Windows 설치 파일과 이 버전에 대응하는 소스는 별도 릴리스가 아니라 이 정식 버전 릴리스의 **Assets**에서 함께 받을 수 있습니다.
-
-            - `BandWagon_Setup_${{ needs['prepare-source'].outputs.version }}.exe`: 버전 고정 설치 파일
-            - `BandWagon_Setup_latest.exe`: 최신 버전 별칭 설치 파일
-            - `BandWagon_Portable_${{ needs['prepare-source'].outputs.version }}.zip`: 버전 고정 포터블 패키지
-            - `BandWagon_Portable_latest.zip`: 최신 버전 별칭 포터블 패키지
-            - `BandWagon_Source_${{ needs['prepare-source'].outputs.version }}.zip`: 같은 태그의 대응 소스
-            - `BandWagon_Source_${{ needs['prepare-source'].outputs.version }}.zip.sha256`: 소스 ZIP SHA-256 체크섬
-            - `BandWagon_Dependencies_Build_${{ needs['prepare-source'].outputs.version }}.md`: 의존성 출처와 빌드 정보
+          body_path: release-body.md
           files: release-assets/*

@@ -801,7 +801,7 @@ class GelView(QWidget):
                                                Qt.TextWordWrap, tag)
                 name_h = min(natural.height(), fm_name.lineSpacing() * 3)
                 name_rect = QRectF(x1 + 2, r.top() + 2, name_w, name_h)
-                qp.drawText(name_rect, Qt.TextWordWrap | Qt.AlignLeft | Qt.AlignTop, tag)
+                qp.drawText(name_rect, Qt.TextWordWrap | Qt.AlignHCenter | Qt.AlignTop, tag)
                 if lane.peaks is None:
                     continue
                 font_mw = QFont("DejaVu Sans Mono", 7, QFont.Bold)

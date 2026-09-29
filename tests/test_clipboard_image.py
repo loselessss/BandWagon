@@ -30,6 +30,21 @@ class ClipboardImageTest(unittest.TestCase):
         self.assertEqual(overlay.getpixel((50, header_height + 50))[3], 55)
         self.assertEqual(overlay.getpixel((20, header_height + 80))[3], 255)
 
+    def test_clipboard_overlay_can_hide_numbers_without_losing_ladder_or_border(self):
+        source = Image.new("RGB", (100, 100), "white")
+        lane = Lane(0, 20, 80)
+        lane.kind = "marker"
+        lane.peaks = [50]
+        lane.peak_bounds = [(45, 55)]
+        lane.mw = [10.0]
+        with_numbers = render_analysis_overlay(source, [lane], transparent_bg=True)
+        without_numbers = render_analysis_overlay(
+            source, [lane], transparent_bg=True, show_mw=False)
+        self.assertNotEqual(with_numbers.tobytes(), without_numbers.tobytes())
+        header_height = without_numbers.height - source.height
+        self.assertEqual(without_numbers.getpixel((20, header_height + 80))[3], 255)
+        self.assertEqual(without_numbers.getpixel((50, header_height + 50))[3], 55)
+
     def test_rgba_survives_png_and_qimage_clipboard_formats(self):
         source = Image.new("RGBA", (2, 2))
         source.putdata([

@@ -1,15 +1,14 @@
 # BandWagon 의존성·소스·빌드 정보
 
 이 문서는 릴리스 `@VERSION@`에 포함된 소스와 Windows 배포 파일을 재현할 때
-필요한 의존성의 출처와 빌드 순서를 기록합니다. 릴리스 페이지의 Assets에서
-버전별 설치 파일과 함께 이 문서를 받을 수 있습니다.
+필요한 의존성의 출처와 빌드 순서를 기록합니다. 이 문서는 릴리스 Assets의
+`BandWagon_Source_@VERSION@.zip` 안에 `DEPENDENCIES_BUILD.md`로 포함됩니다.
 
 ## 소스 기준
 
 - 저장소: https://github.com/loselessss/BandWagon
 - 릴리스 태그: `v@VERSION@`
 - 대응 소스: 같은 태그에서 생성한 `BandWagon_Source_@VERSION@.zip`
-- 소스 ZIP 무결성: 같은 Assets의 `BandWagon_Source_@VERSION@.zip.sha256`
 
 ## 런타임 의존성
 

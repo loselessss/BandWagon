@@ -35,6 +35,28 @@ class GelInteractionsTest(unittest.TestCase):
         finally:
             win.close()
 
+    def test_enter_after_lane_name_opens_next_name(self):
+        win = Analyzer()
+        try:
+            win._orig = Image.new("RGB", (100, 100), "white")
+            win._after_load("sample.png")
+            win.lanes = [Lane(0, 10, 30), Lane(1, 40, 60)]
+            win._rebuild_lane_table()
+            win.show()
+            win.tabs.setCurrentIndex(1)
+            self.app.processEvents()
+            win.lane_table.editItem(win.lane_table.item(0, 0))
+            editor = win.lane_table.focusWidget()
+            editor.setText("First")
+            QTest.keyClick(editor, Qt.Key_Return)
+            QTest.qWait(50)
+            self.assertEqual(win.lanes[0].name, "First")
+            self.assertEqual(win.lane_table.currentRow(), 1)
+            self.assertEqual(win.lane_table.focusWidget().selectedText(), "Lane 2")
+        finally:
+            win._saved_snapshot = win._project_state_snapshot()
+            win.close()
+
     def test_canvas_band_opens_matching_intensity_row(self):
         win = Analyzer()
         try:

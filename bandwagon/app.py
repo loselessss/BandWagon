@@ -491,6 +491,8 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, RecoveryMixin
                 self._info(tr("update_title"),
                            tr("update_current", version=APP_VERSION))
             return
+        if not manual and self._layout_settings.value("updates/skipped_version", "") == update.version:
+            return
         self._available_update = update
         self.status.showMessage(
             tr("update_available", version=update.version), 10000)
@@ -539,8 +541,13 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, RecoveryMixin
             return
         self._available_update = None
         dialog = UpdateDialog(self._update_service, update, self)
+        dialog.version_skipped.connect(self._skip_update_version)
         dialog.install_requested.connect(self._install_update)
         dialog.exec_()
+
+    def _skip_update_version(self, version):
+        self._layout_settings.setValue("updates/skipped_version", version)
+        self._layout_settings.sync()
 
     def _install_update(self, path):
         if not self._ask(tr("update_install_title"), tr("update_install_prompt")):

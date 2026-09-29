@@ -13,8 +13,9 @@ from PyQt5.QtWidgets import (
     QComboBox, QFormLayout, QGroupBox, QHBoxLayout, QHeaderView,
     QInputDialog, QLabel, QPushButton, QSpinBox, QTableWidget,
     QTableWidgetItem, QTextEdit, QVBoxLayout, QWidget, QScrollArea, QToolButton,
+    QStyledItemDelegate, QLineEdit,
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer, QEvent
 
 from .i18n import tr
 from .theme import *
@@ -22,6 +23,17 @@ from .models import Lane
 from .widgets import StdCurveView, FineSlider
 from .dialogs import MarkerDialog, MarkerPresetManager, _dialog_style, _no_help_button
 from .presets import load_marker_presets, save_marker_presets
+
+
+class LaneNameDelegate(QStyledItemDelegate):
+    def setEditorData(self, editor, index):
+        editor.setProperty("lane_row", index.row())
+        super().setEditorData(editor, index)
+
+    def eventFilter(self, editor, event):
+        if event.type() == QEvent.KeyPress and event.key() in (Qt.Key_Return, Qt.Key_Enter):
+            self.parent()._rename_advance_row = editor.property("lane_row")
+        return super().eventFilter(editor, event)
 
 
 class LanesMixin:
@@ -198,6 +210,8 @@ class LanesMixin:
         self.lane_table.setColumnWidth(1, 90)
         self.lane_table.setColumnWidth(2, 100)
         self.lane_table.setStyleSheet(self._table_css())
+        self.lane_table._rename_advance_row = None
+        self.lane_table.setItemDelegateForColumn(0, LaneNameDelegate(self.lane_table))
         self.lane_table.cellChanged.connect(self._on_lane_renamed)
         # Keep the table outside the settings scroll area to avoid nested scrolling.
         self.lane_table.setMinimumHeight(150)
@@ -513,8 +527,22 @@ class LanesMixin:
         if col == 0 and row < len(self.lanes):
             it = self.lane_table.item(row, 0)
             if it:
+                advance = self.lane_table._rename_advance_row == row
+                self.lane_table._rename_advance_row = None
                 self.lanes[row].name = it.text(); self.gel.update()
                 self._commit_lanes()
+                if advance and row + 1 < len(self.lanes):
+                    QTimer.singleShot(10, lambda next_row=row + 1: self._edit_next_lane_name(next_row))
+
+    def _edit_next_lane_name(self, row):
+        if row < self.lane_table.rowCount():
+            item = self.lane_table.item(row, 0)
+            self.lane_table.setCurrentCell(row, 0)
+            self.lane_table.scrollToItem(item)
+            self.lane_table.editItem(item)
+            editor = self.lane_table.focusWidget()
+            if isinstance(editor, QLineEdit):
+                editor.selectAll()
 
     def _set_lane_kind(self, lane, idx, combo):
         old_kind = lane.kind

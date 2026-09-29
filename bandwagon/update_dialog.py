@@ -57,6 +57,7 @@ class UpdateDownloadWorker(QThread):
 
 class UpdateDialog(QDialog):
     install_requested = pyqtSignal(object)
+    version_skipped = pyqtSignal(str)
 
     def __init__(self, service, update, parent=None):
         super().__init__(parent)
@@ -93,6 +94,9 @@ class UpdateDialog(QDialog):
         self.release_button.clicked.connect(
             lambda: QDesktopServices.openUrl(QUrl(update.release_url)))
         buttons.addButton(self.release_button, QDialogButtonBox.ActionRole)
+        self.skip_button = QPushButton(tr("update_skip_version"))
+        self.skip_button.clicked.connect(self._skip_version)
+        buttons.addButton(self.skip_button, QDialogButtonBox.ActionRole)
         self.install_button = QPushButton(tr("update_download_install"))
         self.install_button.clicked.connect(self._start_download)
         buttons.addButton(self.install_button, QDialogButtonBox.AcceptRole)
@@ -105,6 +109,10 @@ class UpdateDialog(QDialog):
         elif not update.asset.sha256:
             self.install_button.setEnabled(False)
             self.status_label.setText(tr("update_no_checksum"))
+
+    def _skip_version(self):
+        self.version_skipped.emit(self._update.version)
+        self.reject()
 
     def _start_download(self):
         if self._worker is not None:

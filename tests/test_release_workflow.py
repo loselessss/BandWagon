@@ -24,7 +24,8 @@ class ReleaseWorkflowStructureTests(unittest.TestCase):
         self.assertLess(source_pos, binary_pos)
         self.assertIn("actions/upload-artifact@v4", self.workflow)
         self.assertIn("name: release-source-assets", self.workflow)
-        self.assertIn('(cd release-assets && sha256sum "BandWagon_Source_${VERSION}.zip"', self.workflow)
+        self.assertIn('source-extra/BandWagon-${VERSION}/DEPENDENCIES_BUILD.md', self.workflow)
+        self.assertIn('unzip -tq "$source_zip"', self.workflow)
 
     def test_stable_release_has_required_asset_names(self):
         required_patterns = (
@@ -33,22 +34,24 @@ class ReleaseWorkflowStructureTests(unittest.TestCase):
             r'BandWagon_Portable_\$\{VERSION\}\.zip',
             r"BandWagon_Portable_latest\.zip",
             r'BandWagon_Source_\$\{VERSION\}\.zip',
-            r'BandWagon_Source_\$\{VERSION\}\.zip\.sha256',
-            r'BandWagon_Dependencies_Build_\$\{VERSION\}\.md',
         )
         for pattern in required_patterns:
             self.assertRegex(self.workflow, pattern)
+        self.assertNotIn('BandWagon_Source_${VERSION}.zip.sha256', self.workflow)
+        self.assertNotIn('BandWagon_Dependencies_Build_${VERSION}.md', self.workflow)
+        self.assertIn('body_path: release-body.md', self.workflow)
+        self.assertNotIn('## Downloads', self.workflow)
 
     def test_no_source_prerelease_or_source_tag_is_created(self):
         self.assertNotRegex(self.workflow, r"(?i)source[-_]?(?:pre)?release")
         self.assertNotRegex(self.workflow, r"v(?:\$\{\{[^}]+\}\}|\$\{VERSION\})-source")
         self.assertIn("prerelease: false", self.workflow)
-        self.assertIn("별도 릴리스가 아니라", self.workflow)
+        self.assertIn("별도의 `-source` 태그", self.process)
 
     def test_process_document_points_to_normal_release_page(self):
         self.assertIn("releases/tag/vX.Y.Z", self.process)
         self.assertIn("vX.Y.Z-source", self.process)
-        self.assertIn("기존 릴리스와 Assets는", self.process)
+        self.assertIn("v2.3.0 및 그 이전 릴리스", self.process)
 
 
 if __name__ == "__main__":
