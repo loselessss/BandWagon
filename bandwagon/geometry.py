@@ -18,7 +18,7 @@ import numpy as np
 from PIL import Image
 from PyQt5.QtWidgets import (
     QGroupBox, QHBoxLayout, QVBoxLayout, QLabel, QPushButton,
-    QSpinBox, QWidget, QCheckBox,
+    QSpinBox, QWidget, QCheckBox, QToolButton,
 )
 from PyQt5.QtCore import Qt, QSignalBlocker
 
@@ -94,24 +94,26 @@ class GeometryMixin:
         self.rot_spin = QSpinBox(); self.rot_spin.setRange(-180, 180); self.rot_spin.setSuffix("°")
         self.rot_spin.setFixedWidth(64); self.rot_spin.setStyleSheet(self._spin_css())
         fine_row.addWidget(self.rot_spin)
-        btn_rot_reset = QPushButton(tr("btn_reset")); btn_rot_reset.setStyleSheet(self._btn_css())
+        btn_rot_reset = QPushButton(tr("reset_rotation")); btn_rot_reset.setStyleSheet(self._btn_css())
         btn_rot_reset.clicked.connect(self._reset_fine_rotation)
-        fine_row.addWidget(btn_rot_reset)
         rv.addLayout(fine_row)
+        rv.addWidget(btn_rot_reset)
 
         self.rot_slider.valueChanged.connect(self._on_rot_value_changed)
         self.rot_spin.valueChanged.connect(self._on_rot_value_changed)
         self.rot_slider.sliderReleased.connect(self._commit_fine_rotation)
         self.rot_spin.editingFinished.connect(self._commit_fine_rotation)
 
-        fine_note = QLabel(tr("fine_rotate_note"))
-        fine_note.setStyleSheet(f"color:{MUTE};font-size:9px;"); fine_note.setWordWrap(True)
+        fine_note = QLabel(tr("fine_rotate_short_hint"))
+        fine_note.setToolTip(tr("fine_rotate_note"))
+        fine_note.setStyleSheet(f"color:{MUTE};font-size:11px;"); fine_note.setWordWrap(True)
         rv.addWidget(fine_note)
         v.addWidget(rot)
 
         region = QGroupBox(tr("group_region")); region.setStyleSheet(self._group_css())
         rgl = QVBoxLayout(region); rgl.setSpacing(5)
-        info = QLabel(tr("warp_intro"))
+        info = QLabel(tr("warp_short_hint"))
+        info.setToolTip(tr("warp_intro"))
         info.setStyleSheet(f"color:{MUTE};font-size:11px;"); info.setWordWrap(True)
         rgl.addWidget(info)
         auto = QPushButton(tr("btn_auto_warp")); auto.clicked.connect(self._auto_warp); auto.setStyleSheet(self._btn_accent_css())
@@ -121,8 +123,9 @@ class GeometryMixin:
         self.btn_corner = QPushButton(tr("btn_corner_mode_off")); self.btn_corner.setCheckable(True)
         self.btn_corner.clicked.connect(self._toggle_corner_mode); self.btn_corner.setStyleSheet(self._btn_css())
         rgl.addWidget(self.btn_corner)
-        order_hint = QLabel(tr("corner_click_order"))
-        order_hint.setStyleSheet(f"color:{MUTE};font-size:10px;"); order_hint.setWordWrap(True)
+        order_hint = QLabel(tr("corner_short_hint"))
+        order_hint.setToolTip(tr("corner_click_order"))
+        order_hint.setStyleSheet(f"color:{MUTE};font-size:11px;"); order_hint.setWordWrap(True)
         order_hint.setAlignment(Qt.AlignCenter)
         rgl.addWidget(order_hint)
         self.corner_label = QLabel(tr("corner_count", n=0))
@@ -135,6 +138,8 @@ class GeometryMixin:
         wrow.addWidget(wr); wrow.addWidget(wc)
         rgl.addLayout(wrow)
         v.addWidget(region)
+        v.removeWidget(region)
+        v.insertWidget(2, region)
 
         bow = QGroupBox(tr("group_bow_correction")); bow.setStyleSheet(self._group_css())
         bv = QVBoxLayout(bow)
@@ -155,10 +160,10 @@ class GeometryMixin:
         self.bow_spin = QSpinBox(); self.bow_spin.setRange(-150, 150); self.bow_spin.setSuffix("px")
         self.bow_spin.setFixedWidth(64); self.bow_spin.setStyleSheet(self._spin_css())
         brow.addWidget(self.bow_spin)
-        btn_bow_reset = QPushButton(tr("btn_reset")); btn_bow_reset.setStyleSheet(self._btn_css())
+        btn_bow_reset = QPushButton(tr("reset_bow")); btn_bow_reset.setStyleSheet(self._btn_css())
         btn_bow_reset.clicked.connect(self._reset_bow_correction)
-        brow.addWidget(btn_bow_reset)
         bv.addLayout(brow)
+        bv.addWidget(btn_bow_reset)
         bow_hint = QLabel(tr("bow_sign_hint"))
         bow_hint.setStyleSheet(f"color:{MUTE};font-size:9px;"); bow_hint.setWordWrap(True)
         bv.addWidget(bow_hint)
@@ -190,10 +195,10 @@ class GeometryMixin:
         self.shear_spin = QSpinBox(); self.shear_spin.setRange(-150, 150); self.shear_spin.setSuffix("px")
         self.shear_spin.setFixedWidth(64); self.shear_spin.setStyleSheet(self._spin_css())
         shrow.addWidget(self.shear_spin)
-        btn_shear_reset = QPushButton(tr("btn_reset")); btn_shear_reset.setStyleSheet(self._btn_css())
+        btn_shear_reset = QPushButton(tr("reset_shear")); btn_shear_reset.setStyleSheet(self._btn_css())
         btn_shear_reset.clicked.connect(self._reset_shear_correction)
-        shrow.addWidget(btn_shear_reset)
         shv.addLayout(shrow)
+        shv.addWidget(btn_shear_reset)
         shear_hint = QLabel(tr("shear_sign_hint"))
         shear_hint.setStyleSheet(f"color:{MUTE};font-size:9px;"); shear_hint.setWordWrap(True)
         shv.addWidget(shear_hint)
@@ -248,6 +253,22 @@ class GeometryMixin:
         note = QLabel(tr("adjust_display_only_note"))
         note.setStyleSheet(f"color:{MUTE};font-size:10px;"); note.setWordWrap(True)
         v.addWidget(note)
+
+        # Less frequent geometry controls follow the main color adjustments.
+        v.removeWidget(bow); v.removeWidget(shear)
+        advanced = QWidget(); av = QVBoxLayout(advanced); av.setContentsMargins(0, 0, 0, 0)
+        av.addWidget(bow); av.addWidget(shear)
+        advanced.hide()
+        self.advanced_geometry_toggle = QToolButton()
+        self.advanced_geometry_toggle.setText(tr("advanced_geometry"))
+        self.advanced_geometry_toggle.setCheckable(True)
+        self.advanced_geometry_toggle.setStyleSheet(self._disclosure_css())
+        self.advanced_geometry_toggle.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self.advanced_geometry_toggle.setArrowType(Qt.RightArrow)
+        self.advanced_geometry_toggle.toggled.connect(advanced.setVisible)
+        self.advanced_geometry_toggle.toggled.connect(lambda on: self.advanced_geometry_toggle.setArrowType(
+            Qt.DownArrow if on else Qt.RightArrow))
+        v.addWidget(self.advanced_geometry_toggle); v.addWidget(advanced)
 
         v.addStretch()
         self._add_tab(page, tr("tab_adjust"))
@@ -943,6 +964,8 @@ class GeometryMixin:
         self._finish_memo_group()
         self._memo_commit_timer.stop()
         source = self.sender()
+        if source in (self.sp_prom, self.sp_dist, self.sl_band_thresh, self.sl_smear):
+            self._mark_analysis_stale()
         snapshot = self._current_document_snapshot()
         if self._document_group_source is source \
                 and self._edit_pos == len(self._edit_ops) - 1 \
@@ -1174,6 +1197,9 @@ class GeometryMixin:
                            (getattr(self, "btn_vrange", None), "vrange")]:
                 if btn is not None and m != which and btn.isChecked():
                     btn.blockSignals(True); btn.setChecked(False); btn.blockSignals(False)
+                    key = {"lane": "btn_manual_lane_off", "corner": "btn_corner_mode_off",
+                           "vrange": "btn_vrange_mode_off"}[m]
+                    btn.setText(tr(key))
             self.gel.set_mode(which)
         else:
             self.gel.set_mode("view")
@@ -1188,6 +1214,7 @@ class GeometryMixin:
         바꿨을 때(_on_lane_edge_changed)와 동일하게 기존 분석 결과를
         무효화한다."""
         self._update_vrange_label()
+        self._mark_analysis_stale()
         for lane in self.lanes:
             lane.peaks = None
             lane.peak_area = None

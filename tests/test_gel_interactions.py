@@ -58,7 +58,7 @@ class GelInteractionsTest(unittest.TestCase):
             win._saved_snapshot = win._project_state_snapshot()
             win.close()
 
-    def test_copy_dialog_offers_marker_and_border_overlay(self):
+    def test_copy_uses_shared_export_dialog(self):
         win = Analyzer()
         try:
             lane = Lane(0, 10, 50)
@@ -66,15 +66,69 @@ class GelInteractionsTest(unittest.TestCase):
             lane.peaks = [40]
             win.lanes = [lane]
 
-            def choose_marker_overlay(box):
-                button = next(b for b in box.buttons()
-                              if b.text() == tr("export_marker_border_only"))
-                button.click()
-                return 0
+            from bandwagon.export_dialog import ExportDialog
+            def choose_marker_overlay(dialog):
+                self.assertIsInstance(dialog, ExportDialog)
+                dialog.checks["photo"].setChecked(False)
+                dialog.checks["annotation"].setChecked(False)
+                return ExportDialog.Accepted
 
-            with patch("bandwagon.fileio.QMessageBox.exec_", choose_marker_overlay):
-                self.assertEqual(win._ask_overlay_option(clipboard=True), "marker_border_only")
+            with patch.object(ExportDialog, "exec_", choose_marker_overlay):
+                options = win._export_options(Image.new("RGB", (100, 100)))
+                self.assertFalse(options["photo"])
+                self.assertFalse(options["annotation"])
+                self.assertTrue(options["marker_mw"])
         finally:
+            win.close()
+
+    def test_lane_keyboard_navigation_and_escape(self):
+        win = Analyzer()
+        try:
+            win._orig = Image.new("RGB", (100, 100), "white")
+            win._after_load("sample.png")
+            win.lanes = [Lane(0, 10, 30), Lane(1, 40, 60)]
+            win._rebuild_lane_table()
+            win.show(); win.tabs.setCurrentIndex(1)
+            self.app.processEvents()
+            win.lane_table.editItem(win.lane_table.item(0, 0))
+            QTest.keyClick(win.lane_table.focusWidget(), Qt.Key_Return)
+            QTest.qWait(30)
+            self.assertEqual(win.lane_table.currentRow(), 1)
+            QTest.keyClick(win.lane_table.focusWidget(), Qt.Key_Backtab)
+            QTest.qWait(30)
+            self.assertEqual(win.lane_table.currentRow(), 0)
+            editor = win.lane_table.focusWidget()
+            editor.setText("Discard this")
+            QTest.keyClick(editor, Qt.Key_Escape)
+            self.assertEqual(win.lanes[0].name, "Lane 1")
+            win.btn_lane.click()
+            self.assertEqual(win.gel.mode, "lane")
+            QTest.keyClick(win, Qt.Key_Escape)
+            self.assertEqual(win.gel.mode, "view")
+        finally:
+            win._saved_snapshot = win._project_state_snapshot()
+            win.close()
+
+    def test_analysis_status_and_lane_selection(self):
+        win = Analyzer()
+        try:
+            win._orig = Image.new("RGB", (100, 100), "white")
+            win._after_load("sample.png")
+            win.lanes = [Lane(0, 10, 30), Lane(1, 40, 60)]
+            win._rebuild_lane_table()
+            win.lane_table.setCurrentCell(1, 0)
+            self.assertIs(win.gel.selected_lane, win.lanes[1])
+            win._on_gel_lane_selected(win.lanes[0])
+            self.assertEqual(win.lane_table.currentRow(), 0)
+            win.sp_prom.setValue(win.sp_prom.value() - 1)
+            self.assertEqual(win.analysis_notice.text(), tr("analysis_stale"))
+            win.run_analysis()
+            self.assertFalse(win._analysis_stale)
+            self.assertEqual(win.analysis_notice.text(), tr("analysis_empty"))
+            self.assertFalse(win.advanced_geometry_toggle.isChecked())
+            self.assertFalse(win.band_settings_toggle.isChecked())
+        finally:
+            win._saved_snapshot = win._project_state_snapshot()
             win.close()
 
     def test_canvas_band_opens_matching_intensity_row(self):

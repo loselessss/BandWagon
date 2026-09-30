@@ -264,10 +264,12 @@ class GelView(QWidget):
     vrangeChanged = pyqtSignal(bool)  # 세로 분석 범위가 (재)지정/조정 완료
     zoomChanged = pyqtSignal(float)  # 현재 줌 배율(1.0 = 100%)
     bandSelected = pyqtSignal(object, int)  # 이미지에서 선택한 (레인, 밴드 번호)
+    laneSelected = pyqtSignal(object)
+    modeChanged = pyqtSignal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setMinimumSize(420, 420)
+        self.setMinimumSize(320, 280)
         self.setMouseTracking(True)
         self.setAcceptDrops(True)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -279,6 +281,7 @@ class GelView(QWidget):
         self.show_overlay = True  # 라이브 프리뷰에서 레인/밴드/MW 오버레이 표시 여부
         self.band_display_style = "area"  # "area"(경계 영역) 또는 "line"(피크 위치 한 줄)
         self.selected_band = None  # (lane, band_index) — 결과 표에서 고른 밴드를 캔버스에서 굵게 강조
+        self.selected_lane = None
         self.show_guides = False  # 회전/펴기 보정 중 격자+중앙 십자선 가이드 표시 여부
         self._lane_a = None
         self._lane_b = None
@@ -316,10 +319,13 @@ class GelView(QWidget):
 
     def set_lanes(self, lanes):
         self.lanes = lanes
+        if self.selected_lane not in lanes:
+            self.selected_lane = None
         self.update()
 
     def set_mode(self, m):
         self.mode = m
+        self.modeChanged.emit(m)
         self._lane_a = self._lane_b = None
         self._lane_edge_drag = None
         self._lane_move_drag = None
@@ -540,10 +546,14 @@ class GelView(QWidget):
         if self.mode == "lane":
             label_lane = self._lane_label_hit(e.x(), e.y())
             if label_lane is not None:
+                self.selected_lane = label_lane
+                self.laneSelected.emit(label_lane)
                 self._lane_move_drag = (label_lane, self._wx_to_ix(e.x()), label_lane.x1, label_lane.x2)
                 return
             hit = self._lane_edge_hit(e.x())
             if hit is not None:
+                self.selected_lane = hit[0]
+                self.laneSelected.emit(hit[0])
                 self._lane_edge_drag = hit
                 return
             self._lane_a = self._wx_to_ix(e.x())
@@ -553,6 +563,12 @@ class GelView(QWidget):
         # 패닝할 수 있게 한다. 다른 모드는 좌클릭이 이미 다른 용도로 쓰이고 있어
         # 충돌을 피하려고 view 모드에서만 적용한다 (패닝 자체는 중간클릭으로도 가능).
         if self.mode == "view":
+            label_lane = self._lane_label_hit(e.x(), e.y())
+            if label_lane is not None:
+                self.selected_lane = label_lane
+                self.laneSelected.emit(label_lane)
+                self.update()
+                return
             self._pan_drag = (e.x(), e.y(), self._pan_x, self._pan_y)
             self.setCursor(Qt.ClosedHandCursor)
 
@@ -747,6 +763,9 @@ class GelView(QWidget):
             qp.fillRect(QRectF(x1, r.top(), x2 - x1, r.height()), col)
             col.setAlpha(200); qp.setPen(QPen(col, 1.5))
             qp.drawRect(QRectF(x1, r.top(), x2 - x1, r.height()))
+            if lane is self.selected_lane:
+                qp.setPen(QPen(QColor(255, 255, 255), 3))
+                qp.drawRect(QRectF(x1, r.top(), x2 - x1, r.height()))
             if self.mode == "lane":
                 # 레인 모드에서는 좌우 경계를 드래그 핸들처럼 두껍게 강조
                 handle = QPen(QColor(255, 255, 255), 3)
@@ -1133,7 +1152,7 @@ class SliderRow(QWidget):
         super().__init__(parent)
         self._default = default
         lay = QHBoxLayout(self); lay.setContentsMargins(0, 0, 0, 0); lay.setSpacing(8)
-        lb = QLabel(label); lb.setFixedWidth(34); lb.setStyleSheet(f"color:{MUTE};font-size:11px;")
+        lb = QLabel(label); lb.setMinimumWidth(48); lb.setStyleSheet(f"color:{INKT};font-size:12px;")
         lay.addWidget(lb)
         self.slider = FineSlider(Qt.Horizontal)
         self.slider.setRange(lo, hi); self.slider.setValue(default)

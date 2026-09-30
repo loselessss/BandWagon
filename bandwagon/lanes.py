@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import (
     QTableWidgetItem, QTextEdit, QVBoxLayout, QWidget, QScrollArea, QToolButton,
     QStyledItemDelegate, QLineEdit,
 )
-from PyQt5.QtCore import Qt, QTimer, QEvent
+from PyQt5.QtCore import Qt, QTimer, QEvent, pyqtSignal
 
 from .i18n import tr
 from .theme import *
@@ -26,13 +26,20 @@ from .presets import load_marker_presets, save_marker_presets
 
 
 class LaneNameDelegate(QStyledItemDelegate):
+    advanceRequested = pyqtSignal(int)
     def setEditorData(self, editor, index):
         editor.setProperty("lane_row", index.row())
         super().setEditorData(editor, index)
 
     def eventFilter(self, editor, event):
-        if event.type() == QEvent.KeyPress and event.key() in (Qt.Key_Return, Qt.Key_Enter):
-            self.parent()._rename_advance_row = editor.property("lane_row")
+        if event.type() == QEvent.KeyPress and event.key() in (
+                Qt.Key_Return, Qt.Key_Enter, Qt.Key_Tab, Qt.Key_Backtab):
+            row = editor.property("lane_row")
+            backwards = event.key() == Qt.Key_Backtab or bool(event.modifiers() & Qt.ShiftModifier)
+            self.commitData.emit(editor)
+            self.closeEditor.emit(editor, QStyledItemDelegate.NoHint)
+            self.advanceRequested.emit(row - 1 if backwards else row + 1)
+            return True
         return super().eventFilter(editor, event)
 
 
@@ -71,7 +78,7 @@ class LanesMixin:
         hint = QLabel(tr("lane_manual_hint"))
         hint.setStyleSheet(f"color:{MUTE};font-size:10px;"); hint.setWordWrap(True)
         h.addWidget(hint)
-        clear = QPushButton(tr("btn_clear_all_lanes")); clear.clicked.connect(self._on_clear_lanes_clicked); clear.setStyleSheet(self._btn_css())
+        clear = QPushButton(tr("btn_clear_all_lanes")); clear.clicked.connect(self._on_clear_lanes_clicked); clear.setStyleSheet(self._danger_btn_css())
         h.addWidget(clear)
         preset_btn = QPushButton(tr("btn_manage_marker_presets")); preset_btn.clicked.connect(self._open_marker_presets)
         preset_btn.setStyleSheet(self._btn_css())
@@ -103,7 +110,7 @@ class LanesMixin:
         details_toggle.setCheckable(True)
         details_toggle.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
         details_toggle.setArrowType(Qt.RightArrow)
-        details_toggle.setStyleSheet(self._btn_css())
+        details_toggle.setStyleSheet(self._disclosure_css())
         self.band_settings_toggle = details_toggle
         v.addWidget(details_toggle)
         det_box = QWidget()
@@ -206,13 +213,16 @@ class LanesMixin:
         header.setSectionResizeMode(0, QHeaderView.Interactive)
         header.setSectionResizeMode(1, QHeaderView.Interactive)
         header.setSectionResizeMode(2, QHeaderView.Interactive)
-        self.lane_table.setColumnWidth(0, 140)
-        self.lane_table.setColumnWidth(1, 90)
-        self.lane_table.setColumnWidth(2, 100)
+        self.lane_table.setColumnWidth(0, 106)
+        self.lane_table.setColumnWidth(1, 82)
+        self.lane_table.setColumnWidth(2, 94)
         self.lane_table.setStyleSheet(self._table_css())
-        self.lane_table._rename_advance_row = None
-        self.lane_table.setItemDelegateForColumn(0, LaneNameDelegate(self.lane_table))
+        delegate = LaneNameDelegate(self.lane_table)
+        delegate.advanceRequested.connect(lambda row: QTimer.singleShot(10, lambda: self._edit_next_lane_name(row)))
+        self.lane_table.setItemDelegateForColumn(0, delegate)
         self.lane_table.cellChanged.connect(self._on_lane_renamed)
+        self.lane_table.currentCellChanged.connect(self._on_lane_table_selected)
+        self.lane_table.verticalHeader().setDefaultSectionSize(32)
         # Keep the table outside the settings scroll area to avoid nested scrolling.
         self.lane_table.setMinimumHeight(150)
         outer.addWidget(self.lane_table, 1)
@@ -231,15 +241,26 @@ class LanesMixin:
             f"color:{CYAN};font-size:11px;font-family:'DejaVu Sans Mono';")
         self.mw_r2_label.setWordWrap(True)
         v.addWidget(self.mw_r2_label)
+        self.analysis_notice = QLabel(tr("analysis_empty"))
+        self.analysis_notice.setWordWrap(True)
+        self.analysis_notice.setStyleSheet(f"color:{CYAN};font-size:12px;padding:6px;")
+        v.addWidget(self.analysis_notice)
 
         self.result_table = QTableWidget(0, 5)
         self.result_table.setHorizontalHeaderLabels([tr("col_lane"), tr("col_band"), tr("col_mw_kda"), tr("col_intensity"), tr("col_volume")])
         self.result_table.verticalHeader().setVisible(False)
-        self.result_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.result_table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
+        for column, width in enumerate((110, 60, 85, 95, 95)):
+            self.result_table.setColumnWidth(column, width)
+        self.result_table.horizontalHeader().setStretchLastSection(True)
+        self.result_table.verticalHeader().setDefaultSectionSize(30)
+        for column, key in ((3, "intensity_unit_hint"), (4, "volume_unit_hint")):
+            self.result_table.horizontalHeaderItem(column).setToolTip(tr(key))
         self.result_table.setStyleSheet(self._table_css())
         self.result_table.setEditTriggers(QTableWidget.NoEditTriggers)  # 요청#9: 결과는 편집 불가(읽기 전용)
         self.result_table.setSelectionMode(QTableWidget.ExtendedSelection)
         self.result_table.cellClicked.connect(self._on_result_cell_clicked)
+        self.result_table.currentCellChanged.connect(lambda row, col, *_: self._on_result_cell_clicked(row, col))
         v.addWidget(self.result_table, 1)
         self._add_tab(page, tr("tab_analysis"))
         self.analysis_tab = self.tabs.widget(self.tabs.count() - 1)
@@ -344,6 +365,7 @@ class LanesMixin:
     def _on_lane_edge_changed(self):
         """레인 경계를 드래그해 폭을 조정하거나, 레인 라벨을 드래그해 위치를
         옮긴 뒤 호출. 레인 구성이 바뀌었으므로 기존 밴드 분석 결과는 무효화한다."""
+        self._mark_analysis_stale()
         for lane in self.lanes:
             lane.peaks = None
             lane.peak_area = None
@@ -449,6 +471,8 @@ class LanesMixin:
         self.gel.set_lanes([])
         self.profile.set_lanes([])
         self.result_table.setRowCount(0)
+        self._analysis_stale = False
+        self._update_analysis_notice()
         self._rebuild_lane_table()
 
     def _on_clear_lanes_clicked(self):
@@ -462,6 +486,7 @@ class LanesMixin:
         위치를 미리 저장해뒀다가 되돌리지 않으면 레인이 많을 때 편집할
         때마다 맨 위로 튕겨서 매우 불편했다(실사용 중 보고됨)."""
         scroll_pos = self.lane_table.verticalScrollBar().value()
+        selected_row = self.lane_table.currentRow()
         self.lane_table.blockSignals(True)
         self.lane_table.setRowCount(0)
         for row, lane in enumerate(self.lanes):
@@ -476,15 +501,21 @@ class LanesMixin:
             combo.activated.connect(lambda idx, l=lane, c=combo: self._set_lane_kind(l, idx, c))
             self.lane_table.setCellWidget(r, 1, combo)
             order = QWidget(); oh = QHBoxLayout(order); oh.setContentsMargins(0, 0, 0, 0); oh.setSpacing(2)
-            up = QPushButton("Up"); up.setFixedWidth(26); up.setFixedHeight(20); up.setStyleSheet(self._compact_btn_css())
+            up = QPushButton("↑"); up.setFixedWidth(28); up.setFixedHeight(28); up.setStyleSheet(self._compact_btn_css())
+            up.setToolTip(tr("lane_move_up")); up.setAccessibleName(tr("lane_move_up"))
             up.setEnabled(row > 0); up.clicked.connect(lambda _, i=row: self._move_lane(i, -1))
-            down = QPushButton("Dn"); down.setFixedWidth(26); down.setFixedHeight(20); down.setStyleSheet(self._compact_btn_css())
+            down = QPushButton("↓"); down.setFixedWidth(28); down.setFixedHeight(28); down.setStyleSheet(self._compact_btn_css())
+            down.setToolTip(tr("lane_move_down")); down.setAccessibleName(tr("lane_move_down"))
             down.setEnabled(row < len(self.lanes) - 1); down.clicked.connect(lambda _, i=row: self._move_lane(i, 1))
-            delbtn = QPushButton(tr("btn_delete")); delbtn.setFixedWidth(38); delbtn.setFixedHeight(20); delbtn.setStyleSheet(self._compact_btn_css())
+            delbtn = QPushButton("×"); delbtn.setFixedWidth(28); delbtn.setFixedHeight(28); delbtn.setStyleSheet(self._danger_btn_css(compact=True))
+            delbtn.setAccessibleName(tr("delete_this_lane_tip"))
             delbtn.setToolTip(tr("delete_this_lane_tip"))
             delbtn.clicked.connect(lambda _, i=row: self._delete_lane(i))
             oh.addWidget(up); oh.addWidget(down); oh.addWidget(delbtn)
             self.lane_table.setCellWidget(r, 2, order)
+        if 0 <= selected_row < len(self.lanes):
+            self.lane_table.setCurrentCell(selected_row, 0)
+            self.gel.selected_lane = self.lanes[selected_row]
         self.lane_table.blockSignals(False)
         self.lane_table.verticalScrollBar().setValue(scroll_pos)
 
@@ -527,15 +558,11 @@ class LanesMixin:
         if col == 0 and row < len(self.lanes):
             it = self.lane_table.item(row, 0)
             if it:
-                advance = self.lane_table._rename_advance_row == row
-                self.lane_table._rename_advance_row = None
                 self.lanes[row].name = it.text(); self.gel.update()
                 self._commit_lanes()
-                if advance and row + 1 < len(self.lanes):
-                    QTimer.singleShot(10, lambda next_row=row + 1: self._edit_next_lane_name(next_row))
 
     def _edit_next_lane_name(self, row):
-        if row < self.lane_table.rowCount():
+        if 0 <= row < self.lane_table.rowCount():
             item = self.lane_table.item(row, 0)
             self.lane_table.setCurrentCell(row, 0)
             self.lane_table.scrollToItem(item)
@@ -543,6 +570,31 @@ class LanesMixin:
             editor = self.lane_table.focusWidget()
             if isinstance(editor, QLineEdit):
                 editor.selectAll()
+
+    def _on_lane_table_selected(self, row, *_):
+        self.gel.selected_lane = self.lanes[row] if 0 <= row < len(self.lanes) else None
+        self.gel.update()
+
+    def _on_gel_lane_selected(self, lane):
+        if lane in self.lanes:
+            row = self.lanes.index(lane)
+            self.lane_table.setCurrentCell(row, 0)
+            self.lane_table.scrollToItem(self.lane_table.item(row, 0))
+
+    def _mark_analysis_stale(self):
+        if self.lanes:
+            self._analysis_stale = True
+            self._update_analysis_notice()
+
+    def _update_analysis_notice(self):
+        if not hasattr(self, "analysis_notice"):
+            return
+        if not self.lanes:
+            self._analysis_stale = False
+        count = self.result_table.rowCount()
+        key = "analysis_stale" if getattr(self, "_analysis_stale", False) else (
+            "analysis_ready" if count else "analysis_empty")
+        self.analysis_notice.setText(tr(key, n=count))
 
     def _set_lane_kind(self, lane, idx, combo):
         old_kind = lane.kind
@@ -629,6 +681,7 @@ class LanesMixin:
         self.gel.set_lanes(self.lanes)
         self.profile.set_lanes(self.lanes)
         self._compute_mw()
+        self._analysis_stale = False
         self._refresh_results()
         self._compute_std()
         total = sum(len(l.peaks) for l in self.lanes if l.peaks is not None)
@@ -736,8 +789,10 @@ class LanesMixin:
                 vol = f"{lane.peak_volume[j]:.0f}" if lane.peak_volume is not None else "—"
                 for c, val in enumerate([lane.name, str(j + 1), mw, inten, vol]):
                     it = QTableWidgetItem(val); it.setForeground(lane.color)
+                    it.setTextAlignment((Qt.AlignLeft if c == 0 else Qt.AlignRight) | Qt.AlignVCenter)
                     it.setData(Qt.UserRole, (lane, j))
                     self.result_table.setItem(r, c, it)
+        self._update_analysis_notice()
 
     def _on_result_cell_clicked(self, row, _col):
         """결과 표에서 행을 클릭하면 그 밴드를 캔버스에서 굵게 강조 표시한다 —

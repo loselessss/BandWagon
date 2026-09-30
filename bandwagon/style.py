@@ -24,7 +24,11 @@ class StyleMixin:
             f"QSplitter::handle{{background:{LINE};}}"
             f"QScrollBar:vertical{{background:{INK1};width:10px;}}"
             f"QScrollBar::handle:vertical{{background:{INK4};border-radius:5px;min-height:24px;}}"
-            f"QScrollBar::add-line,QScrollBar::sub-line{{height:0;}}")
+            f"QScrollBar:horizontal{{background:{INK1};height:10px;}}"
+            f"QScrollBar::handle:horizontal{{background:{INK4};border-radius:5px;min-width:24px;}}"
+            "QScrollBar::add-line:horizontal,QScrollBar::sub-line:horizontal{width:0;}"
+            "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}"
+            "QScrollBar::add-page,QScrollBar::sub-page{background:transparent;}")
 
     def _menubar_css(self):
         return (f"QMenuBar{{background:{INK1};border-bottom:1px solid {LINE};padding:2px 6px;}}"
@@ -40,25 +44,38 @@ class StyleMixin:
     def _tabs_css(self):
         return (f"QTabWidget::pane{{border:1px solid {LINE};border-radius:8px;background:{INK2};top:-1px;}}"
                 f"QTabBar::tab{{background:transparent;color:{MUTE};padding:7px 4px;"
-                f"border-bottom:2px solid transparent;font-size:11px;}}"
+                f"border-bottom:2px solid transparent;font-size:12px;}}"
                 f"QTabBar::tab:selected{{color:{CYAN};border-bottom:2px solid {CYAN};}}"
                 f"QTabBar::tab:hover:!selected{{color:{INKT};}}")
 
     def _group_css(self):
-        return (f"QGroupBox{{color:{MUTE};font-size:10px;border:1px solid {LINE};"
+        return (f"QGroupBox{{color:{INKT};font-size:12px;border:1px solid {LINE};"
                 f"border-radius:8px;margin-top:10px;padding:10px 8px 8px 8px;}}"
                 f"QGroupBox::title{{subcontrol-position:top left;left:10px;top:-7px;padding:0 4px;background:{INK2};}}")
 
     def _btn_css(self):
         return (f"QPushButton{{background:{INK3};color:{INKT};border:1px solid {LINE};"
-                f"border-radius:6px;padding:6px 10px;font-size:11px;}}"
+                f"border-radius:6px;padding:6px 10px;font-size:12px;}}"
                 f"QPushButton:hover{{background:{INK4};border-color:{LINE2};}}"
+                f"QPushButton:focus{{border-color:{CYAN};}}"
+                f"QPushButton:disabled{{color:{MUTE};background:{INK2};}}"
                 f"QPushButton:checked{{background:rgba(63,180,230,0.18);border-color:{CYAN};color:{CYAN};}}")
+
+    def _danger_btn_css(self, compact=False):
+        padding = "0px" if compact else "6px 10px"
+        return (f"QPushButton{{background:{INK3};color:#f3a2a2;border:1px solid {LINE};"
+                f"border-radius:5px;padding:{padding};font-size:12px;}}"
+                "QPushButton:hover,QPushButton:focus{border-color:#f3a2a2;background:#482f35;}")
 
     def _btn_accent_css(self):
         return (f"QPushButton{{background:{CYAN};color:#06161f;border:none;border-radius:6px;"
                 f"padding:8px 14px;font-size:12px;font-weight:bold;}}"
                 f"QPushButton:hover{{background:#5cc6f2;}}")
+
+    def _disclosure_css(self):
+        return (f"QToolButton{{color:{INKT};background:{INK3};border:1px solid {LINE};"
+                "border-radius:5px;padding:7px;font-size:12px;}"
+                f"QToolButton:hover,QToolButton:focus{{border-color:{CYAN};}}")
 
     def _spin_css(self):
         # 다크 배경에서 QSpinBox 기본 화살표가 거의 안 보이는 문제가 있어

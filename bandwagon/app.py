@@ -45,7 +45,7 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, RecoveryMixin
         super().__init__()
         self._base_title = f"{APP_NAME} v{APP_VERSION}"
         self.setWindowTitle(self._base_title)
-        self.setMinimumSize(1080, 700)
+        self.setMinimumSize(900, 620)
         self.resize(1380, 860)
 
         self._orig = None
@@ -309,6 +309,8 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, RecoveryMixin
         self.zoom_label.setFixedWidth(40); self.zoom_label.setAlignment(Qt.AlignCenter)
         zoom_hint = QLabel(tr("zoom_hint"))
         zoom_hint.setStyleSheet(f"color:{MUTE};font-size:10px;")
+        zoom_hint.setWordWrap(True)
+        zoom_hint.setToolTip(tr("zoom_hint"))
         zoom_out.clicked.connect(lambda: self._zoom_step(1 / 1.25))
         zoom_in.clicked.connect(lambda: self._zoom_step(1.25))
         zoom_reset.clicked.connect(self._zoom_reset)
@@ -323,12 +325,21 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, RecoveryMixin
         zoom_row.addWidget(self.chk_overlay)
         lv.addLayout(zoom_row)
 
+        self.canvas_mode_hint = QLabel(tr("mode_view_hint"))
+        self.canvas_mode_hint.setWordWrap(True)
+        self.canvas_mode_hint.setStyleSheet(f"color:{CYAN};font-size:12px;padding:4px;")
+        lv.addWidget(self.canvas_mode_hint)
+
         self.gel = GelView()
         self.gel.laneAdded.connect(self._on_lane_added)
         self.gel.laneEdgeChanged.connect(self._on_lane_edge_changed)
         self.gel.cornerChanged.connect(self._on_corner_changed)
         self.gel.vrangeChanged.connect(self._on_vrange_changed)
         self.gel.bandSelected.connect(self._on_gel_band_selected)
+        self.gel.laneSelected.connect(self._on_gel_lane_selected)
+        self.gel.modeChanged.connect(lambda mode: self.canvas_mode_hint.setText(
+            tr("mode_" + mode + "_hint") if mode in ("view", "lane", "corner", "vrange")
+            else tr("mode_view_hint")))
         self.gel.zoomChanged.connect(self._on_zoom_changed)
         lv.addWidget(self.gel, 1)
         self.profile = ProfileView()
@@ -338,7 +349,7 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, RecoveryMixin
         right = QWidget(); right.setMinimumWidth(330)
         rv = QVBoxLayout(right); rv.setContentsMargins(4, 4, 4, 4); rv.setSpacing(8)
         self.tabs = QTabWidget(); self.tabs.setStyleSheet(self._tabs_css())
-        self.tabs.setUsesScrollButtons(False)
+        self.tabs.setUsesScrollButtons(True)
         self.tabs.tabBar().setExpanding(True)
         rv.addWidget(self.tabs)
         split.addWidget(right)
@@ -579,7 +590,10 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, RecoveryMixin
         return m.exec_() == QMessageBox.Yes
 
     def keyPressEvent(self, e):
-        if e.modifiers() == Qt.ControlModifier:
+        if e.key() == Qt.Key_Escape and self.gel.mode != "view":
+            self._on_tab_changed(self.tabs.currentIndex())
+            e.accept()
+        elif e.modifiers() == Qt.ControlModifier:
             if e.key() == Qt.Key_V:
                 self.paste_image()
             elif e.key() == Qt.Key_C:

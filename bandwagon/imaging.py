@@ -200,7 +200,10 @@ def downscale_for_preview(img, canvas_w, canvas_h, margin=1.5):
 
 
 def render_analysis_overlay(base_img, lanes, band_style="area", transparent_bg=False,
-                            show_mw=True, marker_and_border_only=False):
+                            show_mw=True, marker_and_border_only=False,
+                            show_border=True, show_marker_mw=True, show_annotation=True,
+                            show_bands=True, mw_marker_only=False, text_opacity=100,
+                            graphic_opacity=100, image_opacity=100, font_scale=1.0):
     """base_img 위에 레인 경계·검출 밴드·MW 라벨을 그려 합성한 새 이미지를
     반환한다(화면 캡처가 아니라 원본 좌표 기준으로 직접 그림 — 저장 해상도가
     화면 크기에 좌우되지 않음).
@@ -221,11 +224,15 @@ def render_analysis_overlay(base_img, lanes, band_style="area", transparent_bg=F
     3-패스로 그린다: 레인 박스/밴드선 → 레인 이름(헤더) → MW 라벨. 밴드보다
     레인 박스를 먼저 그려야 다음 레인 박스가 이전 레인 글자를 안 덮는다."""
     W, H = base_img.size
+    def px(value):
+        return max(1, round(value * font_scale))
     measure = ImageDraw.Draw(Image.new("RGB", (1, 1)))
 
     def _font_to_fit(text, max_width, base_size=14, min_size=7):
         """텍스트가 max_width(px) 안에 들어가는 가장 큰 폰트 크기를 찾는다.
         레인 폭이 좁아 제목이 옆 레인을 침범하는 가독성 문제를 막기 위함."""
+        base_size = max(1, round(base_size * font_scale))
+        min_size = max(1, round(min_size * font_scale))
         size = base_size
         while size > min_size:
             try:
@@ -264,7 +271,7 @@ def render_analysis_overlay(base_img, lanes, band_style="area", transparent_bg=F
         return lines[:max_lines]
 
     try:
-        font_small = ImageFont.truetype("DejaVuSansMono-Bold.ttf", 11)
+        font_small = ImageFont.truetype("DejaVuSansMono-Bold.ttf", max(1, round(11 * font_scale)))
     except Exception:
         try:
             font_small = ImageFont.truetype("DejaVuSansMono.ttf", 11)
@@ -273,34 +280,37 @@ def render_analysis_overlay(base_img, lanes, band_style="area", transparent_bg=F
 
     # ── 헤더 높이 계산: 모든 레인 이름 중 가장 많이 줄바꿈된 것 기준 ──
     lane_labels = []  # (lane, lines, font, line_h)
-    header_h = 0 if marker_and_border_only else 16
-    for lane in ([] if marker_and_border_only else lanes):
+    header_h = 0 if marker_and_border_only or not show_annotation else round(16 * font_scale)
+    for lane in ([] if marker_and_border_only or not show_annotation else lanes):
         label = lane.name
         if lane.kind == "marker": label += " [M]"
         elif lane.kind == "bsa": label += " [BSA]"
         lane_w = max(1, lane.x2 - lane.x1)
-        font, _ = _font_to_fit(label, lane_w - 8)
-        lines = _wrap_lines(label, font, lane_w - 8)
-        line_h = font.size + 3
+        font, _ = _font_to_fit(label, lane_w - px(8))
+        lines = _wrap_lines(label, font, lane_w - px(8))
+        line_h = font.size + px(3)
         lane_labels.append((lane, lines, font, line_h))
-        header_h = max(header_h, line_h * len(lines) + 6)
+        header_h = max(header_h, line_h * len(lines) + px(6))
+    if not lane_labels:
+        header_h = 0
 
     # ── 헤더만큼 위로 늘린 새 캔버스를 만든다 ──
     # transparent_bg=False: 원본 사진을 헤더 아래에 붙여넣는다.
     # transparent_bg=True: 사진은 안 쓰고 완전 투명(RGBA 알파=0) 캔버스로
     # 시작 — 이후 그리는 것(레인 박스/밴드/글자)만 불투명하게 남는다.
-    if transparent_bg:
-        img = Image.new("RGBA", (W, H + header_h), (0, 0, 0, 0))
-    else:
-        img = Image.new("RGB", (W, H + header_h), (13, 18, 23))
-        img.paste(base_img.convert("RGB"), (0, header_h))
-    draw = ImageDraw.Draw(img)
+    img = Image.new("RGBA", (W, H + header_h), (0, 0, 0, 0))
+    if not transparent_bg:
+        photo = base_img.convert("RGBA")
+        photo.putalpha(photo.getchannel("A").point(
+            lambda a: round(a * max(0, min(100, image_opacity)) / 100)))
+        img.paste(photo, (0, header_h))
+        del photo
 
     def _col(rgb):
         """레인 색(RGB 3튜플)에, 투명 배경 모드면 완전 불투명 알파를 붙여
         반환한다 — RGBA 캔버스에 그릴 땐 알파를 명시해야 확실히 불투명하게
         나온다."""
-        return rgb + (255,) if transparent_bg else rgb
+        return rgb + (255,)
 
     # ── 1패스: 레인 박스 + 밴드 표시(이미지 영역 — header_h만큼 아래로 오프셋) ──
     # band_style="area": 위경계~아래경계 영역을 반투명 박스로 — '여기서부터
@@ -313,8 +323,9 @@ def render_analysis_overlay(base_img, lanes, band_style="area", transparent_bg=F
     odraw = ImageDraw.Draw(overlay)
     for lane in lanes:
         col = (lane.color.red(), lane.color.green(), lane.color.blue())
-        draw.rectangle([lane.x1, header_h, lane.x2, header_h + H - 1], outline=_col(col), width=2)
-        if lane.peaks is not None and (not marker_and_border_only or lane.kind == "marker"):
+        if show_border:
+            odraw.rectangle([lane.x1, header_h, lane.x2, header_h + H - 1], outline=_col(col), width=px(2))
+        if show_bands and lane.peaks is not None and (not marker_and_border_only or lane.kind == "marker"):
             if band_style == "line":
                 for py in lane.peaks:
                     py = int(py) + header_h
@@ -328,11 +339,12 @@ def render_analysis_overlay(base_img, lanes, band_style="area", transparent_bg=F
                     odraw.rectangle([lane.x1, top, lane.x2, bot], fill=col + (55,))
                     odraw.line([(lane.x1, top), (lane.x2, top)], fill=col + (255,), width=1)
                     odraw.line([(lane.x1, bot), (lane.x2, bot)], fill=col + (255,), width=1)
-    if transparent_bg:
-        img = Image.alpha_composite(img, overlay)
-    else:
-        img = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
-    draw = ImageDraw.Draw(img)  # 합성 후 이미지가 바뀌었으니 Draw 핸들도 새로 받음
+    overlay.putalpha(overlay.getchannel("A").point(
+        lambda a: round(a * max(0, min(100, graphic_opacity)) / 100)))
+    img = Image.alpha_composite(img, overlay)
+    del overlay, odraw
+    text_layer = Image.new("RGBA", img.size)
+    draw = ImageDraw.Draw(text_layer)
 
     # ── 2패스: 레인 이름 — 헤더 띠 안에만 그려 이미지와 절대 안 겹친다 ──
     for lane, lines, font, line_h in lane_labels:
@@ -340,25 +352,26 @@ def render_analysis_overlay(base_img, lanes, band_style="area", transparent_bg=F
         for i, line in enumerate(lines):
             bbox = draw.textbbox((0, 0), line, font=font)
             line_w = bbox[2] - bbox[0]
-            draw.text((lane.x1 + (lane.x2 - lane.x1 - line_w) / 2, 3 + i * line_h),
+            draw.text((lane.x1 + (lane.x2 - lane.x1 - line_w) / 2, px(3) + i * line_h),
                       line, fill=_col(col), font=font)
 
     # ── 3패스: MW 값 — 이미지 영역 안(header_h만큼 오프셋)에 그린다 ──
     for lane in lanes:
-        if not show_mw or (marker_and_border_only and lane.kind != "marker"):
+        if not show_mw or not show_marker_mw or ((marker_and_border_only or mw_marker_only) and lane.kind != "marker"):
             continue
         if lane.peaks is None:
             continue
         lane_w = max(1, lane.x2 - lane.x1)
         bounds = lane.peak_bounds if lane.peak_bounds else None
-        last_ty = header_h - 12   # 같은 레인 라벨 겹침 방지(직전 라벨 y 추적)
+        last_ty = header_h - px(12)   # 같은 레인 라벨 겹침 방지(직전 라벨 y 추적)
         for j, py in enumerate(lane.peaks):
             py = int(py) + header_h
             if band_style == "line" or not bounds:
                 top = py                    # 선 모드: 그 줄 바로 위
             else:
                 top = bounds[j][0] + header_h  # 영역 모드: 경계 위쪽 기준
-            if j < len(lane.mw) and lane.mw[j] is not None and lane.mw[j] > 0:
+            if (not marker_and_border_only or lane.kind == "marker") and j < len(lane.mw) \
+                    and lane.mw[j] is not None and lane.mw[j] > 0:
                 txt = f"{lane.mw[j]:.1f}"
                 # 밴드 영역 위(상단 경계선보다 살짝 위)에 투명 배경으로, 흰 글자+검은
                 # 외곽선을 입혀 어떤 배경색(밴드의 진한 파란색 등) 위에서도 또렷하게
@@ -366,13 +379,15 @@ def render_analysis_overlay(base_img, lanes, band_style="area", transparent_bg=F
                 bbox = draw.textbbox((0, 0), txt, font=font_small)
                 tw = bbox[2] - bbox[0]
                 tx = lane.x1 + (lane_w - tw) / 2  # 레인 폭 중앙에 배치
-                ty = top - bbox[3] - 2             # 밴드 영역 위쪽 경계선 바로 위
-                if ty < last_ty + 12:             # 너무 가까우면 아래로 밀어 겹침 방지
-                    ty = last_ty + 12
+                ty = top - bbox[3] - px(2)             # 밴드 영역 위쪽 경계선 바로 위
+                if ty < last_ty + px(12):             # 너무 가까우면 아래로 밀어 겹침 방지
+                    ty = last_ty + px(12)
                 last_ty = ty
                 draw.text((tx, ty), txt, font=font_small,
-                          fill=_col((255, 255, 255)), stroke_width=2, stroke_fill=_col((0, 0, 0)))
-    return img
+                          fill=_col((255, 255, 255)), stroke_width=px(2), stroke_fill=_col((0, 0, 0)))
+    text_layer.putalpha(text_layer.getchannel("A").point(
+        lambda a: round(a * max(0, min(100, text_opacity)) / 100)))
+    return Image.alpha_composite(img, text_layer)
 
 
 # ═══════════════════════════════════════════════════════════════════

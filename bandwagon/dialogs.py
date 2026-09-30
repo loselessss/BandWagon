@@ -76,6 +76,7 @@ def _dialog_style():
     down_icon = _triangle_icon_path("down", INKT)
     return (f"QDialog{{background:{INK2};}}"
             f"QLabel{{color:{INKT};}}"
+            f"QCheckBox{{color:{INKT};spacing:6px;}}"
             f"QDoubleSpinBox,QSpinBox{{background:{INK3};color:{INKT};"
             f"border:1px solid {LINE};border-radius:4px;padding:3px;}}"
             f"QDoubleSpinBox::up-button,QSpinBox::up-button{{subcontrol-origin:border;"
@@ -106,7 +107,7 @@ def _table_css():
     return (f"QTableWidget{{background:{INK1};color:{INKT};gridline-color:{LINE};"
             f"border:1px solid {LINE};border-radius:6px;}}"
             f"QHeaderView::section{{background:{INK2};color:{MUTE};border:none;"
-            f"border-bottom:1px solid {LINE};padding:5px;font-size:10px;}}"
+            f"border-bottom:1px solid {LINE};padding:5px;font-size:12px;}}"
             f"QTableWidget::item:selected{{background:rgba(63,180,230,0.30);color:{INKT};}}"
             f"QTableWidget::item:selected:!active{{background:rgba(63,180,230,0.30);color:{INKT};}}"
             # 셀 더블클릭으로 이름을 편집할 때 뜨는 QLineEdit — 위 QTableWidget
