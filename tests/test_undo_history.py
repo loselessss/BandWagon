@@ -7,6 +7,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PIL import Image
 from PyQt5.QtGui import QTextCursor
+from PyQt5.QtCore import Qt
+from PyQt5.QtTest import QTest
 from PyQt5.QtWidgets import QApplication
 
 from bandwagon.app import Analyzer
@@ -106,6 +108,32 @@ class UndoHistoryTest(unittest.TestCase):
 
         self.assertEqual(len(self.window._edit_ops), 1)
         self.assertEqual(self.window._edit_pos, -1)
+        self.assertEqual(self.window.rot_slider.value(), 0)
+        self.assertTrue(self.window.btn_redo.isEnabled())
+
+    def test_ctrl_z_from_fine_rotation_controls(self):
+        self.window.show()
+        self.window.activateWindow()
+        self.app.processEvents()
+        for control in (self.window.rot_slider, self.window.rot_spin):
+            with self.subTest(control=type(control).__name__):
+                control.setFocus()
+                self.window.rot_slider.setValue(3)
+                self.window._commit_fine_rotation()
+                self.assertTrue(self.window.btn_undo.isEnabled())
+                QTest.keyClick(control, Qt.Key_Z, Qt.ControlModifier)
+                self.app.processEvents()
+                self.assertEqual(self.window.rot_slider.value(), 0)
+
+    def test_ctrl_z_captures_rotation_preview_from_keyboard(self):
+        self.window.show()
+        self.window.activateWindow()
+        self.window.rot_slider.setFocus()
+        self.app.processEvents()
+        QTest.keyClick(self.window.rot_slider, Qt.Key_Right)
+        self.assertNotEqual(self.window.rot_slider.value(), 0)
+        QTest.keyClick(self.window.rot_slider, Qt.Key_Z, Qt.ControlModifier)
+        self.app.processEvents()
         self.assertEqual(self.window.rot_slider.value(), 0)
         self.assertTrue(self.window.btn_redo.isEnabled())
 

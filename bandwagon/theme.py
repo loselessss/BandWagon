@@ -11,20 +11,20 @@ __all__ = [
     "INKT", "MUTE", "LINE", "LINE2", "GRIDC", "CH_COLOR", "LANE_PALETTE",
 ]
 
-# ── 디자인 토큰 (실험실 계측기: 슬레이트 배경 + 시안 액센트) ────────
-INK0 = "#0d1217"
-INK1 = "#121922"
-INK2 = "#19222d"
-INK3 = "#23303d"
-INK4 = "#314250"
-CYAN = "#3fb4e6"
+# ── Fluent 스타일: 중립 다크 표면 + 밝은 파란색 강조 ───────────────
+INK0 = "#191919"
+INK1 = "#202020"
+INK2 = "#272727"
+INK3 = "#323232"
+INK4 = "#3d3d3d"
+CYAN = "#60cdff"
 ROSE = "#f4737f"
 LIME = "#5ad19a"
-INKT = "#eaf2f7"
-MUTE = "#7f93a3"
-LINE = "#28333f"
-LINE2 = "#415262"
-GRIDC = "#1f2a35"
+INKT = "#f3f3f3"
+MUTE = "#b0b0b0"
+LINE = "#383838"
+LINE2 = "#606060"
+GRIDC = "#303030"
 
 CH_COLOR = {
     "RGB":   QColor(238, 242, 247),

@@ -15,9 +15,9 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QLabel, QPushButton, QAction, QSizePolicy, QMessageBox, QSplitter,
     QStatusBar, QMenu, QTabWidget, QDialog, QDialogButtonBox,
-    QScrollArea, QCheckBox,
+    QScrollArea,
 )
-from PyQt5.QtCore import Qt, QTimer, QStandardPaths, QSettings, QByteArray
+from PyQt5.QtCore import Qt, QTimer, QStandardPaths, QSettings, QByteArray, QEvent
 from . import i18n
 from .i18n import tr
 from .theme import *
@@ -26,7 +26,9 @@ from .models import CurveModel
 from .widgets import GelView, ProfileView
 from .dialogs import _dialog_style, _no_help_button
 from .style import StyleMixin
+from .ribbon import RibbonMixin
 from .geometry import GeometryMixin
+from .checkbox import TickCheckBox as QCheckBox
 from .lanes import LanesMixin
 from .fileio import FileIOMixin
 from .recovery import RecoveryMixin
@@ -34,7 +36,7 @@ from .updater import GitHubUpdateService
 from .update_dialog import UpdateCheckWorker, UpdateDialog
 
 
-class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, RecoveryMixin, QMainWindow):
+class Analyzer(RibbonMixin, StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, RecoveryMixin, QMainWindow):
     # "파일 > 열기"가 새로 띄우는 창들의 참조를 여기 계속 들고 있는다 —
     # 파이썬이 지역 변수로만 들고 있으면 GC가 곧바로 회수해 Qt가 창을
     # 닫아버린다. QApplication은 기본이 quitOnLastWindowClosed=True라
@@ -282,15 +284,17 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, RecoveryMixin
         # ── 언어 ─────────────────────────────────────────────────────
         # 예전엔 토글 버튼 하나였는데, 지금 언어가 뭔지 헷갈리지 않게
         # 두 언어를 나란히 두고 고르는 방식으로 바꿨다.
-        m_lang = mb.addMenu(tr("menu_language"))
+        m_info.addSeparator()
+        m_lang = m_info.addMenu(tr("menu_language"))
+        self.m_language = m_lang
         a = QAction(tr("lang_name_ko"), self); a.triggered.connect(lambda: self._set_language("ko"))
         m_lang.addAction(a)
         a = QAction(tr("lang_name_en"), self); a.triggered.connect(lambda: self._set_language("en"))
         m_lang.addAction(a)
 
         central = QWidget(); self.setCentralWidget(central)
-        root = QHBoxLayout(central); root.setContentsMargins(10, 10, 10, 10); root.setSpacing(10)
-        split = QSplitter(Qt.Horizontal); root.addWidget(split)
+        root = QVBoxLayout(central); root.setContentsMargins(10, 10, 10, 10); root.setSpacing(10)
+        split = QSplitter(Qt.Horizontal); root.addWidget(split, 1)
         self._main_splitter = split
         self._layout_settings = QSettings(
             QSettings.IniFormat, QSettings.UserScope, "BandWagon", "BandWagon")
@@ -304,6 +308,11 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, RecoveryMixin
         zoom_in = QPushButton(tr("zoom_in")); zoom_in.setFixedWidth(48); zoom_in.setStyleSheet(self._btn_css())
         zoom_reset = QPushButton("100%"); zoom_reset.setFixedWidth(48); zoom_reset.setStyleSheet(self._btn_css())
         zoom_reset.setToolTip(tr("zoom_reset_tip"))
+        from .fluent_icons import icon
+        for button, name, label in ((zoom_out, 'zoom_out', tr('zoom_out')),
+                                     (zoom_in, 'zoom_in', tr('zoom_in'))):
+            button.setIcon(icon(name)); button.setText('')
+            button.setToolTip(label); button.setAccessibleName(label)
         self.zoom_label = QLabel("100%")
         self.zoom_label.setStyleSheet(f"color:{MUTE};font-size:10px;")
         self.zoom_label.setFixedWidth(40); self.zoom_label.setAlignment(Qt.AlignCenter)
@@ -325,7 +334,8 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, RecoveryMixin
         zoom_row.addWidget(self.chk_overlay)
         lv.addLayout(zoom_row)
 
-        self.canvas_mode_hint = QLabel(tr("mode_view_hint"))
+        self.canvas_mode_hint = QLabel()
+        self.canvas_mode_hint.hide()
         self.canvas_mode_hint.setWordWrap(True)
         self.canvas_mode_hint.setStyleSheet(f"color:{CYAN};font-size:12px;padding:4px;")
         lv.addWidget(self.canvas_mode_hint)
@@ -337,9 +347,7 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, RecoveryMixin
         self.gel.vrangeChanged.connect(self._on_vrange_changed)
         self.gel.bandSelected.connect(self._on_gel_band_selected)
         self.gel.laneSelected.connect(self._on_gel_lane_selected)
-        self.gel.modeChanged.connect(lambda mode: self.canvas_mode_hint.setText(
-            tr("mode_" + mode + "_hint") if mode in ("view", "lane", "corner", "vrange")
-            else tr("mode_view_hint")))
+        self.gel.modeChanged.connect(self._update_mode_hint)
         self.gel.zoomChanged.connect(self._on_zoom_changed)
         lv.addWidget(self.gel, 1)
         self.profile = ProfileView()
@@ -348,6 +356,9 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, RecoveryMixin
 
         right = QWidget(); right.setMinimumWidth(330)
         rv = QVBoxLayout(right); rv.setContentsMargins(4, 4, 4, 4); rv.setSpacing(8)
+        self.settings_title = QLabel()
+        self.settings_title.setStyleSheet(f"color:{INKT};font-size:16px;font-weight:600;padding:4px;")
+        rv.addWidget(self.settings_title)
         self.tabs = QTabWidget(); self.tabs.setStyleSheet(self._tabs_css())
         self.tabs.setUsesScrollButtons(True)
         self.tabs.tabBar().setExpanding(True)
@@ -378,6 +389,13 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, RecoveryMixin
         self.status = QStatusBar(); self.status.setStyleSheet(f"background:{INK1};color:{MUTE};")
         self.setStatusBar(self.status)
         self.status.showMessage(tr("status_ready"))
+        self.tabs.tabBar().hide()
+        root.insertWidget(0, self._build_ribbon())
+        # Shortcuts must stay active even though the legacy menu bar is hidden.
+        for menu in self.menuBar().findChildren(QMenu):
+            for action in menu.actions():
+                if not action.shortcut().isEmpty(): self.addAction(action)
+        self.menuBar().hide()
 
         split.setSizes([980, 360])
         saved_layout = self._layout_settings.value("layout/main_splitter")
@@ -525,6 +543,8 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, RecoveryMixin
 
     def _dispose_closed_window(self):
         """Release accepted closes; wait for any running update check."""
+        if getattr(self, "_inline_curve", None) is not None:
+            self._inline_curve.finish()
         self._closing = True
         for timer in self.findChildren(QTimer):
             timer.stop()
@@ -589,8 +609,27 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, RecoveryMixin
         m.button(QMessageBox.No).setText(tr("btn_no"))
         return m.exec_() == QMessageBox.Yes
 
+    def _update_mode_hint(self, mode):
+        active = mode in ("lane", "corner", "vrange")
+        key = 'crop_hint' if mode == 'corner' and getattr(self, '_active_tool', None) == 'crop' else "mode_" + mode + "_hint"
+        self.canvas_mode_hint.setText(tr(key) if active else "")
+        self.canvas_mode_hint.setVisible(active)
+
+    def eventFilter(self, obj, event):
+        if obj in getattr(self, "_geometry_shortcut_widgets", ()) and event.type() in (
+                QEvent.ShortcutOverride, QEvent.KeyPress):
+            if event.modifiers() == Qt.ControlModifier and event.key() in (Qt.Key_Z, Qt.Key_Y):
+                event.accept()
+                if event.type() == QEvent.KeyPress:
+                    (self._undo if event.key() == Qt.Key_Z else self._redo)()
+                return True
+        return super().eventFilter(obj, event)
+
     def keyPressEvent(self, e):
-        if e.key() == Qt.Key_Escape and self.gel.mode != "view":
+        if e.key() == Qt.Key_Escape and getattr(self, "_inline_curve", None) is not None:
+            self._inline_curve.cancel()
+            e.accept()
+        elif e.key() == Qt.Key_Escape and self.gel.mode != "view":
             self._on_tab_changed(self.tabs.currentIndex())
             e.accept()
         elif e.modifiers() == Qt.ControlModifier:
@@ -606,7 +645,9 @@ class Analyzer(StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, RecoveryMixin
                     self.copy_image()
         elif e.key() in (Qt.Key_Return, Qt.Key_Enter):
             # 젤 영역 지정 모드에서 코너 4개가 있으면 Enter로 바로 변환 적용
-            if getattr(self, "btn_corner", None) is not None and self.btn_corner.isChecked() \
+            if self.btn_crop.isChecked() and len(self.gel.corners) == 4:
+                self._apply_crop()
+            elif getattr(self, "btn_corner", None) is not None and self.btn_corner.isChecked() \
                     and len(self.gel.corners) == 4:
                 self._manual_warp()
             else:

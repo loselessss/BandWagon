@@ -354,6 +354,8 @@ class FileIOMixin:
         event.accept()
 
     def _after_load(self, name):
+        if getattr(self, "_inline_curve", None) is not None:
+            self._inline_curve.finish()
         self._pristine_wb_gray_override = None
         self._base_title = f"{name} — {APP_NAME} v{APP_VERSION}"
         self._pristine_orig = self._orig.copy()   # 전체 초기화 시 복귀할 기준
@@ -376,6 +378,7 @@ class FileIOMixin:
             dialog.deleteLater()
 
     def copy_image(self):
+        self._finish_tool_preview()
         src = self._display or self._orig
         if src is None:
             self.status.showMessage(tr("nothing_to_copy_msg")); return
@@ -387,6 +390,7 @@ class FileIOMixin:
         self.status.showMessage(tr("status_copied_to_clipboard"))
 
     def save_image(self):
+        self._finish_tool_preview()
         src = self._display or self._orig
         if src is None:
             self.status.showMessage(tr("nothing_to_save_msg")); return
@@ -407,6 +411,7 @@ class FileIOMixin:
         파일이 있으면(_current_project_path) 대화상자 없이 그 경로에 바로
         덮어쓴다. 아직 한 번도 저장한 적 없으면(경로를 모름) 어차피 경로를
         물어야 하므로 save_project_as()와 동일하게 동작한다."""
+        self._finish_tool_preview()
         if self._orig is None:
             self.status.showMessage(tr("nothing_to_save_msg")); return
         if self._current_project_path:
@@ -417,6 +422,7 @@ class FileIOMixin:
     def save_project_as(self):
         """"프로젝트 새로 저장" — 이미 저장한 경로가 있어도 항상 새 파일
         이름/위치를 물어본다(사본 만들기 용도)."""
+        self._finish_tool_preview()
         if self._orig is None:
             self.status.showMessage(tr("nothing_to_save_msg")); return
         default_path = self._current_project_path or str(Path(self._last_dir) / "bandwagon_project.bandwagon")

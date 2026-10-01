@@ -18,11 +18,12 @@ import numpy as np
 from PIL import Image
 from PyQt5.QtWidgets import (
     QGroupBox, QHBoxLayout, QVBoxLayout, QLabel, QPushButton,
-    QSpinBox, QWidget, QCheckBox, QToolButton,
+    QSpinBox, QWidget, QDialog, QTabWidget, QScrollArea,
 )
 from PyQt5.QtCore import Qt, QSignalBlocker
 
 from .i18n import tr
+from .checkbox import TickCheckBox as QCheckBox
 from .theme import *
 from .meta import HAS_CV2
 from .imaging import pil_to_pixmap, downscale_for_preview, apply_bow_correction, apply_shear_correction, apply_edit_op, find_gel_quad
@@ -37,7 +38,7 @@ class GeometryMixin:
     # "adjust"/"lanes" 자신은 포함하지 않는다.
     _GEOMETRY_OPS = frozenset({
         "rotate", "flip", "invert_colors", "fine_rotate",
-        "bow_correct", "shear_correct", "warp",
+        "bow_correct", "shear_correct", "warp", "reference_bow", "crop",
     })
 
     def _section_label(self, text):
@@ -48,10 +49,10 @@ class GeometryMixin:
         return lab
 
     def _build_tab_correct(self):
-        """펴기/보정 통합 탭(요청 #3). 기하 보정(회전·펴기·곡률·자르기)을
-        먼저, 색감 보정(밝기/대비·반전·커브)을 나중에 배치 — 작업 순서가
-        자연스럽게 '기하 먼저, 색감 나중'이 되도록."""
+        """보정 안에 독립 스크롤을 가진 기하/색상 하위 탭을 구성한다."""
+        self.correction_tabs = QTabWidget()
         page = self._new_page(); v = QVBoxLayout(page); v.setContentsMargins(10, 10, 10, 10); v.setSpacing(8)
+        geometry_page = page
 
         self.chk_guides = QCheckBox(tr("chk_show_guides"))
         self.chk_guides.setChecked(True)
@@ -61,9 +62,11 @@ class GeometryMixin:
         v.addWidget(self.chk_guides)
 
         # ===== 기하 보정 =====
-        v.addWidget(self._section_label(tr("section_geometry")))
+        self.geometry_heading = self._section_label(tr("section_geometry"))
+        v.addWidget(self.geometry_heading)
+        self.geometry_heading.hide()
 
-        rot = QGroupBox(tr("group_rotate_flip")); rot.setStyleSheet(self._group_css())
+        rot = QGroupBox(tr("tool_rotate")); rot.setStyleSheet(self._group_css())
         rv = QVBoxLayout(rot); rv.setSpacing(5)
         row1 = QHBoxLayout(); row1.setSpacing(5)
         for label, fn in [(tr("rotate_left90"), lambda: self._rotate(-90)),
@@ -75,7 +78,8 @@ class GeometryMixin:
         for label, fn in [(tr("flip_h"), lambda: self._flip("h")),
                           (tr("flip_v"), lambda: self._flip("v"))]:
             b = QPushButton(label); b.clicked.connect(fn); b.setStyleSheet(self._btn_css()); row2.addWidget(b)
-        rv.addLayout(row2)
+        flip = QGroupBox(tr("tool_flip")); flip.setStyleSheet(self._group_css())
+        QVBoxLayout(flip).addLayout(row2)
 
         # 정밀 회전 (1도 단위) — 드래그하면 바로 적용되는 실시간 미리보기.
         # 별도 적용 버튼 없음: 슬라이더를 놓거나 숫자입력 후 포커스를 옮기면 그 자리에서 확정.
@@ -109,8 +113,22 @@ class GeometryMixin:
         fine_note.setStyleSheet(f"color:{MUTE};font-size:11px;"); fine_note.setWordWrap(True)
         rv.addWidget(fine_note)
         v.addWidget(rot)
+        v.addWidget(flip)
 
-        region = QGroupBox(tr("group_region")); region.setStyleSheet(self._group_css())
+        crop = QGroupBox(tr("tool_crop")); crop.setStyleSheet(self._group_css())
+        crv = QVBoxLayout(crop)
+        crop_hint = QLabel(tr("crop_hint")); crop_hint.setWordWrap(True); crv.addWidget(crop_hint)
+        self.btn_crop = QPushButton(tr("crop_select")); self.btn_crop.setCheckable(True)
+        self.btn_crop.setStyleSheet(self._btn_css())
+        self.btn_crop.toggled.connect(lambda on: self._set_exclusive_mode("corner", on))
+        crv.addWidget(self.btn_crop)
+        crop_apply = QPushButton(tr("crop_apply")); crop_apply.setStyleSheet(self._btn_accent_css())
+        crop_apply.clicked.connect(self._apply_crop); crv.addWidget(crop_apply)
+        crop_clear = QPushButton(tr("btn_reset_corners")); crop_clear.clicked.connect(self._clear_corners)
+        crop_clear.setStyleSheet(self._btn_css()); crv.addWidget(crop_clear)
+        v.addWidget(crop)
+
+        region = QGroupBox(tr("tool_warp")); region.setStyleSheet(self._group_css())
         rgl = QVBoxLayout(region); rgl.setSpacing(5)
         info = QLabel(tr("warp_short_hint"))
         info.setToolTip(tr("warp_intro"))
@@ -118,6 +136,9 @@ class GeometryMixin:
         rgl.addWidget(info)
         auto = QPushButton(tr("btn_auto_warp")); auto.clicked.connect(self._auto_warp); auto.setStyleSheet(self._btn_accent_css())
         rgl.addWidget(auto)
+        self.chk_warp_curve = QCheckBox(tr("warp_then_curve"))
+        self.chk_warp_curve.setStyleSheet(f"color:{INKT};font-size:11px;" + self._checkbox_css())
+        rgl.addWidget(self.chk_warp_curve)
         sub = QLabel(tr("warp_or_manual_corners")); sub.setStyleSheet(f"color:{MUTE};font-size:10px;"); sub.setAlignment(Qt.AlignCenter)
         rgl.addWidget(sub)
         self.btn_corner = QPushButton(tr("btn_corner_mode_off")); self.btn_corner.setCheckable(True)
@@ -138,8 +159,6 @@ class GeometryMixin:
         wrow.addWidget(wr); wrow.addWidget(wc)
         rgl.addLayout(wrow)
         v.addWidget(region)
-        v.removeWidget(region)
-        v.insertWidget(2, region)
 
         bow = QGroupBox(tr("group_bow_correction")); bow.setStyleSheet(self._group_css())
         bv = QVBoxLayout(bow)
@@ -163,6 +182,10 @@ class GeometryMixin:
         btn_bow_reset = QPushButton(tr("reset_bow")); btn_bow_reset.setStyleSheet(self._btn_css())
         btn_bow_reset.clicked.connect(self._reset_bow_correction)
         bv.addLayout(brow)
+        self.btn_reference_bow = QPushButton(tr("reference_bow_title"))
+        self.btn_reference_bow.setStyleSheet(self._btn_accent_css())
+        self.btn_reference_bow.clicked.connect(self._reference_bow)
+        bv.insertWidget(0, self.btn_reference_bow)
         bv.addWidget(btn_bow_reset)
         bow_hint = QLabel(tr("bow_sign_hint"))
         bow_hint.setStyleSheet(f"color:{MUTE};font-size:9px;"); bow_hint.setWordWrap(True)
@@ -211,7 +234,13 @@ class GeometryMixin:
 
 
         # ===== 색감 보정 =====
-        v.addWidget(self._section_label(tr("section_color")))
+        v.addStretch()
+        page = self._new_page(); v = QVBoxLayout(page); v.setContentsMargins(10, 10, 10, 10); v.setSpacing(8)
+        color_page = page
+        self.color_heading = self._section_label(tr("section_color"))
+        v.addWidget(self.color_heading); self.color_heading.hide()
+        brightness = QGroupBox(tr("tool_brightness")); brightness.setStyleSheet(self._group_css())
+        bv = QVBoxLayout(brightness); v.addWidget(brightness)
 
         # 드래그 중(valueChanged)에는 캔버스 크기 축소본에만 색보정을 적용해
         # 가볍게 미리보기하고(_refresh_display(preview=True)), 슬라이더를 놓으면
@@ -223,55 +252,88 @@ class GeometryMixin:
         self.sl_contrast.valueChanged.connect(lambda _=None: self._refresh_display(preview=True))
         self.sl_bright.released.connect(self._commit_adjust)
         self.sl_contrast.released.connect(self._commit_adjust)
-        v.addWidget(self.sl_bright); v.addWidget(self.sl_contrast)
+        bv.addWidget(self.sl_bright); bv.addWidget(self.sl_contrast)
+        bright_reset = QPushButton(tr("btn_reset_adjust_all")); bright_reset.setStyleSheet(self._btn_css())
+        bright_reset.clicked.connect(self._reset_adjust); bv.addWidget(bright_reset)
+        invert = QGroupBox(tr("tool_invert")); invert.setStyleSheet(self._group_css())
+        iv = QVBoxLayout(invert); v.addWidget(invert)
         invert_row = QHBoxLayout(); invert_row.setSpacing(6)
         btn_invert = QPushButton(tr("btn_invert_colors")); btn_invert.clicked.connect(self._invert_colors)
         btn_invert.setStyleSheet(self._btn_css())
         invert_row.addWidget(btn_invert)
         invert_hint = QLabel(tr("invert_hint"))
         invert_hint.setStyleSheet(f"color:{MUTE};font-size:10px;"); invert_hint.setWordWrap(True)
-        invert_row.addWidget(invert_hint, 1)
-        v.addLayout(invert_row)
+        iv.addLayout(invert_row)
+        iv.addWidget(invert_hint)
+        curve_group = QGroupBox(tr("tool_curve")); curve_group.setStyleSheet(self._group_css())
+        cv = QVBoxLayout(curve_group); cv.setSpacing(5); v.addWidget(curve_group)
         # 고정크기 위젯을 alignment로 직접 넣으면 Qt5.15/Windows에서 위젯 주변에
         # 갱신 안 되는 죽은 영역이 생겨 흰배경으로 남는다. 컨테이너로 감싸 중앙 배치.
         ch_wrap = QWidget(); ch_h = QHBoxLayout(ch_wrap)
-        ch_h.setContentsMargins(0, 0, 0, 0); ch_h.addStretch()
+        ch_h.setContentsMargins(0, 0, 0, 0)
         self.channel_bar = ChannelBar(); self.channel_bar.channelChanged.connect(self._switch_channel)
-        ch_h.addWidget(self.channel_bar); ch_h.addStretch()
-        v.addWidget(ch_wrap)
+        ch_h.addWidget(self.channel_bar)
+        cv.addWidget(ch_wrap)
         cv_wrap = QWidget(); cv_h = QHBoxLayout(cv_wrap)
-        cv_h.setContentsMargins(0, 0, 0, 0); cv_h.addStretch()
+        cv_h.setContentsMargins(0, 0, 0, 0)
         self.curve = CurveWidget("RGB"); self.curve.changed.connect(self._on_curve_changed)
         self.curve.released.connect(self._commit_adjust)
-        cv_h.addWidget(self.curve); cv_h.addStretch()
-        v.addWidget(cv_wrap)
+        cv_h.addWidget(self.curve)
+        cv.addWidget(cv_wrap)
         brow = QHBoxLayout(); brow.setSpacing(6)
         bc = QPushButton(tr("btn_reset_curve")); bc.clicked.connect(self._reset_curve); bc.setStyleSheet(self._btn_css())
         ba = QPushButton(tr("btn_reset_adjust_all")); ba.clicked.connect(self._reset_adjust); ba.setStyleSheet(self._btn_css())
-        brow.addWidget(bc); brow.addWidget(ba)
-        v.addLayout(brow)
+        cv.addWidget(bc); cv.addWidget(ba)
         note = QLabel(tr("adjust_display_only_note"))
         note.setStyleSheet(f"color:{MUTE};font-size:10px;"); note.setWordWrap(True)
         v.addWidget(note)
 
-        # Less frequent geometry controls follow the main color adjustments.
-        v.removeWidget(bow); v.removeWidget(shear)
-        advanced = QWidget(); av = QVBoxLayout(advanced); av.setContentsMargins(0, 0, 0, 0)
-        av.addWidget(bow); av.addWidget(shear)
-        advanced.hide()
-        self.advanced_geometry_toggle = QToolButton()
-        self.advanced_geometry_toggle.setText(tr("advanced_geometry"))
-        self.advanced_geometry_toggle.setCheckable(True)
-        self.advanced_geometry_toggle.setStyleSheet(self._disclosure_css())
-        self.advanced_geometry_toggle.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
-        self.advanced_geometry_toggle.setArrowType(Qt.RightArrow)
-        self.advanced_geometry_toggle.toggled.connect(advanced.setVisible)
-        self.advanced_geometry_toggle.toggled.connect(lambda on: self.advanced_geometry_toggle.setArrowType(
-            Qt.DownArrow if on else Qt.RightArrow))
-        v.addWidget(self.advanced_geometry_toggle); v.addWidget(advanced)
+        self._geometry_shortcut_widgets = []
+        for spin in (self.rot_spin, self.bow_spin, self.shear_spin):
+            for widget in (spin, spin.lineEdit()):
+                widget.installEventFilter(self)
+                self._geometry_shortcut_widgets.append(widget)
 
         v.addStretch()
-        self._add_tab(page, tr("tab_adjust"))
+        for content, title in ((geometry_page, "tab_geometry"), (color_page, "tab_color")):
+            scroll = QScrollArea()
+            scroll.setWidgetResizable(True)
+            scroll.setFrameShape(QScrollArea.NoFrame)
+            scroll.setWidget(content)
+            self.correction_tabs.addTab(scroll, tr(title))
+        self.tabs.addTab(self.correction_tabs, tr("tab_adjust"))
+        self.correction_tabs.currentChanged.connect(
+            lambda _: self._on_tab_changed(self.tabs.currentIndex()))
+        self.correct_tools = {
+            'rotate': (0, rot), 'flip': (0, flip), 'crop': (0, crop),
+            'warp': (0, region), 'bow': (0, bow), 'shear': (0, shear),
+            'brightness': (1, brightness), 'curve': (1, curve_group), 'invert': (1, invert),
+        }
+        self.correction_tabs.tabBar().hide()
+        self._show_correct_tool('rotate')
+
+    def _show_correct_tool(self, name):
+        index, group = self.correct_tools[name]
+        for _, widget in self.correct_tools.values():
+            widget.setVisible(widget is group)
+        self.correction_tabs.setCurrentIndex(index)
+        self.chk_guides.setVisible(index == 0)
+
+    @memory_safe_edit
+    def _apply_crop(self):
+        if self._orig is None or len(self.gel.corners) != 4:
+            self._info(tr('tool_crop'), tr('crop_hint'))
+            return
+        self._finalize_pending_rotation(); self._finalize_pending_bow(); self._finalize_pending_shear()
+        points = np.asarray(self.gel.corners)
+        w, h = self._orig.size
+        left = max(0, min(w - 1, int(np.floor(points[:, 0].min()))))
+        top = max(0, min(h - 1, int(np.floor(points[:, 1].min()))))
+        right = max(left + 1, min(w, int(np.ceil(points[:, 0].max()))))
+        bottom = max(top + 1, min(h, int(np.ceil(points[:, 1].max()))))
+        self._record_op('crop', {'box': [left, top, right, bottom]})
+        self.btn_crop.blockSignals(True); self.btn_crop.setChecked(False); self.btn_crop.blockSignals(False)
+        self.gel.set_mode('view'); self._after_geometry_change()
 
     def _on_curve_changed(self):
         # 커브 점을 드래그하는 중(changed) — 축소본에만 적용해 가볍게 미리보기.
@@ -352,7 +414,7 @@ class GeometryMixin:
             self._color_preview_base = None   # 확정했으니 축소 캐시 폐기
             out = self._apply_color_pipeline(self._orig)
             self._display = out
-        self.gel.set_image(pil_to_pixmap(out), out.size)
+        self.gel.set_image(pil_to_pixmap(out), self._orig.size)
         self.status.showMessage(
             tr("status_image_info", w=self._orig.width, h=self._orig.height,
                bright=self.sl_bright.value(), contrast=self.sl_contrast.value()))
@@ -398,6 +460,7 @@ class GeometryMixin:
         드래그 중엔 self._orig을 안 건드리고 다운스케일 미리보기만 그린다
         (저품질 상태가 분석/저장에 쓰이는 걸 방지). _orig 갱신은 release
         시(_commit_fine_rotation)에 원본 해상도로만 한다."""
+        self._finish_other_geometry("rotation")
         if self.rot_slider.value() != v:
             self.rot_slider.blockSignals(True); self.rot_slider.setValue(v); self.rot_slider.blockSignals(False)
         if self.rot_spin.value() != v:
@@ -409,6 +472,8 @@ class GeometryMixin:
                 return
             self._rot_base = self._orig.copy()
             self._rot_session_pushed = False
+            self._preview_small = None
+        if self._preview_small is None:
             canvas_size = self.gel.size()
             self._preview_small, self._preview_scale = downscale_for_preview(
                 self._rot_base, canvas_size.width(), canvas_size.height())
@@ -418,7 +483,8 @@ class GeometryMixin:
         # 그대로 그리면 0인데 그림은 돌아간 채로 보이는 불일치가 생긴다.
         preview = self._preview_small if v == 0 else self._preview_small.rotate(
             -v, resample=Image.BILINEAR, expand=False, fillcolor=(255, 255, 255))
-        self.gel.set_image(pil_to_pixmap(preview), preview.size)
+        self.btn_undo.setEnabled(True)
+        self.gel.set_image(pil_to_pixmap(preview), self._orig.size)
         self.status.showMessage(
             tr("status_image_info", w=self._orig.width, h=self._orig.height,
                bright=self.sl_bright.value(), contrast=self.sl_contrast.value()))
@@ -514,9 +580,23 @@ class GeometryMixin:
         return apply_bow_correction(img, amount)
 
     @memory_safe_edit
+    def _reference_bow(self):
+        if self._orig is None or min(self._orig.size) < 2:
+            return
+        if getattr(self, "_inline_curve", None) is not None:
+            return
+        self._finalize_pending_rotation()
+        self._finalize_pending_bow()
+        self._finalize_pending_shear()
+        self._on_tab_changed(self.tabs.currentIndex())
+        from .inline_curve import InlineCurve
+        self._inline_curve = InlineCurve(self)
+
+    @memory_safe_edit
     def _on_bow_value_changed(self, v):
         """_on_rot_value_changed와 동일한 패턴(곡률보정판). v는 세션
         기준(_curve_base) 대비 절대 휨 정도(px)이며, release해도 유지된다."""
+        self._finish_other_geometry("bow")
         if self.bow_slider.value() != v:
             self.bow_slider.blockSignals(True); self.bow_slider.setValue(v); self.bow_slider.blockSignals(False)
         if self.bow_spin.value() != v:
@@ -528,6 +608,8 @@ class GeometryMixin:
                 return
             self._curve_base = self._orig.copy()
             self._bow_session_pushed = False
+            self._preview_small = None
+        if self._preview_small is None:
             canvas_size = self.gel.size()
             self._preview_small, self._preview_scale = downscale_for_preview(
                 self._curve_base, canvas_size.width(), canvas_size.height())
@@ -536,7 +618,8 @@ class GeometryMixin:
         # 버전 참고 — self._orig엔 이전 곡률이 baked-in일 수 있음).
         preview = self._preview_small if v == 0 else self._apply_bow_correction(
             self._preview_small, v * self._preview_scale)
-        self.gel.set_image(pil_to_pixmap(preview), preview.size)
+        self.btn_undo.setEnabled(True)
+        self.gel.set_image(pil_to_pixmap(preview), self._orig.size)
         self.status.showMessage(
             tr("status_image_info", w=self._orig.width, h=self._orig.height,
                bright=self.sl_bright.value(), contrast=self.sl_contrast.value()))
@@ -616,6 +699,7 @@ class GeometryMixin:
     def _on_shear_value_changed(self, v):
         """_on_bow_value_changed와 동일한 패턴(기울기보정판). v는 세션
         기준(_shear_base) 대비 절대 이동량(px)이며, release해도 유지된다."""
+        self._finish_other_geometry("shear")
         if self.shear_slider.value() != v:
             self.shear_slider.blockSignals(True); self.shear_slider.setValue(v); self.shear_slider.blockSignals(False)
         if self.shear_spin.value() != v:
@@ -627,6 +711,8 @@ class GeometryMixin:
                 return
             self._shear_base = self._orig.copy()
             self._shear_session_pushed = False
+            self._preview_small = None
+        if self._preview_small is None:
             canvas_size = self.gel.size()
             self._preview_small, self._preview_scale = downscale_for_preview(
                 self._shear_base, canvas_size.width(), canvas_size.height())
@@ -635,7 +721,8 @@ class GeometryMixin:
         # — self._orig엔 이전 기울기가 baked-in일 수 있음).
         preview = self._preview_small if v == 0 else self._apply_shear_correction(
             self._preview_small, v * self._preview_scale)
-        self.gel.set_image(pil_to_pixmap(preview), preview.size)
+        self.btn_undo.setEnabled(True)
+        self.gel.set_image(pil_to_pixmap(preview), self._orig.size)
         self.status.showMessage(
             tr("status_image_info", w=self._orig.width, h=self._orig.height,
                bright=self.sl_bright.value(), contrast=self.sl_contrast.value()))
@@ -707,6 +794,15 @@ class GeometryMixin:
         self._refresh_after_pixels_changed()
         self.status.showMessage(tr("status_shear_reset"))
 
+    def _finish_other_geometry(self, kind):
+        if self._orig is None:
+            return
+        for name, finish in (("rotation", self._finalize_pending_rotation),
+                             ("bow", self._finalize_pending_bow),
+                             ("shear", self._finalize_pending_shear)):
+            if name != kind:
+                finish()
+
     def _refresh_after_pixels_changed(self):
         """픽셀이 바뀌면 코너/자르기 선택을 비우고 분석용 그레이스케일·
         히스토그램을 다시 계산한다. 커브/밝기/대비, 정밀회전 기준선, 레인은
@@ -735,6 +831,8 @@ class GeometryMixin:
         그래야 _orig이 항상 '재생 결과'라는 불변식이 깨지지 않는다.
         현재 위치보다 미래의 연산(되돌리기 후 새로 편집한 경우의 옛
         다시하기 가지)은 여기서 잘라낸다(표준 undo/redo 동작)."""
+        if getattr(self, "_inline_curve", None) is not None:
+            self._inline_curve.cancel()
         if self._edit_pristine is None:
             # pristine이 아직 없으면(막 불러온 직후 등) 현재 _orig을 새
             # pristine으로 놓고 기록을 새로 시작한다.
@@ -748,9 +846,10 @@ class GeometryMixin:
             self._edit_ops = []
             self._edit_pos = -1
         new_op = (op_name, params)
-        if self._edit_pos == len(self._edit_ops) - 1 and self._edit_pos >= 0 \
+        if op_name in {"adjust", "lanes", "document"} \
+                and self._edit_pos == len(self._edit_ops) - 1 and self._edit_pos >= 0 \
                 and self._edit_ops[self._edit_pos] == new_op:
-            return  # 연결된 슬라이더/스핀박스가 같은 상태를 두 번 확정한 경우
+            return  # 상태 스냅샷만 중복 제거. 반전/회전 등 실행 명령은 매번 적용.
         del self._edit_ops[self._edit_pos + 1:]   # 다시하기 가지 제거
         # 정밀회전/곡률보정의 세션 내 교체는 _apply_fine_rotation()/
         # _apply_bow_op()이 직접 처리하므로(_rot_session_pushed 등으로
@@ -872,6 +971,7 @@ class GeometryMixin:
         self._apply_lanes_snapshot(lanes_snapshot)
         last_op = ops[-1][0] if ops else None
         self._sync_geom_sliders(last_op, last_rot, last_bow, last_shear, pre_last_img)
+        self._preview_small = None
 
     def _sync_geom_sliders(self, last_op, last_rot, last_bow, last_shear, pre_last_img):
         """정밀회전/곡률/기울기 슬라이더 표시값을 각자 마지막으로 적용된
@@ -913,11 +1013,15 @@ class GeometryMixin:
         프레임마다 기록이 쌓이지 않는다."""
         if self._orig is None:
             return
-        self._record_op("adjust", {
+        snapshot = {
             "bright": self.sl_bright.value(),
             "contrast": self.sl_contrast.value(),
             "curves": {ch: m.to_dict() for ch, m in self.curves.items()},
-        })
+        }
+        self._finalize_pending_rotation()
+        self._finalize_pending_bow()
+        self._finalize_pending_shear()
+        self._record_op("adjust", snapshot)
 
     def _snapshot_adjust_baseline(self):
         """현재 밝기/대비/톤커브 값을 '이 세션의 adjust 기록 없음' 기준값으로
@@ -1077,6 +1181,9 @@ class GeometryMixin:
         스타크래프트 리플레이처럼 이미지를 저장해 둔 게 아니라, pristine부터
         그 지점까지 연산을 처음부터 다시 계산하는 것이라 약간의 시간이
         들지만, 매 단계의 이미지를 메모리에 쌓아두지 않아도 된다."""
+        if getattr(self, "_inline_curve", None) is not None:
+            self._inline_curve.cancel()
+            return
         self._finish_memo_group()
         self._memo_commit_timer.stop()
         self._finish_document_group()
@@ -1151,7 +1258,11 @@ class GeometryMixin:
         """탭을 전환하면 이전 탭에서 켜둔 마우스 동작(레인 수동 검출/코너 지정/
         자르기/세로 범위 지정 모드)을 모두 끈다. 안 그러면 다른 탭으로
         넘어가서도 이미지 위에서 마우스가 이전 모드대로 동작해 혼란을 준다."""
+        if getattr(self, "_inline_curve", None) is not None:
+            self._inline_curve.apply()
         self.curve.update()
+        if hasattr(self, "btn_crop"):
+            self.btn_crop.blockSignals(True); self.btn_crop.setChecked(False); self.btn_crop.blockSignals(False)
         if hasattr(self, "btn_lane") and self.btn_lane.isChecked():
             self.btn_lane.blockSignals(True); self.btn_lane.setChecked(False); self.btn_lane.blockSignals(False)
             self.btn_lane.setText(tr("btn_manual_lane_off"))
@@ -1162,13 +1273,11 @@ class GeometryMixin:
             self.btn_vrange.blockSignals(True); self.btn_vrange.setChecked(False); self.btn_vrange.blockSignals(False)
             self.btn_vrange.setText(tr("btn_vrange_mode_off"))
         self.gel.set_mode("view")
-        # 통합 보정 탭(회전/펴기/곡률/기울기)이 항상 탭 목록의 첫 번째로
-        # 추가되므로(_build() 참고) 인덱스 0으로 판별한다 — 이 탭에서만
-        # 격자+중앙 십자선 가이드를 보여줘 수평/수직이 맞는지 확인하기
-        # 쉽게 한다. 사용자가 체크박스로 꺼뒀으면(_guides_enabled=False)
-        # 이 탭이어도 안 보인다.
-        self.gel.show_guides = self._guides_enabled and (i == 0)
+        # 기하 보정 하위 탭에서만 격자/중앙선을 보여준다.
+        self.gel.show_guides = self._guides_enabled and self._geometry_tab_active()
         self.gel.update()
+
+        self._sync_ribbon_from_tab(i)
 
     def _on_guides_toggled(self, on):
         """캔버스 위 격자+중앙 십자선 가이드 체크박스. 지금 탭이 보정 탭이
@@ -1176,8 +1285,12 @@ class GeometryMixin:
         머문 채로 체크박스만 눌렀을 때도 바로 반영되도록 여기서 직접
         갱신한다."""
         self._guides_enabled = on
-        self.gel.show_guides = on and (self.tabs.currentIndex() == 0)
+        self.gel.show_guides = on and self._geometry_tab_active()
         self.gel.update()
+
+    def _geometry_tab_active(self):
+        return (self.tabs.currentWidget() is self.correction_tabs
+                and self.correction_tabs.currentIndex() == 0)
 
     def _set_exclusive_mode(self, which: str, on: bool):
         """레인 수동 조정 / 코너 지정 / 자르기 / 세로 범위 지정 중 하나만
@@ -1193,6 +1306,8 @@ class GeometryMixin:
             self._finalize_pending_shear()
             if had_pending:
                 self._refresh_after_pixels_changed()
+            if hasattr(self, 'btn_crop') and (which != 'corner' or getattr(self, '_active_tool', None) != 'crop'):
+                self.btn_crop.blockSignals(True); self.btn_crop.setChecked(False); self.btn_crop.blockSignals(False)
             for btn, m in [(self.btn_lane, "lane"), (self.btn_corner, "corner"),
                            (getattr(self, "btn_vrange", None), "vrange")]:
                 if btn is not None and m != which and btn.isChecked():
@@ -1304,6 +1419,8 @@ class GeometryMixin:
         self.gel.update(); self.corner_label.setText(tr("corner_count_auto"))
         if self._ask(tr("auto_detect_done_title"), tr("auto_detect_done_msg")):
             self._warp(ordered)
+            if self.chk_warp_curve.isChecked():
+                self._reference_bow()
         else:
             self._enter_manual_corner_mode()
 

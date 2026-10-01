@@ -47,7 +47,9 @@ class CurveWidget(QWidget):
         self._drag = False
         self._dirty = False   # changed를 emit했지만 아직 released를 안 보낸 상태
         self._marker = None
-        self.setFixedSize(self.SIDE, self.SIDE)
+        self.setMinimumSize(220, 220)
+        self.setMaximumSize(self.SIDE, self.SIDE)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setMouseTracking(True)
         self.setCursor(Qt.CrossCursor)
         self.setAttribute(Qt.WA_OpaquePaintEvent, True)
@@ -225,7 +227,8 @@ class ChannelBar(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.current = "RGB"
-        self.setFixedSize(286, 30)
+        self.setMinimumWidth(220); self.setMaximumWidth(286); self.setFixedHeight(30)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.setCursor(Qt.PointingHandCursor)
 
     def paintEvent(self, _):
@@ -972,12 +975,13 @@ class ThumbView(QWidget):
 class ProfileView(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setMinimumHeight(150)
+        self.setFixedHeight(64)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self._lanes = []
 
     def set_lanes(self, lanes):
         self._lanes = [l for l in lanes if l.profile is not None]
+        self.setFixedHeight(150 if self._lanes else 64)
         self.update()
 
     def paintEvent(self, _):
@@ -989,7 +993,8 @@ class ProfileView(QWidget):
 
         if not self._lanes:
             qp.setPen(QColor(MUTE)); qp.setFont(QFont("DejaVu Sans", 10))
-            qp.drawText(self.rect(), Qt.AlignCenter, tr("profile_empty_hint"))
+            qp.drawText(QRectF(14, 28, self.width() - 28, self.height() - 32),
+                        Qt.AlignCenter | Qt.TextWordWrap, tr("profile_empty_hint"))
             return
 
         pl, pt, pr, pb = 22, 28, 14, 16

@@ -26,7 +26,13 @@ class GelInteractionsTest(unittest.TestCase):
     def test_guide_control_lives_on_adjust_tab(self):
         win = Analyzer()
         try:
-            self.assertIs(win.chk_guides.parentWidget(), win.tabs.widget(0).widget())
+            self.assertIs(win.chk_guides.parentWidget(), win.correction_tabs.widget(0).widget())
+            self.assertTrue(win.gel.show_guides)
+            win._select_ribbon_tool('curve')
+            self.assertFalse(win.gel.show_guides)
+            self.assertFalse(win.bow_spin.isVisibleTo(win.correction_tabs))
+            self.assertTrue(win.curve.isVisibleTo(win.correction_tabs))
+            win._select_ribbon_tool('rotate')
             self.assertTrue(win.gel.show_guides)
             win.tabs.setCurrentWidget(win.analysis_tab)
             self.assertFalse(win.gel.show_guides)
@@ -44,7 +50,7 @@ class GelInteractionsTest(unittest.TestCase):
             win.lanes = [Lane(0, 10, 30), Lane(1, 40, 60)]
             win._rebuild_lane_table()
             win.show()
-            win.tabs.setCurrentIndex(1)
+            win._select_ribbon_tool('lane_list')
             self.app.processEvents()
             win.lane_table.editItem(win.lane_table.item(0, 0))
             editor = win.lane_table.focusWidget()
@@ -88,7 +94,7 @@ class GelInteractionsTest(unittest.TestCase):
             win._after_load("sample.png")
             win.lanes = [Lane(0, 10, 30), Lane(1, 40, 60)]
             win._rebuild_lane_table()
-            win.show(); win.tabs.setCurrentIndex(1)
+            win.show(); win._select_ribbon_tool('manual_lanes')
             self.app.processEvents()
             win.lane_table.editItem(win.lane_table.item(0, 0))
             QTest.keyClick(win.lane_table.focusWidget(), Qt.Key_Return)
@@ -125,7 +131,11 @@ class GelInteractionsTest(unittest.TestCase):
             win.run_analysis()
             self.assertFalse(win._analysis_stale)
             self.assertEqual(win.analysis_notice.text(), tr("analysis_empty"))
-            self.assertFalse(win.advanced_geometry_toggle.isChecked())
+            win._select_ribbon_tool('bow')
+            self.assertTrue(win.bow_spin.isVisibleTo(win.correction_tabs))
+            self.assertFalse(win.shear_spin.isVisibleTo(win.correction_tabs))
+            win._select_ribbon_tool('shear')
+            self.assertTrue(win.shear_spin.isVisibleTo(win.correction_tabs))
             self.assertFalse(win.band_settings_toggle.isChecked())
         finally:
             win._saved_snapshot = win._project_state_snapshot()

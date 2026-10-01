@@ -1,5 +1,6 @@
 """Recover an interrupted edit without copying full-resolution image buffers."""
 from functools import wraps
+from inspect import signature
 from PyQt5.QtCore import QSignalBlocker
 from PyQt5.QtWidgets import QAbstractSlider, QSpinBox
 from .i18n import tr
@@ -65,4 +66,12 @@ def memory_safe_edit(method):
             return False
         finally:
             self._memory_edit_active = False
+    if len(signature(method).parameters) == 1:
+        # PyQt inspects the callable's actual argument count. A *args wrapper
+        # receives clicked/triggered(bool), even when the original slot takes
+        # no arguments. Preserve that slot shape so Qt discards the bool.
+        @wraps(method)
+        def slot(self):
+            return guarded(self)
+        return slot
     return guarded

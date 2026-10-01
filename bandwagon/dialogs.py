@@ -72,49 +72,13 @@ def _no_help_button(dlg):
 
 
 def _dialog_style():
-    up_icon = _triangle_icon_path("up", INKT)
-    down_icon = _triangle_icon_path("down", INKT)
-    return (f"QDialog{{background:{INK2};}}"
-            f"QLabel{{color:{INKT};}}"
-            f"QCheckBox{{color:{INKT};spacing:6px;}}"
-            f"QDoubleSpinBox,QSpinBox{{background:{INK3};color:{INKT};"
-            f"border:1px solid {LINE};border-radius:4px;padding:3px;}}"
-            f"QDoubleSpinBox::up-button,QSpinBox::up-button{{subcontrol-origin:border;"
-            f"subcontrol-position:top right;width:16px;background:{INK4};"
-            f"border-left:1px solid {LINE};border-bottom:1px solid {LINE};"
-            f"border-top-right-radius:4px;}}"
-            f"QDoubleSpinBox::up-button:hover,QSpinBox::up-button:hover{{background:{LINE};}}"
-            f"QDoubleSpinBox::down-button,QSpinBox::down-button{{subcontrol-origin:border;"
-            f"subcontrol-position:bottom right;width:16px;background:{INK4};"
-            f"border-left:1px solid {LINE};border-bottom-right-radius:4px;}}"
-            f"QDoubleSpinBox::down-button:hover,QSpinBox::down-button:hover{{background:{LINE};}}"
-            f"QDoubleSpinBox::up-arrow,QSpinBox::up-arrow{{image:url({up_icon});width:10px;height:10px;}}"
-            f"QDoubleSpinBox::down-arrow,QSpinBox::down-arrow{{image:url({down_icon});width:10px;height:10px;}}"
-            f"QComboBox::drop-down{{subcontrol-origin:border;subcontrol-position:top right;"
-            f"width:20px;border-left:1px solid {LINE};background:{INK4};"
-            f"border-top-right-radius:4px;border-bottom-right-radius:4px;}}"
-            f"QComboBox::drop-down:hover{{background:{LINE};}}"
-            f"QComboBox::down-arrow{{image:url({down_icon});width:10px;height:10px;}}"
-            f"QPushButton{{background:{INK3};color:{INKT};border:1px solid {LINE};"
-            f"border-radius:5px;padding:5px 14px;}}"
-            f"QPushButton:hover{{background:{INK4};}}")
+    from .fluent import stylesheet
+    return stylesheet()
 
 
 def _table_css():
-    """QTableWidget 공용 스타일. Analyzer(self._table_css)와 독립 다이얼로그인
-    MarkerPresetManager가 둘 다 쓰므로 모듈 레벨 함수로 둔다(Analyzer 메서드로만
-    있으면 Analyzer보다 먼저 정의되는 다이얼로그 클래스에서 호출할 수 없다)."""
-    return (f"QTableWidget{{background:{INK1};color:{INKT};gridline-color:{LINE};"
-            f"border:1px solid {LINE};border-radius:6px;}}"
-            f"QHeaderView::section{{background:{INK2};color:{MUTE};border:none;"
-            f"border-bottom:1px solid {LINE};padding:5px;font-size:12px;}}"
-            f"QTableWidget::item:selected{{background:rgba(63,180,230,0.30);color:{INKT};}}"
-            f"QTableWidget::item:selected:!active{{background:rgba(63,180,230,0.30);color:{INKT};}}"
-            # 셀 더블클릭으로 이름을 편집할 때 뜨는 QLineEdit — 위 QTableWidget
-            # 규칙은 아이템 표시에만 적용되고 이 편집기 위젯엔 안 먹혀서,
-            # 지정 안 하면 Qt 기본(검정 글씨)이 다크 배경 위에서 안 보였다.
-            f"QTableWidget QLineEdit{{background:{INK1};color:{INKT};"
-            f"border:1px solid {CYAN};border-radius:2px;}}")
+    from .fluent import table
+    return table()
 
 
 class MarkerDialog(QDialog):

@@ -33,17 +33,18 @@ from PyQt5.QtGui import QImage
 from PyQt5.QtWidgets import (
     QApplication, QDialog, QDialogButtonBox, QFileDialog, QGroupBox,
     QHBoxLayout, QLabel, QMessageBox, QPushButton, QSizePolicy,
-    QVBoxLayout, QWidget, QCheckBox,
+    QVBoxLayout, QWidget, QScrollArea, QLayout, QSplitter,
 )
 
 from .i18n import tr
 from .theme import CYAN, INK2, INK3, INKT, MUTE
 from .dialogs import _dialog_style, _no_help_button
 from .imaging import (
-    blend_for_uv_canvas, blend_visible_uv, downscale_for_preview,
+    blend_visible_uv, downscale_for_preview,
     pil_to_pixmap, uv_only_grayscale, warp_uv_to_visible, warp_visible_to_uv,
 )
 from .widgets import GelView, ThumbView, FineSlider
+from .ribbon import ToolStrip
 
 
 COMPOSITE_EXT = ".bwcomposite"
@@ -122,7 +123,8 @@ class CompositeStudio(QDialog):
         _no_help_button(self)
         self.setWindowTitle(tr("composite_studio_title"))
         self.setStyleSheet(_dialog_style())
-        self.setMinimumSize(520, 640)
+        self.setMinimumSize(820, 560)
+        self.resize(1000, 680)
         self._visible_img = None    # 가시광 원본 (PIL RGB)
         self._uv_img = None         # UV 원본 (PIL RGB)
         self._last_dir = last_dir or str(Path.home())
@@ -131,7 +133,18 @@ class CompositeStudio(QDialog):
 
     # ── UI ──────────────────────────────────────────────────────────
     def _build(self):
-        root = QVBoxLayout(self); root.setContentsMargins(12, 12, 12, 12); root.setSpacing(8)
+        from .checkbox import TickCheckBox as QCheckBox
+        outer = QVBoxLayout(self); outer.setContentsMargins(10, 10, 10, 10)
+        self.ribbon = ToolStrip([(key, 'tool_' + key, symbol,
+            lambda key=key: self._show_studio_tool(key), True)
+            for key, symbol in (('photos', 'open'), ('align', 'warp'), ('blend', 'adjust'), ('export', 'save'))])
+        self.ribbon.setFixedHeight(78); outer.addWidget(self.ribbon)
+        split = QSplitter(Qt.Horizontal); split.setChildrenCollapsible(False)
+        outer.addWidget(split, 1)
+        scroll = QScrollArea(); scroll.setWidgetResizable(True); scroll.setMinimumWidth(310)
+        content = QWidget(); scroll.setWidget(content)
+        root = QVBoxLayout(content); root.setContentsMargins(12, 12, 12, 12); root.setSpacing(10)
+        root.setSizeConstraint(QLayout.SetMinimumSize)
 
         info = QLabel(tr("composite_intro"))
         info.setStyleSheet(f"color:{MUTE};font-size:11px;"); info.setWordWrap(True)
@@ -156,6 +169,9 @@ class CompositeStudio(QDialog):
         vis_col.addWidget(self.thumb_visible, 0, Qt.AlignHCenter)
         vcap = QLabel(tr("wb_caption_visible")); vcap.setAlignment(Qt.AlignCenter)
         vcap.setStyleSheet(f"color:{MUTE};font-size:10px;"); vis_col.addWidget(vcap)
+        load_visible = QPushButton(tr("wb_btn_load_visible"))
+        load_visible.clicked.connect(lambda: self._pick_image_for("visible"))
+        vis_col.addWidget(load_visible)
         load_row.addLayout(vis_col)
 
         uv_col = QVBoxLayout(); uv_col.setSpacing(4)
@@ -164,6 +180,9 @@ class CompositeStudio(QDialog):
         uv_col.addWidget(self.thumb_uv, 0, Qt.AlignHCenter)
         ucap = QLabel(tr("wb_caption_uv")); ucap.setAlignment(Qt.AlignCenter)
         ucap.setStyleSheet(f"color:{MUTE};font-size:10px;"); uv_col.addWidget(ucap)
+        load_uv = QPushButton(tr("wb_btn_load_uv"))
+        load_uv.clicked.connect(lambda: self._pick_image_for("uv"))
+        uv_col.addWidget(load_uv)
         load_row.addLayout(uv_col)
         root.addWidget(load_box)
 
@@ -189,9 +208,12 @@ class CompositeStudio(QDialog):
         self.gel.setMinimumWidth(0); self.gel.setMinimumHeight(240)
         self.gel.set_mode("corner")
         self.gel.cornerChanged.connect(self._on_corner_changed)
-        root.addWidget(self.gel, 1)
+        split.addWidget(self.gel); split.addWidget(scroll)
+        split.setStretchFactor(0, 3); split.setStretchFactor(1, 1); split.setSizes([660, 320])
 
         # 3) 오파시티
+        blend_box = QGroupBox(tr('tool_blend')); blend_box.setStyleSheet(self._group_css())
+        blend_layout = QVBoxLayout(blend_box); root.addWidget(blend_box)
         op_row = QHBoxLayout(); op_row.setSpacing(6)
         op_lbl = QLabel(tr("wb_opacity_label")); op_lbl.setStyleSheet(f"color:{MUTE};font-size:11px;")
         op_row.addWidget(op_lbl)
@@ -200,14 +222,15 @@ class CompositeStudio(QDialog):
         self.opacity_slider.setStyleSheet(self._slider_css())
         self.opacity_slider.valueChanged.connect(lambda _v: self._refresh_canvas())
         op_row.addWidget(self.opacity_slider, 1)
-        root.addLayout(op_row)
+        blend_layout.addLayout(op_row)
         op_hint = QLabel(tr("wb_opacity_hint"))
         op_hint.setStyleSheet(f"color:{MUTE};font-size:9px;"); op_hint.setWordWrap(True)
-        root.addWidget(op_hint)
+        blend_layout.addWidget(op_hint)
         self.bright_bands = QCheckBox(tr("wb_bright_bands"))
         self.bright_bands.setChecked(True)
         self.bright_bands.setToolTip(tr("wb_bright_bands_hint"))
-        root.addWidget(self.bright_bands)
+        blend_layout.addWidget(self.bright_bands)
+        self.bright_bands.toggled.connect(lambda _: self._refresh_canvas())
 
         # 4) 내보내기 / 닫기
         btn_export = QPushButton(tr("composite_btn_export")); btn_export.clicked.connect(self._export)
@@ -219,7 +242,21 @@ class CompositeStudio(QDialog):
 
         bb = QDialogButtonBox(QDialogButtonBox.Close)
         bb.rejected.connect(self.reject)
-        root.addWidget(bb)
+        outer.addWidget(bb)
+        root.addStretch()
+        self.tool_widgets = {'photos': (info, btn_load_existing, load_box, thumb_hint),
+                             'align': (corner_box,), 'blend': (blend_box,),
+                             'export': (btn_export, export_hint)}
+        self._show_studio_tool('photos')
+
+    def _show_studio_tool(self, name):
+        self._studio_tool = name
+        for key, widgets in self.tool_widgets.items():
+            for widget in widgets:
+                widget.setVisible(key == name)
+        self.ribbon.select(name)
+        self.gel.set_mode('corner' if name == 'align' else 'view')
+        self._refresh_canvas()
 
     # ── 이미지 불러오기 ──────────────────────────────────────────────
     def _pick_image_for(self, target):
@@ -321,6 +358,9 @@ class CompositeStudio(QDialog):
         워프가 무거우므로 캔버스 크기에 맞춰 축소해 계산한다(코너도 같은
         비율로 축소)."""
         if self._uv_img is None:
+            if self._visible_img is not None:
+                small, _ = downscale_for_preview(self._visible_img, self.gel.width(), self.gel.height())
+                self.gel.set_image(pil_to_pixmap(small), self._visible_img.size)
             return
         corners = self.gel.corners
         cs = self.gel.size()
@@ -330,7 +370,8 @@ class CompositeStudio(QDialog):
                 opacity = self.opacity_slider.value() / 100.0
                 corners_small = [(x * uv_scale, y * uv_scale) for x, y in corners]
                 vis_on_uv = warp_visible_to_uv(self._visible_img, corners_small, uv_small.size)
-                canvas_img = blend_for_uv_canvas(uv_small, vis_on_uv, opacity)
+                canvas_img = blend_visible_uv(vis_on_uv, uv_small, opacity,
+                                               bright_bands=self.bright_bands.isChecked())
             except Exception:
                 canvas_img = uv_small
         else:
@@ -408,22 +449,17 @@ class CompositeStudio(QDialog):
 
     # ── 스타일 헬퍼 (메인 윈도우 StyleMixin에 의존하지 않도록 자체 보유) ──
     def _group_css(self):
-        return (f"QGroupBox{{color:{INKT};border:1px solid {INK3};border-radius:8px;"
-                f"margin-top:8px;padding:8px;font-size:11px;font-weight:bold;background:{INK2};}}"
-                f"QGroupBox::title{{subcontrol-origin:margin;left:10px;padding:0 4px;}}")
+        from .fluent import group
+        return group()
 
     def _btn_css(self):
-        return (f"QPushButton{{background:{INK3};color:{INKT};border:none;border-radius:6px;"
-                f"padding:6px 10px;font-size:11px;}}"
-                f"QPushButton:hover{{background:{INKT};color:{INK2};}}")
+        from .fluent import button
+        return button()
 
     def _btn_accent_css(self):
-        return (f"QPushButton{{background:{CYAN};color:{INK2};border:none;border-radius:6px;"
-                f"padding:8px 12px;font-size:12px;font-weight:bold;}}"
-                f"QPushButton:hover{{background:{INKT};}}")
+        from .fluent import button
+        return button(accent=True)
 
     def _slider_css(self):
-        return (f"QSlider::groove:horizontal{{height:4px;background:{INK3};border-radius:2px;}}"
-                f"QSlider::handle:horizontal{{width:14px;height:14px;margin:-6px 0;"
-                f"background:{INKT};border:2px solid {CYAN};border-radius:8px;}}"
-                f"QSlider::sub-page:horizontal{{background:{CYAN};border-radius:2px;}}")
+        from .fluent import surfaces
+        return surfaces()

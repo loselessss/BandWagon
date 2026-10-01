@@ -17,6 +17,31 @@ from PyQt5.QtCore import QByteArray, QMimeData
 from PyQt5.QtGui import QImage, QPixmap
 
 
+def lane_boundary_signal(gray, count, yrange=None):
+    """Bounded, background-corrected column evidence for dark-band lanes.
+
+    Rows are normalized independently so a saturated band or illumination
+    gradient cannot dominate the entire gel. Return evidence at sampled x's.
+    """
+    from scipy.ndimage import gaussian_filter1d
+    height, width = gray.shape
+    top, bottom = (0, height) if yrange is None else yrange
+    top = max(0, min(height - 1, int(top)))
+    bottom = max(top + 1, min(height, int(bottom)))
+    xs = np.linspace(0, width - 1, min(width, 2048)).astype(int)
+    ys = np.linspace(top, bottom - 1, min(bottom - top, 512)).astype(int)
+    sampled = np.asarray(gray[np.ix_(ys, xs)], dtype=np.float32)
+    pitch = len(xs) / max(1, count)
+    background = gaussian_filter1d(sampled, max(2, pitch * .65), axis=1, mode="reflect")
+    residual = np.maximum(background - sampled, 0)
+    # Reject sub-gray-level noise; retain faint bands alongside strong lanes.
+    residual = np.maximum(residual - .5, 0)
+    scale = np.maximum(np.percentile(residual, 90, axis=1), 2)
+    evidence = np.sqrt(np.minimum(residual / scale[:, None], 1))
+    signal = gaussian_filter1d(evidence.mean(axis=0), max(.6, pitch * .025), mode="nearest")
+    return np.interp(np.arange(width), xs, signal)
+
+
 def pil_to_qimage(img):
     """PIL 이미지를 알파 채널 손실 없이 독립적인 QImage로 변환한다."""
     img = img.convert("RGBA")
@@ -659,7 +684,7 @@ def apply_shear_correction(img, amount):
     return _strip_remap(img, amount, bow=False)
 
 
-def _strip_remap(img, amount, bow, rows=128):
+def _strip_remap(img, amount, bow, rows=128, offsets=None):
     """Bound coordinate buffers to a strip; retain full-source border semantics."""
     import cv2
     arr = np.asarray(img if img.mode == "RGB" else img.convert("RGB"))
@@ -667,7 +692,8 @@ def _strip_remap(img, amount, bow, rows=128):
     out = np.empty_like(arr)
     xs = np.arange(w, dtype=np.float32)
     if bow:
-        shift = float(amount) * ((xs - w / 2.0) / (w / 2.0)) ** 2
+        shift = (float(amount) * ((xs - w / 2.0) / (w / 2.0)) ** 2
+                 if offsets is None else np.asarray(offsets, dtype=np.float32))
     for start in range(0, h, rows):
         end = min(start + rows, h)
         ys = np.arange(start, end, dtype=np.float32)
@@ -680,6 +706,26 @@ def _strip_remap(img, amount, bow, rows=128):
         cv2.remap(arr, map_x, map_y, interpolation=cv2.INTER_LINEAR,
                   dst=out[start:end], borderMode=cv2.BORDER_REFLECT)
     return Image.fromarray(out, "RGB")
+
+
+def reference_curve(points, xs):
+    """Shape-preserving interpolation shared by guide drawing and remapping."""
+    from scipy.interpolate import PchipInterpolator
+    points = np.asarray(points, dtype=float)
+    if (points.ndim != 2 or points.shape[1] != 2 or len(points) < 2
+            or not np.isfinite(points).all() or np.any(np.diff(points[:, 0]) <= 0)):
+        raise ValueError("Reference points must be finite and ordered left to right")
+    return PchipInterpolator(points[:, 0], points[:, 1])(
+        np.clip(xs, points[0, 0], points[-1, 0]))
+
+
+def apply_reference_curve(img, points, baseline=None):
+    ys = reference_curve(points, np.arange(img.width, dtype=np.float32))
+    target = float(np.mean(np.asarray(points)[:, 1]))
+    offsets = target - ys if baseline is None else ys - baseline
+    if np.max(np.abs(offsets)) < 1e-6:
+        return img
+    return _strip_remap(img, 0, bow=True, offsets=offsets)
 
 
 def apply_edit_op(img, gray_override, op_name, params):
@@ -696,6 +742,10 @@ def apply_edit_op(img, gray_override, op_name, params):
         d = params["dir"]
         out = ImageOps.mirror(img) if d == "h" else ImageOps.flip(img)
         return out, _reapply_gray_geom(gray_override, lambda a: (np.fliplr(a) if d == "h" else np.flipud(a)))
+    if op_name == 'crop':
+        left, top, right, bottom = params['box']
+        return img.crop((left, top, right, bottom)), (
+            None if gray_override is None else gray_override[top:bottom, left:right].copy())
     if op_name == "invert_colors":
         out = ImageOps.invert(img.convert("RGB"))
         return out, gray_override  # 색상 반전은 화면용 RGB만 바꿈(그레이스케일 오버라이드는 UV 신호이므로 무관)
@@ -709,6 +759,11 @@ def apply_edit_op(img, gray_override, op_name, params):
         out = apply_bow_correction(img, params["amount"])
         gray = _reapply_gray_geom(gray_override, lambda a: np.array(
             apply_bow_correction(Image.fromarray(a), params["amount"]).convert("L")))
+        return out, gray
+    if op_name == "reference_bow":
+        out = apply_reference_curve(img, params["points"], params.get("baseline"))
+        gray = _reapply_gray_geom(gray_override, lambda a: np.array(
+            apply_reference_curve(Image.fromarray(a), params["points"], params.get("baseline")).convert("L")))
         return out, gray
     if op_name == "shear_correct":
         out = apply_shear_correction(img, params["amount"])

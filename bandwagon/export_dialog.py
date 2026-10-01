@@ -6,11 +6,12 @@ from PIL import Image
 from PyQt5.QtCore import Qt, QTimer, QRectF
 from PyQt5.QtGui import QColor, QPainter
 from PyQt5.QtWidgets import (
-    QCheckBox, QDialog, QDialogButtonBox, QFormLayout, QHBoxLayout,
+    QDialog, QDialogButtonBox, QFormLayout, QHBoxLayout,
     QLabel, QSpinBox, QVBoxLayout, QWidget,
 )
 
 from .dialogs import _dialog_style, _no_help_button
+from .checkbox import TickCheckBox as QCheckBox
 from .i18n import tr
 from .imaging import pil_to_pixmap, render_analysis_overlay
 

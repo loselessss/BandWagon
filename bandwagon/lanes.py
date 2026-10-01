@@ -13,16 +13,29 @@ from PyQt5.QtWidgets import (
     QComboBox, QFormLayout, QGroupBox, QHBoxLayout, QHeaderView,
     QInputDialog, QLabel, QPushButton, QSpinBox, QTableWidget,
     QTableWidgetItem, QTextEdit, QVBoxLayout, QWidget, QScrollArea, QToolButton,
-    QStyledItemDelegate, QLineEdit,
+    QStyledItemDelegate, QLineEdit, QSizePolicy,
 )
-from PyQt5.QtCore import Qt, QTimer, QEvent, pyqtSignal
+from PyQt5.QtCore import Qt, QTimer, QEvent, QSize, pyqtSignal
 
 from .i18n import tr
+from .imaging import lane_boundary_signal
 from .theme import *
 from .models import Lane
 from .widgets import StdCurveView, FineSlider
 from .dialogs import MarkerDialog, MarkerPresetManager, _dialog_style, _no_help_button
 from .presets import load_marker_presets, save_marker_presets
+
+
+class LaneSettingsScroll(QScrollArea):
+    """Use the visible tool's height, not a cached all-tools size hint."""
+    def sizeHint(self):
+        content = self.widget()
+        if content is None: return super().sizeHint()
+        layout = content.layout()
+        width = max(100, self.viewport().width())
+        height = layout.totalHeightForWidth(width)
+        if height < 0: height = layout.sizeHint().height()
+        return QSize(layout.sizeHint().width(), height + 2 * self.frameWidth())
 
 
 class LaneNameDelegate(QStyledItemDelegate):
@@ -50,7 +63,9 @@ class LanesMixin:
         container = self._new_page()
         outer = QVBoxLayout(container)
         outer.setContentsMargins(4, 4, 4, 4)
-        settings_scroll = QScrollArea()
+        settings_scroll = LaneSettingsScroll()
+        self.lane_settings_scroll = settings_scroll
+        self.lane_panel_layout = outer
         settings_scroll.setWidgetResizable(True)
         settings_scroll.setFrameShape(QScrollArea.NoFrame)
         settings_scroll.setWidget(page)
@@ -72,19 +87,24 @@ class LanesMixin:
         auto = QPushButton(tr("btn_auto_detect_lanes")); auto.clicked.connect(self._auto_lanes)
         auto.setStyleSheet(self._btn_accent_css())
         h.addWidget(auto)
+        manual = QGroupBox(tr('tool_manual_lanes')); manual.setStyleSheet(self._group_css())
+        mh = QVBoxLayout(manual)
         self.btn_lane = QPushButton(tr("btn_manual_lane_on")); self.btn_lane.setCheckable(True); self.btn_lane.setChecked(True)
         self.btn_lane.clicked.connect(self._toggle_lane_mode); self.btn_lane.setStyleSheet(self._btn_css())
-        h.addWidget(self.btn_lane)
+        mh.addWidget(self.btn_lane)
         hint = QLabel(tr("lane_manual_hint"))
         hint.setStyleSheet(f"color:{MUTE};font-size:10px;"); hint.setWordWrap(True)
-        h.addWidget(hint)
+        mh.addWidget(hint)
+        management = QGroupBox(tr('tool_lane_list')); management.setStyleSheet(self._group_css())
+        lh = QVBoxLayout(management)
         clear = QPushButton(tr("btn_clear_all_lanes")); clear.clicked.connect(self._on_clear_lanes_clicked); clear.setStyleSheet(self._danger_btn_css())
-        h.addWidget(clear)
+        lh.addWidget(clear)
         preset_btn = QPushButton(tr("btn_manage_marker_presets")); preset_btn.clicked.connect(self._open_marker_presets)
         preset_btn.setStyleSheet(self._btn_css())
         preset_btn.setToolTip(tr("marker_preset_btn_tip"))
-        h.addWidget(preset_btn)
+        lh.addWidget(preset_btn)
         v.addWidget(box)
+        v.addWidget(manual); v.addWidget(management)
 
         vr_box = QGroupBox(tr("group_vrange")); vr_box.setStyleSheet(self._group_css())
         vrv = QVBoxLayout(vr_box); vrv.setSpacing(5)
@@ -119,6 +139,7 @@ class LanesMixin:
         details_toggle.toggled.connect(
             lambda expanded: details_toggle.setArrowType(Qt.DownArrow if expanded else Qt.RightArrow))
         f = QFormLayout(det_box)
+        f.setRowWrapPolicy(QFormLayout.WrapLongRows)
         self.sp_prom = QSpinBox(); self.sp_prom.setRange(1, 100); self.sp_prom.setValue(90)
         self.sp_prom.setStyleSheet(self._spin_css())
         self.sp_prom.setToolTip(tr("sensitivity_tip"))
@@ -188,13 +209,14 @@ class LanesMixin:
         # 표시 방법만 바꾼다.
         style_row = QHBoxLayout(); style_row.setSpacing(6)
         style_label = QLabel(tr("label_band_display"))
+        style_label.setWordWrap(True)
         style_row.addWidget(style_label)
         self.combo_band_style = QComboBox()
         self.combo_band_style.addItems([tr("band_style_area"), tr("band_style_line")])
         self.combo_band_style.setStyleSheet(self._combo_css())
         self.combo_band_style.currentIndexChanged.connect(self._on_band_style_changed)
         style_row.addWidget(self.combo_band_style, 1)
-        v.addLayout(style_row)
+        style_wrap = QWidget(); style_wrap.setLayout(style_row); v.addWidget(style_wrap)
 
         run = QPushButton(tr("btn_run_analysis")); run.clicked.connect(self.run_analysis); run.setStyleSheet(self._btn_accent_css())
         self.btn_run_analysis = run
@@ -228,7 +250,26 @@ class LanesMixin:
         outer.addWidget(self.lane_table, 1)
         outer.addWidget(run)
         outer.addWidget(run_hint)
+        # Unused height belongs below the controls, never between settings and actions.
+        self.lane_panel_bottom_index = outer.count()
+        outer.addStretch()
         self.tabs.addTab(container, tr("tab_lanes"))
+        self.lane_tools = {'auto_lanes': box, 'manual_lanes': manual,
+                           'lane_list': management, 'range': vr_box, 'bands': det_box}
+        self.lane_style_wrap = style_wrap
+        self._show_lane_tool('auto_lanes')
+
+    def _show_lane_tool(self, name):
+        for key, widget in self.lane_tools.items(): widget.setVisible(key == name)
+        self.band_settings_toggle.hide()
+        self.lane_style_wrap.setVisible(name == 'bands')
+        has_table = name in ('lane_list', 'manual_lanes')
+        self.lane_table.setVisible(has_table)
+        self.lane_settings_scroll.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
+        self.lane_panel_layout.setStretch(0, 0)
+        self.lane_panel_layout.setStretch(self.lane_panel_bottom_index, 0 if has_table else 1)
+        self.lane_settings_scroll.widget().layout().invalidate()
+        self.lane_settings_scroll.updateGeometry()
 
     def _build_tab_analysis(self):
         page = self._new_page(); v = QVBoxLayout(page); v.setContentsMargins(10, 10, 10, 10); v.setSpacing(8)
@@ -381,7 +422,7 @@ class LanesMixin:
         self._commit_lanes()
 
     def _auto_lanes(self):
-        """세로 방향 강도 프로파일에서 레인(밴드가 모인 열)을 자동 검출.
+        """배경 보정 및 행별 정규화한 신호에서 레인 경계를 자동 검출.
         레인 개수를 폭으로 균등 분할한 뒤 경계를 신호가 약한 지점(골)으로
         살짝 보정한다 — 항상 정확히 N개가 나오는 게 목표이며, 세밀한 경계는
         레인 모드에서 드래그로 다듬는 걸 전제로 한다.
@@ -394,16 +435,11 @@ class LanesMixin:
         경로 자체를 없앴다."""
         if self._gray_orig is None:
             self._info(tr("no_image_title"), tr("no_image_msg")); return
-        g = self._gray_orig.astype(float)
-        W = g.shape[1]
-        col = 255.0 - g.mean(axis=0)            # 밴드가 많을수록 큰 값
-        col = np.clip(col - np.percentile(col, 5), 0, None)
-        if col.max() <= 0:
-            self._info(tr("detect_fail_title"), tr("detect_fail_no_signal")); return
-        k = max(3, W // 300)
-        sm = np.convolve(col, np.ones(k) / k, mode="same")
-
+        W = self._gray_orig.shape[1]
         n_target = self.sp_lane_n.value()
+        sm = lane_boundary_signal(self._gray_orig, n_target, self.gel.vrange)
+        if sm.max() <= 0:
+            self._info(tr("detect_fail_title"), tr("detect_fail_no_signal")); return
         spans = self._split_lanes_by_count(sm, n_target, W)
         if spans is None:
             self._info(tr("detect_fail_title"), tr("detect_fail_count_msg", n=n_target))
@@ -422,9 +458,8 @@ class LanesMixin:
     @staticmethod
     def _split_lanes_by_count(sm, n_target, W):
         """평활화된 세로-평균 강도 프로파일 sm을 정확히 n_target개 구간으로
-        나눈다. 폭을 균등하게 n_target등분하는 것을 기본으로 삼고, 등분선
-        바로 근처(±15%)에 등분선 지점 자체보다 뚜렷이 약한 골(신호가
-        need_ratio 이하)이 있을 때만 그 골로 살짝 옮긴다.
+        나눈다. 균등 경계 주변 ±25%에서 낮은 신호 구간의 중앙을 찾고,
+        간격 사전값을 함께 고려한다. 신호 차이가 없으면 균등 경계를 유지한다.
 
         예전에는 ±40% 범위에서 무조건 가장 약한 지점으로 스냅했는데, 그
         범위가 넓다 보니 사실상 항상 뭔가에는 끌려가버려 레인 폭이
@@ -434,22 +469,35 @@ class LanesMixin:
 
         완벽한 자동 분리보다 '항상 정확히 N개가 나오는 안정성'을 우선한다
         — 경계는 레인 모드에서 바로 드래그해 다듬을 수 있다."""
-        if sm.max() <= 0 or n_target <= 0:
+        if len(sm) != W or W < 2 * n_target or n_target <= 0 or not np.all(np.isfinite(sm)) or sm.max() <= 0:
             return None
         seg_w = W / n_target
-        snap_r = max(1, int(seg_w * 0.15))
-        need_ratio = 0.75   # 골이 등분선 지점 신호의 75% 이하로 뚜렷이 약할 때만 스냅
+        snap_r = max(1, int(seg_w * 0.25))
         bounds = [0]
         for i in range(1, n_target):
             center = min(max(int(round(i * seg_w)), 0), W - 1)
-            lo = max(0, center - snap_r); hi = min(W, center + snap_r)
+            lo = max(0, center - snap_r); hi = min(W, center + snap_r + 1)
             lo = max(lo, bounds[-1] + 1)
             if hi <= lo:
                 bounds.append(center)
                 continue
             local = sm[lo:hi]
-            valley = lo + int(np.argmin(local))
-            bounds.append(valley if sm[valley] <= need_ratio * sm[center] else center)
+            # Prefer the middle of a low-signal gap, not its first pixel.
+            # A soft spacing prior prevents noise from moving a flat boundary.
+            floor = float(np.min(local))
+            shoulder = float(np.max(sm[max(0, center - int(seg_w * .5)):
+                                       min(W, center + int(seg_w * .5) + 1)]))
+            contrast = shoulder - floor
+            if contrast <= max(.001, shoulder * .08):
+                bounds.append(center)
+                continue
+            low = local <= floor + contrast * .12
+            indices = np.flatnonzero(low)
+            groups = np.split(indices, np.flatnonzero(np.diff(indices) > 1) + 1)
+            candidates = [lo + int(round((g[0] + g[-1]) / 2)) for g in groups if len(g)]
+            valley = min(candidates, key=lambda x:
+                         (sm[x] - floor) / contrast + .2 * ((x - center) / snap_r) ** 2)
+            bounds.append(valley)
         bounds.append(W)
         # 경계가 역전되거나 겹치지 않도록 단조 증가 보정
         for i in range(1, len(bounds)):

@@ -44,7 +44,7 @@ CURRENT_LANG = load_lang_setting()  # "ko" 또는 "en" — tr()이 참조하는 
 STRINGS = {
     "ko": {
         "wb_bright_bands": "UV: 어두운 배경의 밝은 밴드",
-        "wb_bright_bands_hint": "UV 밴드가 밝으면 체크하세요. 흰 배경의 검은 밴드 사진은 해제하세요. 분석 영상만 어두운 밴드 기준으로 변환합니다.",
+        "wb_bright_bands_hint": "UV 밴드가 밝으면 체크하세요. 흰 배경의 검은 밴드 사진은 해제하세요. 합성할 신호를 선택하고 분석 영상은 어두운 밴드 기준으로 변환합니다.",
         "autosave_failed": "자동 저장에 실패했습니다. Ctrl+S로 작업을 저장해 주세요.",
         "recovery_title": "저장하지 않은 작업 복구",
         "recovery_question": "{source}\n{time}에 자동 저장한 작업이 있습니다. 복구할까요?\n예: 복구 / 아니요: 사본 삭제 / 취소: 다음에 결정",
@@ -189,6 +189,33 @@ STRINGS = {
         "chk_lane_count": "레인 개수",
         "lane_count_hint": "젤에 로딩한 레인 개수를 입력하세요 — 자동 검출이 이 개수로 폭을 나눕니다.",
         "btn_auto_detect_lanes": "레인 자동 검출",
+        "tab_geometry": "기하 보정",
+        "tool_rotate": "회전",
+        "tool_flip": "뒤집기",
+        "tool_crop": "자르기",
+        "tool_warp": "펴기",
+        "tool_bow": "곡률",
+        "tool_shear": "기울기",
+        "tool_brightness": "밝기·대비",
+        "tool_curve": "톤 커브",
+        "tool_invert": "색상 반전",
+        "tool_auto_lanes": "자동 검출",
+        "tool_manual_lanes": "수동 조정",
+        "tool_lane_list": "레인 목록",
+        "tool_range": "세로 범위",
+        "tool_bands": "밴드 설정",
+        "tool_results": "결과표",
+        "tool_photos": "사진",
+        "tool_align": "정렬",
+        "tool_blend": "합성 설정",
+        "tool_export": "내보내기",
+        "crop_hint": "이미지에서 사각형을 드래그해 자를 영역을 지정하세요. 영역 밖만 제거하며 원근 보정은 하지 않습니다. Enter: 적용 · Esc: 선택 종료.",
+        "crop_select": "영역 지정",
+        "crop_apply": "자르기 적용",
+        "ribbon_more_left": "이전 도구",
+        "ribbon_more_right": "다음 도구",
+        "ribbon_file_hint": "열기·저장·복사 도구를 선택하세요. 현재 설정과 미리보기는 유지됩니다.",
+        "tab_color": "색상 보정",
         "section_geometry": "기하 보정 (회전·펴기·곡률·자르기)",
         "section_color": "색감 보정 (밝기·대비·반전·커브)",
         "btn_manual_lane_on": "레인 수동 조정: 켜짐",
@@ -341,6 +368,17 @@ STRINGS = {
         "advanced_geometry": "곡률 · 기울기 세부 보정",
         "reset_rotation": "회전 초기화",
         "reset_bow": "곡률 초기화",
+        "reference_bow_title": "곡률 펴기",
+        "curve_fit": "화면에 맞춤",
+        "curve_inline_hint": "보라색 점은 곡률을 조절하고, 왼쪽 작은 ↕ 손잡이는 선 전체를 위아래로 이동합니다. 끄는 방향으로 미리보기가 움직입니다. 휠: 확대 · 가운데 드래그: 이동 · Esc: 취소.",
+        "curve_move_line": "곡률선 전체 이동 — 위아래로 끌기",
+        "warp_then_curve": "펴기 후 곡률 손잡이 표시",
+        "reference_bow_hint": "빨간 기준선의 점 5개를 끌면 이 화면에서 펴진 결과가 실시간으로 바뀝니다. 노란 선은 목표 수평선입니다. 원본 보기 버튼을 누르는 동안 원본을 확인할 수 있습니다. 빈 곳 클릭: 기준선 이동 · 휠: 확대 · 가운데 버튼 드래그: 이동. 적용을 눌러야 원본에 반영됩니다.",
+        "reference_hold_original": "원본 보기 (누르고 있기)",
+        "reference_preview": "펴진 결과 · 실시간 미리보기",
+        "reference_edit": "원본 · 기준선 조정",
+        "reference_reset": "기준선 초기화",
+        "reference_apply": "곡률 펴기 적용",
         "reset_shear": "기울기 초기화",
         "mode_view_hint": "보기 · 드래그로 이동 / 휠로 확대",
         "mode_lane_hint": "레인 조정 · 드래그로 추가 / 테두리로 폭 조절 / Esc로 종료",
@@ -415,8 +453,8 @@ STRINGS = {
         "wb_btn_load_uv": "UV 사진 열기",
         "wb_group_align": "2. 정렬 (UV 코너 지정)",
         "wb_corner_hint": "UV 사진 위에서 드래그해 사각형을 만든 뒤 네 모서리를 끌어 맞추세요. 가시광 사진이 그 영역에 어떻게 겹쳐지는지 이 화면에서 바로 보입니다.",
-        "wb_opacity_label": "가시광 투명도",
-        "wb_opacity_hint": "슬라이더를 움직이면 위 캔버스에 겹쳐 보이는 가시광 사진의 투명도가 바로 바뀝니다.",
+        "wb_opacity_label": "UV 겹침 강도",
+        "wb_opacity_hint": "0%는 가시광만, 100%는 UV 신호를 가장 강하게 겹칩니다. 미리보기와 내보내기에 같은 합성 설정을 사용합니다.",
         "wb_need_visible_title": "가시광 사진 필요",
         "wb_need_visible_msg": "먼저 가시광 사진을 불러오세요.",
         "wb_need_uv_corners_title": "UV 코너 필요",
@@ -446,11 +484,13 @@ STRINGS = {
             "<p>이미지 열기 -> (필요시) <b>보정/펴기</b>로 다듬기 -> <b>레인</b>에서 레인 지정 후 분석 "
             "-> 마커 MW 입력 -> <b>분석</b>·<b>정량</b> 탭에서 결과 확인 -> 저장</p>"
 
-            "<h3>메뉴 구성</h3>"
+            "<h3>리본 구성</h3>"
             "<p><b>파일</b>(새 창·열기·최근 파일·붙여넣기·프로젝트 저장/새로 저장/현재 위치 열기·"
             "결과 이미지 내보내기) · <b>웨스턴블롯</b>(합성 만들기·기존 합성 파일 불러오기) · "
-            "<b>편집</b>(전체 초기화·되돌리기·다시하기) · <b>정보</b>(사용법·개발자 정보) · "
-            "<b>언어</b>(한국어/English)</p>"
+            "<b>보정</b> · <b>레인</b> · <b>분석</b> · "
+            "<b>정보</b>(되돌리기·다시하기·전체 초기화·사용법·개발자 정보·업데이트·언어).</p>"
+            "<p>상단 아이콘을 누르면 오른쪽에 그 도구의 설정만 표시됩니다. "
+            "도구를 바꾸면 미확정 보정도 적용해 유지합니다. 취소하려면 전환 전에 Esc/Ctrl+Z를 누르세요.</p>"
 
             "<h3>이미지 불러오기 / 저장</h3>"
             "<p>"
@@ -460,9 +500,9 @@ STRINGS = {
             "비교할 수 있습니다. <b>붙여넣기(Ctrl+V)</b>는 예전처럼 지금 창에 바로 적용됩니다<br>"
             "· 설치본에서는 탐색기에서 .bandwagon/.bwcomposite 파일을 더블클릭해도 바로 열립니다"
             "(아이콘 색으로 두 종류가 구분됩니다)<br>"
-            "· <b>결과 이미지 내보내기</b> 메뉴 — 복사 / 저장: 분석 결과가 있으면 '사진만' / '분석 포함(합성)' / "
-            "'오버레이만(투명 배경)' 중 선택 — 오버레이만은 사진 없이 레인/밴드/MW만 투명 배경 PNG로 내보내 "
-            "다른 배경 위에 겹쳐 쓰거나 발표 자료에 붙여넣기 좋습니다. CSV 저장: 밴드별 MW·강도·Volume 표 저장<br>"
+            "· <b>결과 이미지 복사 / 저장</b>: 사진·테두리·Marker MW·레인 이름을 체크하고 "
+            "글자와 그림의 투명도를 조절합니다. 사진을 끄면 투명 오버레이만 출력합니다. "
+            "CSV 저장: 밴드별 MW·강도·Volume 표 저장<br>"
             "· <b>되돌리기(Ctrl+Z)</b>: 이미지 보정뿐 아니라 레인·분석 설정·세로 범위·채널·"
             "밴드 표시 방식·메모 변경까지 최근 200단계를 작업 순서대로 취소"
             "</p>"
@@ -488,8 +528,8 @@ STRINGS = {
             "· 보정 탭의 '가이드 표시' 체크: 격자+중앙 십자선 가이드를 켜고 끄기"
             "</p>"
 
-            "<h3>펴기 탭</h3>"
-            "<p>이 탭(펴기·보정)에 있는 동안은 화면에 10% 간격 격자와 빨간 "
+            "<h3>기하 보정 도구</h3>"
+            "<p>기하 보정 도구에서는 화면에 10% 간격 격자와 빨간 "
             "중앙 십자선이 겹쳐 보여 수평/수직이 맞는지 눈으로 확인하기 "
             "쉽습니다 — 화면 전용이라 저장/내보내기 이미지에는 안 나타납니다.<br>"
             "기울어지거나 사다리꼴로 찍힌 젤을 직사각형으로 폅니다. "
@@ -503,10 +543,12 @@ STRINGS = {
             "· 이 탭을 포함해 곳곳의 슬라이더는 <b>Alt를 누른 채로 드래그</b>하면 "
             "이동량이 1/8로 줄어 미세 조정하기 쉽습니다.</p>"
 
-            "<h3>보정 탭</h3>"
+            "<h3>보정 리본</h3>"
             "<p>회전(90°/180°/정밀회전) · 좌우·상하 반전 · 자르기 · 색상 반전 · 밝기/대비.<br>"
             "밝기·대비는 화면 표시용일 뿐 분석 결과에는 영향을 주지 않습니다. "
-            "나머지(회전·반전·자르기·색상반전)는 원본 자체를 바꾸므로 분석에도 반영됩니다.</p>"
+            "기하 보정은 분석 좌표에도 반영됩니다. 자르기와 원근 펴기는 별도 도구이며, "
+            "곡률 펴기는 메인 미리보기에서 보라색 점을 끌어 조절합니다. "
+            "합성 파일의 UV 분석 신호는 화면 색상 반전의 영향을 받지 않습니다.</p>"
 
             "<h3>웨스턴블롯 메뉴 (합성)</h3>"
             "<p>가시광 사진(마커가 보이는 일반 사진)과 UV 사진(밴드가 보이는 형광 사진)을 "
@@ -515,7 +557,7 @@ STRINGS = {
             "클립보드에서 붙여넣어 두 사진을 불러오세요(이미 불러온 썸네일을 클릭하면 원본을 "
             "크게 볼 수 있습니다). 두 사진을 모두 불러왔으면 캔버스에서 <b>UV 사진 위에</b> "
             "드래그해 사각형을 만든 뒤 네 모서리를 끌어 맞추세요 — 그 즉시 가시광 사진이 그 "
-            "영역에 어떻게 겹쳐지는지 실시간으로 같이 보입니다. '가시광 투명도' 슬라이더로 "
+            "영역에 어떻게 겹쳐지는지 실시간으로 같이 보입니다. 정렬 아이콘에서 코너를 지정하고 합성 설정의 'UV 겹침 강도' 슬라이더로 "
             "겹쳐 보이는 정도를 조절하며 정렬을 맞추다가, 맞으면 '합성 내보내기'로 "
             ".bwcomposite 파일을 저장하세요. 저장 직후 바로 분석을 시작할지 물어봅니다<br>"
             "· <b>기존 합성 파일 불러오기</b>: 이미 만들어둔 .bwcomposite를 열어 바로 분석을 "
@@ -573,7 +615,7 @@ STRINGS = {
     },
     "en": {
         "wb_bright_bands": "UV: bright bands on a dark background",
-        "wb_bright_bands_hint": "Check for bright UV bands; uncheck for dark bands on white. Only the analysis image is normalized to dark bands.",
+        "wb_bright_bands_hint": "Check for bright UV bands; uncheck for dark bands on white. This selects the signal for blending; analysis is normalized to dark bands.",
         "autosave_failed": "Autosave failed. Please save your work with Ctrl+S.",
         "recovery_title": "Recover unsaved work",
         "recovery_question": "{source}\nAn autosaved session from {time} is available. Recover it?\nYes: recover / No: delete copy / Cancel: decide next time",
@@ -718,6 +760,33 @@ STRINGS = {
         "chk_lane_count": "Lane count",
         "lane_count_hint": "Enter the number of lanes you loaded on the gel — auto-detect splits the width by this count.",
         "btn_auto_detect_lanes": "Auto-Detect Lanes",
+        "tab_geometry": "Geometry",
+        "tool_rotate": "Rotate",
+        "tool_flip": "Flip",
+        "tool_crop": "Crop",
+        "tool_warp": "Straighten",
+        "tool_bow": "Curvature",
+        "tool_shear": "Shear",
+        "tool_brightness": "Brightness",
+        "tool_curve": "Tone curve",
+        "tool_invert": "Invert",
+        "tool_auto_lanes": "Auto detect",
+        "tool_manual_lanes": "Manual",
+        "tool_lane_list": "Lane list",
+        "tool_range": "Range",
+        "tool_bands": "Band settings",
+        "tool_results": "Results",
+        "tool_photos": "Photos",
+        "tool_align": "Align",
+        "tool_blend": "Blend",
+        "tool_export": "Export",
+        "crop_hint": "Drag a rectangle on the image to select a crop. Removes the outside area without perspective correction. Enter: apply; Esc: exit selection.",
+        "crop_select": "Select area",
+        "crop_apply": "Apply crop",
+        "ribbon_more_left": "Previous tools",
+        "ribbon_more_right": "Next tools",
+        "ribbon_file_hint": "Choose an open, save or copy command. Current settings and preview are retained.",
+        "tab_color": "Color",
         "section_geometry": "Geometry (rotate, straighten, curvature, crop)",
         "section_color": "Color (brightness, contrast, invert, curve)",
         "btn_manual_lane_on": "Manual Lane Mode: On",
@@ -870,6 +939,17 @@ STRINGS = {
         "advanced_geometry": "Advanced: curvature / shear",
         "reset_rotation": "Reset rotation",
         "reset_bow": "Reset curvature",
+        "reference_bow_title": "Straighten curvature",
+        "curve_fit": "Fit to view",
+        "curve_inline_hint": "Purple points adjust curvature; the small left grip moves the whole line vertically. The preview follows your drag. Wheel: zoom; middle-drag: pan; Esc: cancel.",
+        "curve_move_line": "Move the whole curve — drag up or down",
+        "warp_then_curve": "Show curve handles after straightening",
+        "reference_bow_hint": "Drag the five red control points to update the straightened image live in this view. Yellow marks the target horizontal line. Hold Show original to compare. Click empty space to move the line; wheel to zoom; middle-drag to pan. The original changes only when you apply.",
+        "reference_hold_original": "Show original (hold)",
+        "reference_preview": "Straightened · live preview",
+        "reference_edit": "Original · edit reference",
+        "reference_reset": "Reset reference line",
+        "reference_apply": "Apply straightening",
         "reset_shear": "Reset shear",
         "mode_view_hint": "View · Drag to pan / Wheel to zoom",
         "mode_lane_hint": "Lanes · Drag to add / Drag borders to resize / Esc to finish",
@@ -944,8 +1024,8 @@ STRINGS = {
         "wb_btn_load_uv": "Open UV Photo",
         "wb_group_align": "2. Align (Set UV Corners)",
         "wb_corner_hint": "Drag a rectangle on the UV photo, then drag the 4 corners to fit. You'll see right here how the visible-light photo overlays that area.",
-        "wb_opacity_label": "Visible-Light Opacity",
-        "wb_opacity_hint": "Moving the slider instantly changes how transparent the overlaid visible-light photo is in the canvas above.",
+        "wb_opacity_label": "UV blend strength",
+        "wb_opacity_hint": "0% shows visible light only; 100% gives the strongest UV signal overlay. Preview and export use the same blend settings.",
         "wb_need_visible_title": "Visible-Light Photo Needed",
         "wb_need_visible_msg": "Please load a visible-light photo first.",
         "wb_need_uv_corners_title": "UV Corners Needed",
@@ -975,12 +1055,14 @@ STRINGS = {
             "<p>Open an image -> (if needed) clean up in <b>Adjust/Warp</b> -> assign lanes in <b>Lanes</b> and run analysis "
             "-> enter marker MW -> check results in <b>Analysis</b>/<b>Standard Curve</b> -> save</p>"
 
-            "<h3>Menu Layout</h3>"
+            "<h3>Ribbon Layout</h3>"
             "<p><b>File</b> (New Window, Open, Recent Files, Paste, Save/Save As/Open Project Location, "
             "Export Result Image) · "
             "<b>Western Blot</b> (Create composite, Load existing composite file) · "
-            "<b>Edit</b> (Reset All, Undo, Redo) · <b>Info</b> (Help, Developer Info) · "
-            "<b>Language</b> (한국어/English)</p>"
+            "<b>Adjust</b> · <b>Lanes</b> · <b>Analysis</b> · "
+            "<b>Info</b> (Undo, Redo, Reset All, Help, About, Updates, Language).</p>"
+            "<p>Select an icon to show only that tool's settings beside the main preview. "
+            "Switching tools applies pending corrections; use Esc/Ctrl+Z beforehand to cancel them.</p>"
 
             "<h3>Opening / Saving Images</h3>"
             "<p>"
@@ -991,9 +1073,8 @@ STRINGS = {
             "window as before<br>"
             "· In the installed app, double-clicking a .bandwagon or .bwcomposite file in Explorer "
             "opens it directly (the two file types have differently-colored icons)<br>"
-            "· <b>Export Result Image</b> menu — Copy/Save: if there are analysis results, choose 'image only', "
-            "'with overlay', or 'overlay only (transparent)' — overlay-only exports just the lanes/bands/MW "
-            "labels on a transparent PNG with no photo, handy for layering over another background or slides. "
+            "· <b>Copy/Save Result Image</b>: select photo, borders, Marker MW, and lane names, "
+            "and adjust text/image transparency. Uncheck photo for a transparent overlay. "
             "Export CSV: save a table of MW/intensity/volume per band<br>"
             "· <b>Undo (Ctrl+Z)</b>: undo up to 200 image, lane, adjustment, analysis-setting, "
             "vertical-range, channel, band-display, and memo changes in exact working order"
@@ -1020,8 +1101,8 @@ STRINGS = {
             "· 'Show guides' on the Adjust tab: toggles the grid + center crosshair guide (rotate/warp)"
             "</p>"
 
-            "<h3>Warp Tab</h3>"
-            "<p>While this tab (Warp + Adjust) is active, a grid every 10% and a red "
+            "<h3>Geometry Tools</h3>"
+            "<p>While a geometry tool is active, a grid every 10% and a red "
             "center crosshair overlay the canvas so you can visually check that "
             "things are level — this is screen-only and never appears in saved/exported images.<br>"
             "Straightens a tilted or trapezoidal gel photo into a rectangle. "
@@ -1035,10 +1116,11 @@ STRINGS = {
             "· Sliders here and elsewhere support <b>Alt+drag</b> for fine control — movement "
             "is scaled down to 1/8 speed.</p>"
 
-            "<h3>Adjust Tab</h3>"
+            "<h3>Adjust Ribbon</h3>"
             "<p>Rotate (90°/180°/fine) · flip horizontal/vertical · crop · invert colors · brightness/contrast.<br>"
             "Brightness/contrast are display-only and don't affect analysis results. "
-            "The rest (rotate/flip/crop/invert) modify the original image and do affect analysis.</p>"
+            "Geometry tools also transform analysis coordinates. Crop and perspective straightening are separate tools. "
+            "Drag purple curvature handles directly in the main preview. Display inversion does not change a composite's UV analysis signal.</p>"
 
             "<h3>Western Blot Menu (Composite)</h3>"
             "<p>Aligning and merging a visible-light photo (showing markers) with a UV photo "
@@ -1049,7 +1131,7 @@ STRINGS = {
             "already has a photo to view the original larger). Once both are loaded, drag a "
             "rectangle <b>on the UV photo</b> in the canvas, then drag the 4 corners to fit — the "
             "visible-light photo immediately shows overlaid on that area, live. Use the "
-            "'Visible-Light Opacity' slider while fine-tuning, then click 'Export Composite' to "
+            "Align icon to place corners, then the 'UV blend strength' slider under Blend. Click 'Export Composite' to "
             "save a .bwcomposite file. You'll be asked whether to start analyzing it right away<br>"
             "· <b>Load Existing Composite File</b>: opens an already-exported .bwcomposite and "
             "starts analysis immediately (no need to reopen the studio)<br>"
