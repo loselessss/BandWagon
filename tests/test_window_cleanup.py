@@ -4,7 +4,8 @@ from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PIL import Image
-from PyQt5.QtCore import QCoreApplication, QEvent
+from PyQt5.QtCore import QCoreApplication, QEvent, Qt
+from PyQt5.QtTest import QTest
 from PyQt5.QtWidgets import QApplication, QMessageBox
 from PyQt5 import sip
 from bandwagon.app import Analyzer
@@ -47,6 +48,46 @@ class WindowCleanupTest(unittest.TestCase):
         self.assertFalse(win._closing)
         win._saved_snapshot = win._project_state_snapshot()
         win.close()
+
+    def test_ctrl_w_closes_only_active_window(self):
+        other = self.make_window()
+        win = self.make_window()
+        try:
+            other.show()
+            win.show(); win.activateWindow()
+            win.memo_edit.setFocus()
+            self.app.processEvents()
+            QTest.keyClick(win.memo_edit, Qt.Key_W, Qt.ControlModifier)
+            self.assertTrue(win._closing)
+            self.assertNotIn(win, Analyzer._open_windows)
+            self.assertIsNone(win._orig)
+            self.assertFalse(other._closing)
+            self.assertTrue(other.isVisible())
+            self.assertIn(other, Analyzer._open_windows)
+        finally:
+            other.close()
+            if not win._closing:
+                win.close()
+
+    def test_ctrl_w_can_cancel_unsaved_close(self):
+        win = self.make_window()
+        original = win._orig
+        try:
+            win.show(); win.activateWindow()
+            win.memo_edit.setPlainText("unsaved")
+            win.memo_edit.setFocus()
+            self.app.processEvents()
+            with patch.object(QMessageBox, "exec_") as prompt, patch.object(
+                    QMessageBox, "clickedButton", return_value=None):
+                QTest.keyClick(win.memo_edit, Qt.Key_W, Qt.ControlModifier)
+                prompt.assert_called_once()
+            self.assertFalse(win._closing)
+            self.assertTrue(win.isVisible())
+            self.assertIs(win._orig, original)
+            self.assertIn(win, Analyzer._open_windows)
+        finally:
+            win._saved_snapshot = win._project_state_snapshot()
+            win.close()
 
     def test_update_check_delays_deletion_but_releases_image(self):
         win = self.make_window()

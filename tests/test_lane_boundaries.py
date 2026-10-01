@@ -34,3 +34,11 @@ class LaneBoundaryTest(unittest.TestCase):
     def test_flat_evidence_does_not_shift_uniform_boundaries(self):
         self.assertEqual(LanesMixin._split_lanes_by_count(np.ones(500), 5, 500),
                          [(0, 99), (100, 199), (200, 299), (300, 399), (400, 499)])
+
+    def test_noisy_gaps_cannot_move_boundaries_more_than_fifteen_percent(self):
+        rng = np.random.default_rng(42)
+        signal = rng.uniform(.1, 1, 900)
+        spans = LanesMixin._split_lanes_by_count(signal, 15, 900)
+        for i, (left, _) in enumerate(spans[1:], 1):
+            self.assertLessEqual(abs(left - i * 60), 9)
+        self.assertTrue(all(42 <= right - left + 1 <= 78 for left, right in spans))

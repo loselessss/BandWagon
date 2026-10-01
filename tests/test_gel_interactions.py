@@ -7,9 +7,9 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import cv2
 import numpy as np
 from PIL import Image
-from PyQt5.QtCore import QPoint, Qt
+from PyQt5.QtCore import QPoint, Qt, QElapsedTimer
 from PyQt5.QtTest import QTest
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtWidgets import QApplication, QLineEdit
 
 from bandwagon.app import Analyzer
 from bandwagon.geometry import GeometryMixin
@@ -22,6 +22,18 @@ class GelInteractionsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
+
+    def wait_for_lane_editor(self, win, row):
+        # Advancing to a cell is queued; a fixed 30ms wait can send the next
+        # key to the previous editor on busy Windows runners.
+        timer = QElapsedTimer(); timer.start()
+        while timer.elapsed() < 1000:
+            editor = win.lane_table.focusWidget()
+            if (win.lane_table.currentRow() == row and isinstance(editor, QLineEdit)
+                    and editor.property("lane_row") == row and editor.hasFocus()):
+                return editor
+            QTest.qWait(10)
+        self.fail(f"Lane {row} name editor did not receive focus")
 
     def test_guide_control_lives_on_adjust_tab(self):
         win = Analyzer()
@@ -51,15 +63,16 @@ class GelInteractionsTest(unittest.TestCase):
             win._rebuild_lane_table()
             win.show()
             win._select_ribbon_tool('lane_list')
+            win.activateWindow()
             self.app.processEvents()
             win.lane_table.editItem(win.lane_table.item(0, 0))
             editor = win.lane_table.focusWidget()
             editor.setText("First")
             QTest.keyClick(editor, Qt.Key_Return)
-            QTest.qWait(50)
+            editor = self.wait_for_lane_editor(win, 1)
             self.assertEqual(win.lanes[0].name, "First")
             self.assertEqual(win.lane_table.currentRow(), 1)
-            self.assertEqual(win.lane_table.focusWidget().selectedText(), "Lane 2")
+            self.assertEqual(editor.selectedText(), "Lane 2")
         finally:
             win._saved_snapshot = win._project_state_snapshot()
             win.close()
@@ -95,15 +108,15 @@ class GelInteractionsTest(unittest.TestCase):
             win.lanes = [Lane(0, 10, 30), Lane(1, 40, 60)]
             win._rebuild_lane_table()
             win.show(); win._select_ribbon_tool('manual_lanes')
+            win.activateWindow()
             self.app.processEvents()
             win.lane_table.editItem(win.lane_table.item(0, 0))
             QTest.keyClick(win.lane_table.focusWidget(), Qt.Key_Return)
-            QTest.qWait(30)
+            editor = self.wait_for_lane_editor(win, 1)
             self.assertEqual(win.lane_table.currentRow(), 1)
-            QTest.keyClick(win.lane_table.focusWidget(), Qt.Key_Backtab)
-            QTest.qWait(30)
+            QTest.keyClick(editor, Qt.Key_Backtab)
+            editor = self.wait_for_lane_editor(win, 0)
             self.assertEqual(win.lane_table.currentRow(), 0)
-            editor = win.lane_table.focusWidget()
             editor.setText("Discard this")
             QTest.keyClick(editor, Qt.Key_Escape)
             self.assertEqual(win.lanes[0].name, "Lane 1")

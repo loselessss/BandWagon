@@ -26,6 +26,11 @@ def icon(name, color='#f3f3f3'):
         if name == 'zoom_in': p.drawLine(9, 6, 9, 12)
     elif name == 'lanes':
         for x in (4, 10, 16): p.drawRoundedRect(x, 4, 4, 16, 1, 1)
+    elif name == 'marker':
+        p.drawRoundedRect(4, 3, 10, 18, 1, 1)
+        for y in (6, 10, 15, 18):
+            p.drawLine(7, y, 11, y)
+            p.drawLine(17, y, 21, y)
     elif name in ('analysis', 'quant'):
         path.moveTo(3, 3); path.lineTo(3, 21); path.lineTo(21, 21)
         if name == 'analysis':
@@ -80,6 +85,7 @@ KEYS = {
     'undo': ('toolbar_undo',), 'redo': ('toolbar_redo',),
     'reset': ('toolbar_reset_all', 'btn_reset_curve', 'btn_reset_adjust_all', 'reset_rotation', 'reset_bow', 'reset_shear', 'reference_reset', 'btn_reset_corners'),
     'analysis': ('btn_run_analysis', 'tab_analysis'), 'lanes': ('btn_auto_detect_lanes', 'tab_lanes'),
+    'marker': ('marker_setup_action',),
     'adjust': ('tab_adjust', 'tab_geometry'), 'color': ('btn_invert_colors', 'tab_color'),
     'curve': ('reference_bow_title',), 'crop': ('btn_auto_warp', 'btn_apply_warp'),
     'download': ('toolbar_export_csv', 'toolbar_check_updates', 'update_download_install'),

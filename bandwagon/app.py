@@ -237,6 +237,13 @@ class Analyzer(RibbonMixin, StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, 
         a.setToolTip(tr("toolbar_save_result_tip")); m_file.addAction(a)
         a = QAction(tr("toolbar_export_csv"), self); a.triggered.connect(self.export_csv)
         m_file.addAction(a)
+        m_file.addSeparator()
+        a = QAction(tr("menu_close_window"), self)
+        a.setShortcut("Ctrl+W")
+        a.setShortcutContext(Qt.WindowShortcut)
+        # Use the normal close path so unsaved-work confirmation and cleanup run.
+        a.triggered.connect(lambda _checked=False: self.close())
+        m_file.addAction(a)
 
         # ── 웨스턴블롯 ────────────────────────────────────────────────
         # "새로 만들기"(스튜디오 열기)와 "기존 파일 불러오기"를 나란히 둬서

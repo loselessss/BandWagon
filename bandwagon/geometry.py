@@ -18,7 +18,7 @@ import numpy as np
 from PIL import Image
 from PyQt5.QtWidgets import (
     QGroupBox, QHBoxLayout, QVBoxLayout, QLabel, QPushButton,
-    QSpinBox, QWidget, QDialog, QTabWidget, QScrollArea,
+    QSpinBox, QWidget, QDialog, QTabWidget, QScrollArea, QSizePolicy,
 )
 from PyQt5.QtCore import Qt, QSignalBlocker
 
@@ -84,8 +84,8 @@ class GeometryMixin:
         # 정밀 회전 (1도 단위) — 드래그하면 바로 적용되는 실시간 미리보기.
         # 별도 적용 버튼 없음: 슬라이더를 놓거나 숫자입력 후 포커스를 옮기면 그 자리에서 확정.
         fine_row = QHBoxLayout(); fine_row.setSpacing(6)
-        fine_lbl = QLabel(tr("fine_rotate_label")); fine_lbl.setFixedWidth(28)
-        fine_lbl.setStyleSheet(f"color:{MUTE};font-size:11px;")
+        fine_lbl = QLabel(tr("fine_rotate_label"))
+        fine_lbl.setStyleSheet(f"color:{MUTE};font-size:12px;")
         fine_row.addWidget(fine_lbl)
         self.rot_slider = FineSlider(Qt.Horizontal)
         self.rot_slider.setRange(-180, 180); self.rot_slider.setValue(0)
@@ -96,7 +96,7 @@ class GeometryMixin:
             f"QSlider::sub-page:horizontal{{background:{CYAN};border-radius:2px;}}")
         fine_row.addWidget(self.rot_slider, 1)
         self.rot_spin = QSpinBox(); self.rot_spin.setRange(-180, 180); self.rot_spin.setSuffix("°")
-        self.rot_spin.setFixedWidth(64); self.rot_spin.setStyleSheet(self._spin_css())
+        self._size_correction_spin(self.rot_spin)
         fine_row.addWidget(self.rot_spin)
         btn_rot_reset = QPushButton(tr("reset_rotation")); btn_rot_reset.setStyleSheet(self._btn_css())
         btn_rot_reset.clicked.connect(self._reset_fine_rotation)
@@ -163,10 +163,10 @@ class GeometryMixin:
         bow = QGroupBox(tr("group_bow_correction")); bow.setStyleSheet(self._group_css())
         bv = QVBoxLayout(bow)
         bow_info = QLabel(tr("bow_correction_info"))
-        bow_info.setStyleSheet(f"color:{MUTE};font-size:10px;"); bow_info.setWordWrap(True)
+        bow_info.setStyleSheet(f"color:{MUTE};font-size:12px;"); bow_info.setWordWrap(True)
         bv.addWidget(bow_info)
         brow = QHBoxLayout(); brow.setSpacing(6)
-        blbl = QLabel(tr("label_curvature")); blbl.setFixedWidth(28); blbl.setStyleSheet(f"color:{MUTE};font-size:11px;")
+        blbl = QLabel(tr("label_curvature")); blbl.setStyleSheet(f"color:{MUTE};font-size:12px;")
         brow.addWidget(blbl)
         self.bow_slider = FineSlider(Qt.Horizontal)
         self.bow_slider.setRange(-150, 150); self.bow_slider.setValue(0)
@@ -177,7 +177,7 @@ class GeometryMixin:
             f"QSlider::sub-page:horizontal{{background:{CYAN};border-radius:2px;}}")
         brow.addWidget(self.bow_slider, 1)
         self.bow_spin = QSpinBox(); self.bow_spin.setRange(-150, 150); self.bow_spin.setSuffix("px")
-        self.bow_spin.setFixedWidth(64); self.bow_spin.setStyleSheet(self._spin_css())
+        self._size_correction_spin(self.bow_spin)
         brow.addWidget(self.bow_spin)
         btn_bow_reset = QPushButton(tr("reset_bow")); btn_bow_reset.setStyleSheet(self._btn_css())
         btn_bow_reset.clicked.connect(self._reset_bow_correction)
@@ -188,7 +188,7 @@ class GeometryMixin:
         bv.insertWidget(0, self.btn_reference_bow)
         bv.addWidget(btn_bow_reset)
         bow_hint = QLabel(tr("bow_sign_hint"))
-        bow_hint.setStyleSheet(f"color:{MUTE};font-size:9px;"); bow_hint.setWordWrap(True)
+        bow_hint.setStyleSheet(f"color:{MUTE};font-size:12px;"); bow_hint.setWordWrap(True)
         bv.addWidget(bow_hint)
         v.addWidget(bow)
 
@@ -202,10 +202,10 @@ class GeometryMixin:
         shear = QGroupBox(tr("group_shear_correction")); shear.setStyleSheet(self._group_css())
         shv = QVBoxLayout(shear)
         shear_info = QLabel(tr("shear_correction_info"))
-        shear_info.setStyleSheet(f"color:{MUTE};font-size:10px;"); shear_info.setWordWrap(True)
+        shear_info.setStyleSheet(f"color:{MUTE};font-size:12px;"); shear_info.setWordWrap(True)
         shv.addWidget(shear_info)
         shrow = QHBoxLayout(); shrow.setSpacing(6)
-        shlbl = QLabel(tr("label_shear")); shlbl.setFixedWidth(28); shlbl.setStyleSheet(f"color:{MUTE};font-size:11px;")
+        shlbl = QLabel(tr("label_shear")); shlbl.setStyleSheet(f"color:{MUTE};font-size:12px;")
         shrow.addWidget(shlbl)
         self.shear_slider = FineSlider(Qt.Horizontal)
         self.shear_slider.setRange(-150, 150); self.shear_slider.setValue(0)
@@ -216,14 +216,14 @@ class GeometryMixin:
             f"QSlider::sub-page:horizontal{{background:{CYAN};border-radius:2px;}}")
         shrow.addWidget(self.shear_slider, 1)
         self.shear_spin = QSpinBox(); self.shear_spin.setRange(-150, 150); self.shear_spin.setSuffix("px")
-        self.shear_spin.setFixedWidth(64); self.shear_spin.setStyleSheet(self._spin_css())
+        self._size_correction_spin(self.shear_spin)
         shrow.addWidget(self.shear_spin)
         btn_shear_reset = QPushButton(tr("reset_shear")); btn_shear_reset.setStyleSheet(self._btn_css())
         btn_shear_reset.clicked.connect(self._reset_shear_correction)
         shv.addLayout(shrow)
         shv.addWidget(btn_shear_reset)
         shear_hint = QLabel(tr("shear_sign_hint"))
-        shear_hint.setStyleSheet(f"color:{MUTE};font-size:9px;"); shear_hint.setWordWrap(True)
+        shear_hint.setStyleSheet(f"color:{MUTE};font-size:12px;"); shear_hint.setWordWrap(True)
         shv.addWidget(shear_hint)
         v.addWidget(shear)
 
@@ -255,16 +255,6 @@ class GeometryMixin:
         bv.addWidget(self.sl_bright); bv.addWidget(self.sl_contrast)
         bright_reset = QPushButton(tr("btn_reset_adjust_all")); bright_reset.setStyleSheet(self._btn_css())
         bright_reset.clicked.connect(self._reset_adjust); bv.addWidget(bright_reset)
-        invert = QGroupBox(tr("tool_invert")); invert.setStyleSheet(self._group_css())
-        iv = QVBoxLayout(invert); v.addWidget(invert)
-        invert_row = QHBoxLayout(); invert_row.setSpacing(6)
-        btn_invert = QPushButton(tr("btn_invert_colors")); btn_invert.clicked.connect(self._invert_colors)
-        btn_invert.setStyleSheet(self._btn_css())
-        invert_row.addWidget(btn_invert)
-        invert_hint = QLabel(tr("invert_hint"))
-        invert_hint.setStyleSheet(f"color:{MUTE};font-size:10px;"); invert_hint.setWordWrap(True)
-        iv.addLayout(invert_row)
-        iv.addWidget(invert_hint)
         curve_group = QGroupBox(tr("tool_curve")); curve_group.setStyleSheet(self._group_css())
         cv = QVBoxLayout(curve_group); cv.setSpacing(5); v.addWidget(curve_group)
         # 고정크기 위젯을 alignment로 직접 넣으면 Qt5.15/Windows에서 위젯 주변에
@@ -307,10 +297,18 @@ class GeometryMixin:
         self.correct_tools = {
             'rotate': (0, rot), 'flip': (0, flip), 'crop': (0, crop),
             'warp': (0, region), 'bow': (0, bow), 'shear': (0, shear),
-            'brightness': (1, brightness), 'curve': (1, curve_group), 'invert': (1, invert),
+            'brightness': (1, brightness), 'curve': (1, curve_group),
         }
         self.correction_tabs.tabBar().hide()
         self._show_correct_tool('rotate')
+
+    def _size_correction_spin(self, spin):
+        # Keep room for the sign, full range and unit, without fixing the width
+        # across fonts/DPI. The embedded editor must not get input padding twice.
+        spin.setMinimumWidth(96)
+        spin.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
+        spin.setStyleSheet(self._spin_css() +
+                          'QSpinBox QLineEdit{padding:0;border:0;background:transparent;}')
 
     def _show_correct_tool(self, name):
         index, group = self.correct_tools[name]

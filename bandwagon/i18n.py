@@ -87,6 +87,7 @@ STRINGS = {
         # 메뉴바 (예전엔 툴바였음 — 항목이 늘면서 카테고리별 메뉴로 재구성)
         "menu_file": "파일",
         "menu_new_window": "새 창",
+        "menu_close_window": "창 닫기",
         "menu_new_window_tip": "완전히 빈 새 창을 하나 더 엽니다.",
         "menu_recent_files": "최근 파일",
         "menu_recent_empty": "(최근 연 파일 없음)",
@@ -181,7 +182,7 @@ STRINGS = {
         "slider_brightness": "밝기",
         "slider_contrast": "대비",
         "btn_invert_colors": "색상 반전",
-        "invert_hint": "밝기/대비와 달리 원본에 직접 적용됩니다(밴드 검출에도 영향).",
+        "invert_hint": "클릭하면 즉시 색상을 반전합니다. 다시 누르면 원래 색으로 돌아옵니다. Ctrl+Z로 되돌릴 수 있습니다. 원본에 직접 적용되어 밴드 검출에도 영향을 줍니다.",
         "btn_reset_curve": "커브 리셋",
         "btn_reset_adjust_all": "보정 전체 리셋",
         # 레인 탭
@@ -203,8 +204,15 @@ STRINGS = {
         "tool_manual_lanes": "수동 조정",
         "tool_lane_list": "레인 목록",
         "tool_range": "세로 범위",
-        "tool_bands": "밴드 설정",
-        "tool_results": "결과표",
+        "tool_bands": "검출 설정",
+        "tool_results": "MW 결과",
+        "tool_marker": "마커 설정",
+        "marker_setup_hint": "마커 프리셋을 먼저 고른 뒤 적용할 레인을 선택하세요. 검출된 밴드와 MW를 확인하면 결과로 이동합니다. 프리셋 관리는 리본 맨 뒤에 있습니다.",
+        "marker_lane_label": "적용할 레인:",
+        "marker_setup_action": "마커 지정 · MW 입력",
+        "marker_setup_no_lanes": "먼저 레인을 지정하세요.",
+        "marker_setup_needs_detection": "밴드 검출이 필요합니다. MW 입력을 누르면 먼저 검출합니다.",
+        "marker_setup_detected": "검출된 밴드 {n}개 · 위에서 아래 순서로 MW를 입력하세요. 0은 제외합니다.",
         "tool_photos": "사진",
         "tool_align": "정렬",
         "tool_blend": "합성 설정",
@@ -223,7 +231,8 @@ STRINGS = {
         "lane_manual_hint": "자동 검출이 빗나가면 이미지 위에서 좌우로 드래그해 직접 지정",
         "btn_clear_all_lanes": "레인 전체 삭제",
         "btn_manage_marker_presets": "마커 프리셋 관리",
-        "marker_preset_btn_tip": "자주 쓰는 단백질 마커(밴드별 분자량)를 등록/삭제합니다.\n등록해두면 마커 레인의 'MW' 버튼에서 바로 선택할 수 있습니다.",
+        "tool_marker_presets": "마커 프리셋",
+        "marker_preset_btn_tip": "자주 쓰는 단백질 마커(밴드별 분자량)를 등록/삭제합니다.\n레인 유형에서 마커를 선택하면 MW 입력창에서 프리셋을 사용할 수 있습니다.",
         "group_vrange": "세로 분석 범위",
         "vrange_intro": "분석할 세로(이동거리) 구간을 지정합니다. 웰이나 염료 전선(dye front)처럼 정량에서 빼고 싶은 위/아래 구간을 제외할 때 씁니다.",
         "btn_vrange_mode_off": "범위 지정: 꺼짐",
@@ -232,7 +241,7 @@ STRINGS = {
         "btn_reset_vrange": "범위 초기화",
         "vrange_label_full": "범위: 전체 ({h}px)",
         "vrange_label_set": "범위: {top}px ~ {bot}px (전체 {h}px 중 {pct}%)",
-        "group_band_detect": "밴드 검출",
+        "group_band_detect": "검출 설정",
         "sensitivity_tip": "값이 클수록 더 약한 밴드까지 잡아냅니다(더 민감해짐).",
         "label_sensitivity": "민감도",
         "label_min_band_spacing": "밴드 최소간격(px)",
@@ -243,14 +252,14 @@ STRINGS = {
         "label_band_display": "밴드 표시 방식",
         "band_style_area": "영역 (경계 박스)",
         "band_style_line": "선 (피크 위치)",
-        "btn_run_analysis": "밴드 분석 실행",
+        "btn_run_analysis": "밴드 검출",
         "lane_col_name": "이름",
         "lane_col_type": "유형",
         "lane_col_order_delete": "순서/삭제",
         "tab_lanes": "레인",
         # 분석 탭
-        "analysis_tab_note": "정량은 보정 전 원본에서 계산합니다.\n커브·밝기·대비는 결과에 영향을 주지 않습니다.\n이미지에서 밴드를 클릭하면 이 표의 해당 강도로 이동합니다. 분석 실행은 상단 분석 리본에 있습니다.",
-        "mw_regression_placeholder": "MW 회귀: 마커 레인 2개 이상 + MW 입력 필요",
+        "analysis_tab_note": "정량은 보정 전 원본에서 계산합니다.\n커브·밝기·대비는 결과에 영향을 주지 않습니다.\n이미지에서 밴드를 클릭하면 이 표의 해당 강도로 이동합니다. 분석 실행은 상단 레인 리본에 있습니다.",
+        "mw_regression_placeholder": "MW 계산 대기 · 마커 한 레인에 유효한 기준점 2개 이상을 입력하세요.",
         "col_lane": "레인",
         "col_band": "밴드",
         "col_mw_kda": "MW(kDa)",
@@ -313,12 +322,12 @@ STRINGS = {
         "bsa_conc_title": "BSA 농도",
         "bsa_conc_label": "{name}의 BSA 양 (μg):",
         "no_bands_title": "밴드 없음",
-        "no_bands_run_analysis_msg": "먼저 '분석' 탭에서 밴드 분석을 실행하세요.",
+        "no_bands_run_analysis_msg": "이 레인에서 밴드가 검출되지 않았습니다. 레인 범위와 밴드 검출 설정을 조정한 뒤 다시 마커를 선택하세요.",
         "status_presets_saved": "마커 프리셋 {n}개 저장됨.",
         "no_lanes_title": "레인 없음",
         "no_lanes_msg": "'레인' 탭에서 레인을 먼저 지정하세요.",
-        "status_analysis_done": "분석 완료 — 밴드 {n}개 검출 (원본 기준)",
-        "status_analysis_done_smear": "분석 완료 — 밴드 {n}개 검출 (원본 기준, smear {s}개 제외)",
+        "status_analysis_done": "밴드 {n}개 검출 완료 (원본 기준) · 다음: 마커 설정 → MW 결과",
+        "status_analysis_done_smear": "밴드 {n}개 검출 완료 (원본 기준, smear {s}개 제외) · 다음: 마커 설정 → MW 결과",
         "mw_interp_result": "MW 보간(PCHIP)  참고 R²(선형 기준) = {r2:.4f}   (마커 {n_markers}레인, 기준점 {n_points}개)",
         "status_mw_interp_done": "MW 보간 완료  참고 R²={r2:.4f}  (마커 {n_markers}레인)",
         "std_need_more_lanes": "BSA 표준 레인 2개 이상 + 밴드 분석이 필요합니다.",
@@ -383,7 +392,7 @@ STRINGS = {
         "mode_lane_hint": "레인 조정 · 드래그로 추가 / 테두리로 폭 조절 / Esc로 종료",
         "mode_corner_hint": "젤 영역 지정 · 네 꼭짓점을 맞춘 뒤 Enter로 적용 / Esc로 종료",
         "mode_vrange_hint": "분석 범위 · 위아래로 드래그 / Esc로 종료",
-        "analysis_empty": "레인을 지정한 뒤 상단 분석 리본에서 ‘밴드 분석 실행’을 누르세요.",
+        "analysis_empty": "레인을 지정한 뒤 레인 리본에서 밴드 검출 → 마커 설정 순서로 진행하세요.",
         "analysis_no_bands": "분석 완료 · 검출된 밴드가 없습니다. 레인 범위와 민감도를 확인하세요.",
         "analysis_stale": "분석 조건이 바뀌었습니다. 다시 분석하세요.",
         "analysis_ready": "밴드 {n}개 · 표와 이미지에서 선택할 수 있습니다.",
@@ -482,12 +491,12 @@ STRINGS = {
         "help_html":
             "<h3>기본 흐름</h3>"
             "<p>이미지 열기 -> (필요시) <b>보정/펴기</b>로 다듬기 -> <b>레인</b>에서 레인 지정 후 분석 "
-            "-> 마커 MW 입력 -> <b>분석</b>·<b>정량</b> 탭에서 결과 확인 -> 저장</p>"
+            "-> 마커 MW 입력 -> 레인 리본의 <b>결과</b>·<b>정량</b>에서 확인 -> 저장</p>"
 
             "<h3>리본 구성</h3>"
             "<p><b>파일</b>(새 창·열기·최근 파일·붙여넣기·프로젝트 저장/새로 저장/현재 위치 열기·"
-            "결과 이미지 내보내기) · <b>웨스턴블롯</b>(합성 만들기·기존 합성 파일 불러오기) · "
-            "<b>보정</b> · <b>레인</b> · <b>분석</b> · "
+            "결과 이미지 내보내기·메모) · <b>웨스턴블롯</b>(합성 만들기·기존 합성 파일 불러오기) · "
+            "<b>보정</b> · <b>레인</b>(레인 지정·검출 설정·마커 프리셋·밴드 검출·마커 설정·MW 결과·정량) · "
             "<b>정보</b>(되돌리기·다시하기·전체 초기화·사용법·개발자 정보·업데이트·언어).</p>"
             "<p>상단 아이콘을 누르면 오른쪽에 그 도구의 설정만 표시됩니다. "
             "도구를 바꾸면 미확정 보정도 적용해 유지합니다. 취소하려면 전환 전에 Esc/Ctrl+Z를 누르세요.</p>"
@@ -585,16 +594,16 @@ STRINGS = {
             "함께 바뀝니다<br>"
             "· <b>밴드 표시 방식</b>: '영역'(경계 박스, 기본)과 '선'(피크 위치 한 줄) 중 "
             "고를 수 있습니다 — 표시만 바뀌고 정량값에는 영향이 없습니다<br>"
-            "· 상단 분석 리본의 '밴드 분석 실행'으로 검출 후 레인 목록에서 순서·구성 조정"
+            "· 상단 레인 리본의 '밴드 검출'로 밴드를 확인하고 '마커 설정'에서 MW 입력"
             "</p>"
 
-            "<h3>분석 / 정량 탭</h3>"
+            "<h3>결과 / 정량</h3>"
             "<p>검출된 밴드의 MW·강도·Volume 표를 보여줍니다. "
             "MW는 마커 레인에 입력한 값을 기준으로 곡선 보간하여 계산되며, "
             "정량 계산은 항상 보정 전 원본 데이터를 사용합니다.</p>"
 
-            "<h3>메모 탭</h3>"
-            "<p>정량 탭 바로 옆에 있는 자유 메모장입니다. 이 분석에 대한 메모를 남기면 "
+            "<h3>메모</h3>"
+            "<p>파일 리본의 메모 아이콘에서 여는 자유 메모장입니다. 이 분석에 대한 메모를 남기면 "
             "프로젝트 저장/불러오기 시 함께 저장·복원됩니다. 새 이미지를 열면(같은 창에서 "
             "새로 시작하면) 초기화됩니다.</p>"
 
@@ -658,6 +667,7 @@ STRINGS = {
         # Menu bar (used to be a toolbar -- reorganized into category menus as it grew)
         "menu_file": "File",
         "menu_new_window": "New Window",
+        "menu_close_window": "Close Window",
         "menu_new_window_tip": "Open another completely blank window.",
         "menu_recent_files": "Recent Files",
         "menu_recent_empty": "(No recent files)",
@@ -752,7 +762,7 @@ STRINGS = {
         "slider_brightness": "Brightness",
         "slider_contrast": "Contrast",
         "btn_invert_colors": "Invert Colors",
-        "invert_hint": "Unlike brightness/contrast, this is applied to the original image (affects band detection too).",
+        "invert_hint": "Click to invert colors immediately. Click again to restore the original colors. Undo with Ctrl+Z. Applied to the original image, affecting band detection too.",
         "btn_reset_curve": "Reset Curve",
         "btn_reset_adjust_all": "Reset All Adjustments",
         # Lanes tab
@@ -774,8 +784,15 @@ STRINGS = {
         "tool_manual_lanes": "Manual",
         "tool_lane_list": "Lane list",
         "tool_range": "Range",
-        "tool_bands": "Band settings",
-        "tool_results": "Results",
+        "tool_bands": "Detection settings",
+        "tool_results": "MW Results",
+        "tool_marker": "Marker setup",
+        "marker_setup_hint": "Choose a marker preset first, then its lane. Confirm the detected bands and MW values to open the results. Preset management is at the end of the ribbon.",
+        "marker_lane_label": "Apply to lane:",
+        "marker_setup_action": "Set marker / Enter MW",
+        "marker_setup_no_lanes": "Assign lanes first.",
+        "marker_setup_needs_detection": "Bands need detection. Enter MW will detect them first.",
+        "marker_setup_detected": "{n} detected bands · Enter MW from top to bottom. Zero excludes a band.",
         "tool_photos": "Photos",
         "tool_align": "Align",
         "tool_blend": "Blend",
@@ -794,7 +811,8 @@ STRINGS = {
         "lane_manual_hint": "If auto-detection misses, drag left-right on the image to add lanes manually",
         "btn_clear_all_lanes": "Clear All Lanes",
         "btn_manage_marker_presets": "Manage Marker Presets",
-        "marker_preset_btn_tip": "Add/remove frequently-used protein markers (molecular weight per band).\nOnce saved, you can select them directly from the 'MW' button on a marker lane.",
+        "tool_marker_presets": "Marker Presets",
+        "marker_preset_btn_tip": "Add/remove frequently-used protein markers (molecular weight per band).\nSelect Marker as a lane type to use presets in the MW entry dialog.",
         "group_vrange": "Vertical Analysis Range",
         "vrange_intro": "Restrict band detection to a vertical (migration-distance) window — e.g. to exclude the wells or the dye front from quantification.",
         "btn_vrange_mode_off": "Range Mode: Off",
@@ -803,7 +821,7 @@ STRINGS = {
         "btn_reset_vrange": "Reset Range",
         "vrange_label_full": "Range: Full ({h}px)",
         "vrange_label_set": "Range: {top}px - {bot}px ({pct}% of {h}px)",
-        "group_band_detect": "Band Detection",
+        "group_band_detect": "Detection settings",
         "sensitivity_tip": "Higher values detect even weaker bands (more sensitive).",
         "label_sensitivity": "Sensitivity",
         "label_min_band_spacing": "Min. band spacing (px)",
@@ -814,14 +832,14 @@ STRINGS = {
         "label_band_display": "Band Display Style",
         "band_style_area": "Area (boundary box)",
         "band_style_line": "Line (peak position)",
-        "btn_run_analysis": "Run Band Analysis",
+        "btn_run_analysis": "Detect bands",
         "lane_col_name": "Name",
         "lane_col_type": "Type",
         "lane_col_order_delete": "Order/Delete",
         "tab_lanes": "Lanes",
         # Analysis tab
-        "analysis_tab_note": "Quantification is always computed from the raw image, before adjustments.\nCurve/brightness/contrast do not affect results.\nClick a band on the image to jump to its intensity here. Run analysis from the top Analysis ribbon.",
-        "mw_regression_placeholder": "MW regression: needs 2+ marker lanes with MW values entered",
+        "analysis_tab_note": "Quantification is always computed from the raw image, before adjustments.\nCurve/brightness/contrast do not affect results.\nClick a band on the image to jump to its intensity here. Run analysis from the top Lanes ribbon.",
+        "mw_regression_placeholder": "MW pending · Enter at least two valid reference points in one marker lane.",
         "col_lane": "Lane",
         "col_band": "Band",
         "col_mw_kda": "MW (kDa)",
@@ -884,12 +902,12 @@ STRINGS = {
         "bsa_conc_title": "BSA Concentration",
         "bsa_conc_label": "BSA amount for {name} (μg):",
         "no_bands_title": "No Bands",
-        "no_bands_run_analysis_msg": "Please run band analysis in the 'Analysis' tab first.",
+        "no_bands_run_analysis_msg": "No bands were detected in this lane. Adjust the lane range and band detection settings, then select Marker again.",
         "status_presets_saved": "Saved {n} marker preset(s).",
         "no_lanes_title": "No Lanes",
         "no_lanes_msg": "Please assign lanes in the 'Lanes' tab first.",
-        "status_analysis_done": "Analysis complete — {n} band(s) detected (raw image)",
-        "status_analysis_done_smear": "Analysis complete — {n} band(s) detected (raw image, {s} smear excluded)",
+        "status_analysis_done": "{n} band(s) detected (raw image) · Next: Marker setup → MW Results",
+        "status_analysis_done_smear": "{n} band(s) detected (raw image, {s} smear excluded) · Next: Marker setup → MW Results",
         "mw_interp_result": "MW interpolation (PCHIP)  ref. R² (linear) = {r2:.4f}   ({n_markers} marker lane(s), {n_points} reference point(s))",
         "status_mw_interp_done": "MW interpolation done  ref. R²={r2:.4f}  ({n_markers} marker lane(s))",
         "std_need_more_lanes": "Need 2+ BSA standard lanes plus band analysis.",
@@ -954,7 +972,7 @@ STRINGS = {
         "mode_lane_hint": "Lanes · Drag to add / Drag borders to resize / Esc to finish",
         "mode_corner_hint": "Gel region · Adjust four corners, then Enter to apply / Esc to finish",
         "mode_vrange_hint": "Analysis range · Drag vertically / Esc to finish",
-        "analysis_empty": "Assign lanes, then select Run Band Analysis in the top Analysis ribbon.",
+        "analysis_empty": "Assign lanes, then use Detect bands → Marker setup in the Lanes ribbon.",
         "analysis_no_bands": "Analysis complete · No bands detected. Check lane ranges and sensitivity.",
         "analysis_stale": "Analysis settings changed. Run analysis again.",
         "analysis_ready": "{n} bands · Select in the table or image.",
@@ -1053,13 +1071,13 @@ STRINGS = {
         "help_html":
             "<h3>Basic Workflow</h3>"
             "<p>Open an image -> (if needed) clean up in <b>Adjust/Warp</b> -> assign lanes in <b>Lanes</b> and run analysis "
-            "-> enter marker MW -> check results in <b>Analysis</b>/<b>Standard Curve</b> -> save</p>"
+            "-> enter marker MW -> check <b>Results</b>/<b>Standard Curve</b> in the Lanes ribbon -> save</p>"
 
             "<h3>Ribbon Layout</h3>"
             "<p><b>File</b> (New Window, Open, Recent Files, Paste, Save/Save As/Open Project Location, "
-            "Export Result Image) · "
+            "Export Result Image, Notes) · "
             "<b>Western Blot</b> (Create composite, Load existing composite file) · "
-            "<b>Adjust</b> · <b>Lanes</b> · <b>Analysis</b> · "
+            "<b>Adjust</b> · <b>Lanes</b> (Assign lanes, Detection settings, Marker presets, Detect bands, Marker setup, MW Results, Standard Curve) · "
             "<b>Info</b> (Undo, Redo, Reset All, Help, About, Updates, Language).</p>"
             "<p>Select an icon to show only that tool's settings beside the main preview. "
             "Switching tools applies pending corrections; use Esc/Ctrl+Z beforehand to cancel them.</p>"
@@ -1158,7 +1176,7 @@ STRINGS = {
             "(intensity/volume) change along with this setting too<br>"
             "· <b>Band Display Style</b>: choose 'Area' (boundary box, default) or 'Line' (peak "
             "position only) — this only changes what's drawn, not the quantification<br>"
-            "· Run Band Analysis from the top Analysis ribbon, then reorder or adjust lanes in Lane List"
+            "· Use Detect bands in the Lanes ribbon to check bands, then enter MW in Marker setup"
             "</p>"
 
             "<h3>Analysis / Standard Curve Tabs</h3>"
@@ -1166,8 +1184,8 @@ STRINGS = {
             "MW is computed by curve interpolation from the values you entered on marker lanes, and "
             "quantification always uses the raw image data, before any adjustments.</p>"
 
-            "<h3>Notes Tab</h3>"
-            "<p>A free-form notes box right next to the Standard Curve tab. Anything you write here "
+            "<h3>Notes</h3>"
+            "<p>Open the free-form notes box using the Notes icon in the File ribbon. Anything you write here "
             "is saved with the project and restored when you reopen it. Opening a new image (starting "
             "fresh in the same window) clears it.</p>"
 

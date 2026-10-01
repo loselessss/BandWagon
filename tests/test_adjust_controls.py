@@ -6,7 +6,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import numpy as np
 from PIL import Image, ImageDraw
 from PyQt5.QtCore import Qt, QPoint, QPointF, QEvent
-from PyQt5.QtGui import QMouseEvent
+from PyQt5.QtGui import QMouseEvent, QFont
 from PyQt5.QtTest import QTest
 from PyQt5.QtWidgets import QApplication, QPushButton, QGroupBox
 
@@ -36,11 +36,16 @@ class AdjustControlsTest(unittest.TestCase):
         self.errors.assert_not_called()
 
     def click(self, key):
-        button = next(b for b in self.win.findChildren(QPushButton) if b.text() == tr(key))
-        for name, (_, group) in self.win.correct_tools.items():
-            if group.isAncestorOf(button):
-                self.win._select_ribbon_tool(name)
-                break
+        if key == "btn_invert_colors":
+            self.win.ribbon.setCurrentIndex(1)
+            button = self.win.ribbon_strips[1].buttons['invert']
+            self.win.ribbon_strips[1].scroll.ensureWidgetVisible(button)
+        else:
+            button = next(b for b in self.win.findChildren(QPushButton) if b.text() == tr(key))
+            for name, (_, group) in self.win.correct_tools.items():
+                if group.isAncestorOf(button):
+                    self.win._select_ribbon_tool(name)
+                    break
         self.app.processEvents()
         QTest.mouseClick(button, Qt.LeftButton)
         self.app.processEvents()
@@ -77,6 +82,25 @@ class AdjustControlsTest(unittest.TestCase):
             self.assertEqual([key for key, (_, group) in self.win.correct_tools.items()
                               if group.isVisibleTo(self.win.tabs)], [name])
 
+    def test_geometry_value_fields_fit_sign_and_units_at_minimum_window(self):
+        self.win.resize(900, 620)
+        for tool, spin in (('rotate', self.win.rot_spin), ('bow', self.win.bow_spin),
+                           ('shear', self.win.shear_spin)):
+            self.win._select_ribbon_tool(tool)
+            for points in (9, 14):
+                spin.setFont(QFont(self.win.font().family(), points))
+                spin.ensurePolished()
+                self.app.processEvents()
+                for value in (spin.minimum(), spin.maximum()):
+                    with self.subTest(tool=tool, font=points, value=value):
+                        # Block pixel edits: this test measures layout, not transforms.
+                        spin.blockSignals(True); spin.setValue(value); spin.blockSignals(False)
+                        self.app.processEvents()
+                        editor = spin.lineEdit()
+                        self.assertGreaterEqual(editor.width() - 4,
+                            editor.fontMetrics().horizontalAdvance(spin.text()))
+                        self.assertLessEqual(spin.geometry().right(), spin.parentWidget().width())
+
     def test_repeated_invert_clicks_restore_colors_and_undo_redo(self):
         self.win.correction_tabs.setCurrentIndex(1)
         original = np.array(self.win._orig)
@@ -89,6 +113,29 @@ class AdjustControlsTest(unittest.TestCase):
         np.testing.assert_array_equal(np.array(self.win._orig), 255 - original)
         self.win.btn_redo.trigger()
         np.testing.assert_array_equal(np.array(self.win._orig), original)
+
+    def test_invert_is_immediate_and_keeps_current_settings(self):
+        self.win._select_ribbon_tool('brightness')
+        button = self.win.ribbon_strips[1].buttons['invert']
+        self.assertFalse(button.isCheckable())
+        self.assertEqual(button.toolTip(), tr('invert_hint'))
+        self.assertNotIn('invert', self.win.ribbon_tools)
+        self.assertNotIn('invert', self.win.correct_tools)
+        before = (self.win.tabs.currentIndex(), self.win.correction_tabs.currentIndex(),
+                  self.win.settings_title.text())
+        self.win.sl_bright.setValue(20)
+        self.assertIsNotNone(self.win._color_preview_base)
+        original = np.array(self.win._orig)
+        self.click('btn_invert_colors')
+        np.testing.assert_array_equal(np.array(self.win._orig), 255 - original)
+        self.assertIsNone(self.win._color_preview_base)
+        self.assertEqual(self.win._active_tool, 'brightness')
+        self.assertTrue(self.win.ribbon_tools['brightness'][1].isChecked())
+        self.assertEqual((self.win.tabs.currentIndex(), self.win.correction_tabs.currentIndex(),
+                          self.win.settings_title.text()), before)
+        self.win.btn_undo.trigger()
+        np.testing.assert_array_equal(np.array(self.win._orig), original)
+        self.assertEqual(self.win.sl_bright.value(), 20)
 
     def test_repeated_rotation_and_flip_are_not_deduplicated(self):
         original = self.win._orig.tobytes()

@@ -133,7 +133,8 @@ class Lane:
     def analyze(self, gray_orig, prominence, distance, threshold_pct=40,
                 y_top=None, y_bot=None, smear_max_px=0):
         """원본 그레이스케일에서 프로파일·밴드·volume 계산(보정 무시).
-        volume = 밴드 피크 아래 면적(배경 차감 적분), 정량의 기준값.
+        느리게 변하는 배경/넓은 번짐을 분리한 신호에서 피크와 경계를 찾고,
+        volume은 그 경계 안의 원본 강도를 국소 배경 차감 적분한다.
 
         threshold_pct: 밴드 경계(=적분 범위) 기준 — '피크 높이에서 로컬
         배경을 뺀 순신호가 threshold_pct%로 떨어지는 지점'을 골짜기 범위
@@ -151,11 +152,20 @@ class Lane:
         strip = gray_orig[:, self.x1:self.x2 + 1].astype(float)
         width = strip.shape[1]                       # 레인 폭(px)
         self.profile = 255.0 - strip.mean(axis=1)    # 밴드가 어두울수록 높은 값
-        prof = self.profile
-        H = len(prof)
+        H = len(self.profile)
         y0 = 0 if y_top is None else int(np.clip(y_top, 0, H - 1))
         y1 = (H - 1) if y_bot is None else int(np.clip(y_bot, y0, H - 1))
         from scipy.signal import find_peaks
+        from scipy.ndimage import gaussian_filter1d, grey_opening
+        # Estimate the slowly changing background independently in the selected
+        # range. Detect on net signal, but integrate the original intensities.
+        # Opening removes broad plateaus without turning their edges into bands.
+        section = self.profile[y0:y1 + 1]
+        window = max(15, int(len(section) * .12) | 1)
+        smooth = gaussian_filter1d(section, .7, mode='nearest')
+        background = grey_opening(smooth, size=window, mode='nearest')
+        prof = np.zeros(H, dtype=float)
+        prof[y0:y1 + 1] = np.maximum(smooth - background, 0)
         peaks_local, props = find_peaks(prof[y0:y1 + 1], prominence=prominence, distance=distance)
         peaks = peaks_local + y0                      # 원본 이미지 행 좌표로 환산
         self.peak_prom = props.get("prominences", np.zeros(len(peaks)))
@@ -195,9 +205,9 @@ class Lane:
                 if prof[x] <= target:
                     r = x; break
             peak_bounds.append((l, r))
-            seg = prof[l:r + 1]
+            seg = self.profile[l:r + 1]
             # 경계 두 점을 잇는 직선을 국소 배경으로 보고 차감
-            base = np.linspace(prof[l], prof[r], len(seg))
+            base = np.linspace(self.profile[l], self.profile[r], len(seg))
             net = np.clip(seg - base, 0, None)
             area = float(net.sum())                  # 세로 적분 (강도·px)
             peak_area[i] = area

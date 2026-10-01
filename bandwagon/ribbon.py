@@ -52,7 +52,8 @@ class RibbonMixin:
         self.ribbon = QTabWidget(); self.ribbon.setFixedHeight(110)
         self.ribbon.setStyleSheet(self._tabs_css() + 'QTabBar::tab{padding:8px 12px;}')
         self.ribbon_strips = []; self.ribbon_tools = {}
-        self._ribbon_last = {1: 'rotate', 2: 'auto_lanes', 3: 'results'}
+        self._ribbon_last = {1: 'rotate', 2: 'auto_lanes'}
+        self._lane_last_tool = 'auto_lanes'
         self._active_tool = 'rotate'; self._switching_tool = False
         def action(key, label, symbol, fn): return (key, label, symbol, fn, False)
         def setting(key, label, symbol):
@@ -67,14 +68,18 @@ class RibbonMixin:
                 action('location','menu_project_open_location','open',self.open_project_location),
                 action('copy','toolbar_copy_result','copy',self.copy_image),
                 action('image','toolbar_save_result','save',self.save_image),
-                action('csv','toolbar_export_csv','download',self.export_csv)]),
+                action('csv','toolbar_export_csv','download',self.export_csv),
+                setting('memo','project_memo_label','memo')]),
             ('tab_adjust', [setting(k,'tool_'+k, sym) for k,sym in (
                 ('rotate','rotate'),('flip','flip'),('crop','crop'),('warp','warp'),('bow','curve'),
-                ('shear','shear'),('brightness','adjust'),('curve','curve'),('invert','color'))]),
+                ('shear','shear'),('brightness','adjust'),('curve','curve'))]
+                + [action('invert','tool_invert','color',self._invert_ribbon_colors)]),
             ('tab_lanes', [setting(k, 'tool_'+k, sym) for k,sym in (
-                ('auto_lanes','lanes'),('manual_lanes','adjust'),('lane_list','memo'),('range','crop'),('bands','analysis'))]),
-            ('tab_analysis', [setting('results','tool_results','analysis'),setting('quant','tab_std','quant'),
-                setting('memo','project_memo_label','memo'),action('run','btn_run_analysis','analysis',self._run_ribbon_analysis)]),
+                ('auto_lanes','lanes'),('manual_lanes','adjust'),('lane_list','memo'),('range','crop'),('bands','analysis'))]
+                + [action('run','btn_run_analysis','analysis',self._run_ribbon_analysis),
+                setting('marker','tool_marker','marker'),
+                setting('results','tool_results','analysis'),setting('quant','tab_std','quant'),
+                action('marker_presets','tool_marker_presets','marker',self._open_marker_presets)]),
             ('menu_western', [action('make','menu_western_open','open',self.open_composite_studio),
                 action('import','toolbar_composite_import','open',self.import_composite)]),
             ('menu_info', [action('undo','toolbar_undo','undo',self._undo),action('redo','toolbar_redo','redo',self._redo),
@@ -82,12 +87,14 @@ class RibbonMixin:
                 action('help','toolbar_help','help',self._show_help),action('about','toolbar_about','help',self._show_about),
                 action('update','toolbar_check_updates','download',lambda: self.check_for_updates(True)),
                 action('language','menu_language','color',lambda: self.m_language.exec_(self.ribbon.mapToGlobal(self.ribbon.rect().bottomLeft())))])]
-        category_icons = ('open', 'adjust', 'lanes', 'analysis', 'open', 'help')
+        category_icons = ('open', 'adjust', 'lanes', 'open', 'help')
         for index, (title, commands) in enumerate(pages):
             strip = ToolStrip(commands); self.ribbon.addTab(strip, tr(title)); self.ribbon_strips.append(strip)
             self.ribbon.setTabIcon(index, icon(category_icons[index]))
             for key, _, _, _, selectable in commands:
                 if selectable: self.ribbon_tools[key] = (index, strip.buttons[key])
+                if key == 'marker_presets': strip.buttons[key].setToolTip(tr('marker_preset_btn_tip'))
+                if key == 'invert': strip.buttons[key].setToolTip(tr('invert_hint'))
         self.ribbon.currentChanged.connect(self._on_ribbon_category)
         self.ribbon.setCurrentIndex(1)
         self._select_ribbon_tool('rotate')
@@ -97,20 +104,25 @@ class RibbonMixin:
         return self.ribbon
 
     def _sync_ribbon_history(self):
-        strip = self.ribbon_strips[5]
+        strip = self.ribbon_strips[4]
         strip.buttons['undo'].setEnabled(self.btn_undo.isEnabled())
         strip.buttons['redo'].setEnabled(self.btn_redo.isEnabled())
 
     def _run_ribbon_analysis(self):
         self._finish_tool_preview()
         if self.run_analysis():
-            self._select_ribbon_tool('results')
+            self._select_ribbon_tool('bands')
+
+    def _invert_ribbon_colors(self):
+        if self._orig is None: return
+        self._finish_tool_preview()
+        self._invert_colors()
 
     def _on_ribbon_category(self, index):
         if self._switching_tool: return
         if index in self._ribbon_last:
             self._select_ribbon_tool(self._ribbon_last[index])
-        elif index in (0, 4):
+        elif index in (0, 3):
             # Finish visible edits before saving/exporting or opening the studio.
             self._finish_tool_preview()
             self._switching_tool = True
@@ -140,6 +152,7 @@ class RibbonMixin:
             if name in self.correct_tools:
                 self.tabs.setCurrentIndex(0); self._show_correct_tool(name)
             elif name in self.lane_tools:
+                self._lane_last_tool = name
                 self.tabs.setCurrentIndex(1); self._show_lane_tool(name)
             else:
                 self.tabs.setCurrentIndex({'results': 2, 'quant': 3, 'memo': 4}[name])
@@ -152,6 +165,6 @@ class RibbonMixin:
 
     def _sync_ribbon_from_tab(self, index):
         if not hasattr(self, 'ribbon') or self._switching_tool: return
-        name = {0: self._ribbon_last.get(1, 'rotate'), 1: self._ribbon_last.get(2, 'auto_lanes'),
+        name = {0: self._ribbon_last.get(1, 'rotate'), 1: self._lane_last_tool,
                 2: 'results', 3: 'quant', 4: 'memo'}[index]
         if name != self._active_tool: self._select_ribbon_tool(name)

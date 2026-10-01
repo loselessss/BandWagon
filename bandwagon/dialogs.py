@@ -117,7 +117,7 @@ class MarkerDialog(QDialog):
 
         self.form = QFormLayout(); self.spins = []; self.match_combos = []
         for i in range(n):
-            sb = QDoubleSpinBox(); sb.setRange(0.1, 10000); sb.setDecimals(1)
+            sb = QDoubleSpinBox(); sb.setRange(0, 10000); sb.setDecimals(1)
             sb.setValue(existing[i] if i < len(existing) else 0.0)
             self.form.addRow(f"Band {i + 1}:", sb); self.spins.append(sb)
         lay.addLayout(self.form)
