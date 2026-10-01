@@ -10,7 +10,7 @@ PyQt5 기반 젤 전기영동(gel electrophoresis) 분석 도구. 단일 이미�
 
 ## 명령어
 
-**의존성 설치** (requirements.txt 없음 — README.txt 기준):
+**개발용 의존성 설치** ([README.md](README.md) 기준):
 ```bash
 pip install PyQt5 Pillow numpy scipy opencv-python
 ```
@@ -27,11 +27,14 @@ python -m bandwagon         # 패키지 직접 실행
 `run.pyw`는 콘솔 없이 더블클릭 실행용(배포 대상 사용자용, 디버그에는
 `run.py` 사용).
 
-**자동 테스트 스위트 없음.** 검증은 두 갈래:
-1. PyQt5 GUI가 필요한 부분 → 실제로 `python run.py`를 실행해 화면에서 확인.
-2. Qt 비의존 순수 로직(`imaging.py`의 변환 함수, `models.py`의 피크 검출
-   등) → numpy 배열만으로 격리해서 빠르게 검증 (예: 인위적 평행사변형
-   이미지로 `apply_shear_correction`이 직사각형에 가깝게 되돌리는지 확인).
+**검증** ([AGENTS.md](AGENTS.md) 기준):
+```bash
+python -m unittest discover -s tests -v
+git diff --check
+```
+`tests/`에는 이미지 처리·프로젝트·업데이트·릴리스 구조와 오프스크린 Qt
+상호작용 검사가 있다. 실제 화면의 배치·사용성은 추가로 앱을 실행해 확인한다.
+`scripts/qa_ui_layout.py`는 대표 화면을 `build/ui-qa/`에 렌더링한다.
 
 **i18n 키 일치 검증** (커밋 전 필수 — `i18n.py`의 ko/en 딕셔너리가 항상
 1:1 대응해야 함):
@@ -52,20 +55,24 @@ print('OK', len(keysets[0]), 'keys')
 
 **배포 빌드** (Windows 기준, 세부 절차는 각 문서 참고):
 ```bash
-build_exe.bat        # PyInstaller → dist\BandWagon.exe (자세한 내용: BUILD_EXE.txt)
-build_installer.bat  # Inno Setup → Output\BandWagon_Setup_X.X.exe (BUILD_INSTALLER.txt)
+build_exe.bat        # PyInstaller → dist\BandWagon\BandWagon.exe
+build_installer.bat  # Inno Setup → Output\BandWagon_Setup_<version>.exe
 ```
 macOS는 `./build_mac.sh` (실제 macOS에서만 가능 — PyInstaller는 크로스
-컴파일 미지원, 자세한 내용: `BUILD_MAC.txt`).
+컴파일 미지원). 자세한 절차는 [빌드 안내](docs/BUILDING.md)를 참고한다.
+Windows 배포 빌드는 CPython 3.14.6 x64와 `requirements-build.lock`으로
+검증하는 전용 `.venv-build`를 사용한다.
 
 ## 아키텍처
 
 `app.py`의 `Analyzer(QMainWindow)`가 여러 믹스인을 조립한 형태:
+- `RibbonMixin` (ribbon.py) — 리본 도구 선택·설정 패널·미리보기 전환
 - `StyleMixin` (style.py) — 테마/CSS
 - `GeometryMixin` (geometry.py) — 회전/기울기·곡률 보정/펴기(warp)/
   밝기·대비·톤커브, 되돌리기(undo/redo) 엔진(`_edit_ops`/`_replay_history`)
 - `LanesMixin` (lanes.py) — 레인 구성·자동검출
 - `FileIOMixin` (fileio.py) — 이미지/프로젝트 열기·저장, 합성 파일 임포트
+- `RecoveryMixin` (recovery.py) — 자동 복구 사본 관리
 
 `composite.py`(웨스턴 블롯 합성 스튜디오)는 **믹스인이 아니라 독립
 QDialog**다. `Analyzer` 내부 상태를 전혀 참조하지 않고, 오직
@@ -76,7 +83,8 @@ QDialog**다. `Analyzer` 내부 상태를 전혀 참조하지 않고, 오직
 
 기반 모듈:
 - `models.py` — 밴드 검출/피크 적분/MW 커브 피팅
-- `imaging.py` — 순수 이미지 변환 함수(Qt 의존 없음)
+- `imaging.py` — 이미지 변환 함수와 Qt 이미지 변환 헬퍼
+- `inline_curve.py` — 메인 미리보기 위의 기준선 곡률 보정
 - `widgets.py` — GelView/ThumbView 등 재사용 위젯
 - `theme.py` — 색상 디자인 토큰, 채널/레인 팔레트
 - `presets.py` — 마커(분자량 사다리) 프리셋 로드/저장 (`~/.bandwagon_markers.json`)
@@ -117,10 +125,11 @@ QDialog**다. `Analyzer` 내부 상태를 전혀 참조하지 않고, 오직
 올리고, 그보다 오른쪽 자리는 0으로 초기화한다. 예: `2.3.7`에서 새 기능을
 추가하면 `2.4.0`, 호환성이 깨지면 `3.0.0`, 버그만 고치면 `2.3.8`.
 
-`BUILD_INSTALLER.txt`에 적힌 절차를 따를 것 — 아래 두 곳을 **같이**
-맞춘다(자동 동기화 안 됨):
+`AGENTS.md`와 [빌드 안내](docs/BUILDING.md)의 절차를 따를 것 — 아래 파일을
+**같이** 맞춘다(자동 동기화 안 됨):
 - `bandwagon/meta.py`의 `APP_VERSION`, `RELEASE_DATE`
 - `installer.iss`의 `MyAppVersion`(CRLF/BOM 유지 — 텍스트 에디터로 열 것)
+- `CHANGELOG.md`의 최신 패치노트
 
 `CHANGELOG.md`는 최신 버전을 맨 위에 추가(기존 버전은 아래로 밀림).
 섹션 구성: `## 새 기능` → `## 개선` → `## 성능 개선` → `## 버그 수정` →

@@ -87,7 +87,7 @@ Setup EXE를 받고, 포터블은 다음 Portable ZIP을 받아 기존 폴더를
 2. 회전·기울기·곡률·원근과 밝기·대비를 필요한 만큼 보정합니다.
 3. 레인을 자동 검출하거나 직접 배치합니다.
 4. 마커 레인을 지정하고 기준 분자량을 입력합니다.
-5. 밴드 검출 조건을 조정한 뒤 분석을 실행합니다.
+5. 밴드 검출 조건을 조정한 뒤 **분석 리본 → 밴드 분석 실행**을 누릅니다. 완료하면 결과표로 이동합니다.
 6. 결과 이미지와 CSV를 내보내거나 `.bandwagon` 프로젝트로 저장합니다.
 
 가시광·UV 합성이 필요하면 먼저 **웨스턴블롯 → 만들기**에서 합성 파일을
@@ -203,8 +203,7 @@ build_installer.bat
 ```
 
 결과 설치 파일은 `Output/BandWagon_Setup_<version>.exe`에 생성됩니다.
-자세한 절차는 [BUILD_EXE.txt](BUILD_EXE.txt)와
-[BUILD_INSTALLER.txt](BUILD_INSTALLER.txt)를 참고하세요.
+자세한 절차는 [빌드 안내](docs/BUILDING.md#windows)를 참고하세요.
 
 macOS 앱은 실제 macOS 환경에서만 빌드할 수 있습니다.
 
@@ -212,15 +211,13 @@ macOS 앱은 실제 macOS 환경에서만 빌드할 수 있습니다.
 ./build_mac.sh
 ```
 
-자세한 내용은 [BUILD_MAC.txt](BUILD_MAC.txt)를 참고하세요.
+자세한 내용은 [빌드 안내](docs/BUILDING.md#macos)를 참고하세요.
 
 ## 문서
 
 - [CHANGELOG.md](CHANGELOG.md): 버전별 변경 기록
-- [README.txt](README.txt): 소스 폴더에서 빠르게 실행하는 방법
-- [BUILD_EXE.txt](BUILD_EXE.txt): Windows 실행 파일 빌드
-- [BUILD_INSTALLER.txt](BUILD_INSTALLER.txt): Windows 설치 프로그램 빌드
-- [BUILD_MAC.txt](BUILD_MAC.txt): macOS 앱 빌드
+- [빌드 안내](docs/BUILDING.md): Windows 실행 파일·설치 프로그램과 macOS 앱 빌드
+- [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md): 개발 계획과 진행 기록
 - [RELEASE_PROCESS.md](RELEASE_PROCESS.md): 정식 릴리스 Assets 구성과 게시 절차
 - [RELEASE_DEPENDENCIES.md](RELEASE_DEPENDENCIES.md): 의존성 출처와 소스·빌드 정보
 

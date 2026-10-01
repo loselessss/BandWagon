@@ -25,3 +25,8 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+# Local assistant settings, backups and user test images
+/.claude/
+/AGENTS.local.backup.md
+/Test/

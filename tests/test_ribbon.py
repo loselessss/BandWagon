@@ -5,13 +5,15 @@ from unittest.mock import patch
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 import numpy as np
 from PIL import Image
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtWidgets import QApplication, QAbstractButton
 from PyQt5.QtCore import QPoint
+from PyQt5.QtGui import QFont
 from bandwagon.composite import CompositeStudio
 from bandwagon.imaging import pil_to_pixmap
 from bandwagon.ribbon import ToolStrip
 from bandwagon.app import Analyzer
 from bandwagon.models import Lane
+from bandwagon.i18n import tr
 
 
 class RibbonTest(unittest.TestCase):
@@ -68,7 +70,7 @@ class RibbonTest(unittest.TestCase):
         finally:
             win.close()
 
-    def test_lane_actions_follow_settings_without_large_blank_space(self):
+    def test_lane_settings_remain_compact_without_footer_actions(self):
         win = Analyzer()
         try:
             win.show()
@@ -79,11 +81,67 @@ class RibbonTest(unittest.TestCase):
                         win._select_ribbon_tool(tool)
                         self.app.processEvents()
                         scroll = win.lane_settings_scroll
-                        gap = win.btn_run_analysis.y() - scroll.y() - scroll.height()
-                        self.assertLessEqual(gap, 12)
+                        self.assertLessEqual(scroll.height(), scroll.sizeHint().height() + 2)
                         self.assertFalse(win.lane_table.isVisible())
-                        self.assertTrue(win.btn_run_analysis.isVisible())
         finally:
+            win.close()
+
+    def test_analysis_action_exists_only_once_and_opens_results(self):
+        win = Analyzer()
+        try:
+            image = np.full((180, 120, 3), 255, dtype=np.uint8)
+            image[40:46] = 20; image[100:106] = 20
+            win._orig = Image.fromarray(image); win._after_load('ribbon-analysis.png')
+            win.lanes = [Lane(0, 10, 50), Lane(1, 60, 100)]
+            win._rebuild_lane_table(); win._select_ribbon_tool('memo'); win.show()
+            self.app.processEvents()
+            actions = [button for button in win.findChildren(QAbstractButton)
+                       if button.text() == tr('btn_run_analysis')]
+            self.assertEqual(len(actions), 1)
+            self.assertIs(actions[0], win.ribbon_strips[3].buttons['run'])
+            self.assertNotIn('run', win.ribbon_strips[2].buttons)
+            actions[0].click(); self.app.processEvents()
+            self.assertEqual(win._active_tool, 'results')
+            self.assertEqual(win.ribbon.currentIndex(), 3)
+            self.assertTrue(win.result_table.isVisible())
+            self.assertEqual(win.result_table.rowCount(), 4)
+            self.assertEqual(win.analysis_notice.text(), tr('analysis_ready', n=4))
+        finally:
+            win._saved_snapshot = win._project_state_snapshot()
+            win.close()
+
+    def test_analysis_without_input_does_not_switch_to_results(self):
+        win = Analyzer()
+        try:
+            win._select_ribbon_tool('memo')
+            with patch.object(win, '_info') as info:
+                win.ribbon_strips[3].buttons['run'].click()
+            info.assert_called_once()
+            self.assertEqual(win._active_tool, 'memo')
+            win._orig = Image.new('RGB', (100, 100), 'white')
+            win._after_load('empty.png')
+            with patch.object(win, '_info') as info:
+                win.ribbon_strips[3].buttons['run'].click()
+            info.assert_called_once()
+            self.assertEqual(win._active_tool, 'memo')
+        finally:
+            win._saved_snapshot = win._project_state_snapshot()
+            win.close()
+
+    def test_zero_detected_bands_still_show_completed_result(self):
+        win = Analyzer()
+        try:
+            win._orig = Image.new('RGB', (100, 100), 'white'); win._after_load('empty-bands.png')
+            win.lanes = [Lane(0, 10, 50)]; win._rebuild_lane_table()
+            win._select_ribbon_tool('memo')
+            win.ribbon_strips[3].buttons['run'].click()
+            self.assertEqual(win._active_tool, 'results')
+            self.assertEqual(win.result_table.rowCount(), 0)
+            self.assertEqual(win.analysis_notice.text(), tr('analysis_no_bands'))
+            win.sp_prom.setValue(80)
+            self.assertEqual(win.analysis_notice.text(), tr('analysis_stale'))
+        finally:
+            win._saved_snapshot = win._project_state_snapshot()
             win.close()
 
     def test_empty_profile_is_compact_but_real_graph_retains_its_height(self):
@@ -97,6 +155,25 @@ class RibbonTest(unittest.TestCase):
             win.profile.set_lanes([])
             self.assertEqual(win.profile.height(), 64)
         finally:
+            win.close()
+
+    def test_lane_rows_fit_controls_and_larger_name_font(self):
+        win = Analyzer()
+        try:
+            font = QFont(win.lane_table.font()); font.setPointSize(18)
+            win.lane_table.setFont(font)
+            win.lanes = [Lane(0, 10, 40), Lane(1, 50, 80)]
+            win.lanes[0].name = 'Long lane name / 긴 레인 이름'
+            win._rebuild_lane_table()
+            win._select_ribbon_tool('lane_list'); win.show(); self.app.processEvents()
+            for row in range(2):
+                combo = win.lane_table.cellWidget(row, 1)
+                self.assertGreaterEqual(combo.height(), combo.sizeHint().height())
+                self.assertGreaterEqual(win.lane_table.rowHeight(row),
+                                        win.lane_table.fontMetrics().height() + 12)
+            self.assertEqual(win.lane_table.item(0, 0).toolTip(), win.lanes[0].name)
+        finally:
+            win._saved_snapshot = win._project_state_snapshot()
             win.close()
 
     def test_studio_ribbon_preserves_corners_and_matches_export_blend(self):

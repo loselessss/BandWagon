@@ -218,10 +218,6 @@ class LanesMixin:
         style_row.addWidget(self.combo_band_style, 1)
         style_wrap = QWidget(); style_wrap.setLayout(style_row); v.addWidget(style_wrap)
 
-        run = QPushButton(tr("btn_run_analysis")); run.clicked.connect(self.run_analysis); run.setStyleSheet(self._btn_accent_css())
-        self.btn_run_analysis = run
-        run_hint = QLabel(tr("run_analysis_hint"))
-        run_hint.setStyleSheet(f"color:{MUTE};font-size:10px;"); run_hint.setWordWrap(True)
         v.addStretch()
 
         self.lane_table = QTableWidget(0, 3)
@@ -238,7 +234,8 @@ class LanesMixin:
         self.lane_table.setColumnWidth(0, 106)
         self.lane_table.setColumnWidth(1, 82)
         self.lane_table.setColumnWidth(2, 94)
-        self.lane_table.setStyleSheet(self._table_css())
+        self.lane_table.setStyleSheet(self._table_css() +
+            'QTableWidget QLineEdit{padding:2px 4px;}')
         delegate = LaneNameDelegate(self.lane_table)
         delegate.advanceRequested.connect(lambda row: QTimer.singleShot(10, lambda: self._edit_next_lane_name(row)))
         self.lane_table.setItemDelegateForColumn(0, delegate)
@@ -248,9 +245,7 @@ class LanesMixin:
         # Keep the table outside the settings scroll area to avoid nested scrolling.
         self.lane_table.setMinimumHeight(150)
         outer.addWidget(self.lane_table, 1)
-        outer.addWidget(run)
-        outer.addWidget(run_hint)
-        # Unused height belongs below the controls, never between settings and actions.
+        # Unused height belongs below the controls, never between settings and table.
         self.lane_panel_bottom_index = outer.count()
         outer.addStretch()
         self.tabs.addTab(container, tr("tab_lanes"))
@@ -540,8 +535,10 @@ class LanesMixin:
         for row, lane in enumerate(self.lanes):
             r = self.lane_table.rowCount(); self.lane_table.insertRow(r)
             item = QTableWidgetItem(lane.name); item.setForeground(lane.color)
+            item.setToolTip(lane.name)
             self.lane_table.setItem(r, 0, item)
-            combo = QComboBox(); combo.addItems([tr("lane_kind_sample"), tr("lane_kind_marker"), tr("lane_kind_bsa")]); combo.setStyleSheet(self._combo_css())
+            combo = QComboBox(); combo.addItems([tr("lane_kind_sample"), tr("lane_kind_marker"), tr("lane_kind_bsa")])
+            combo.setStyleSheet(self._combo_css() + 'QComboBox{padding:2px 4px;padding-right:24px;}')
             combo.setCurrentIndex({"sample": 0, "marker": 1, "bsa": 2}[lane.kind])
             # activated는 currentIndexChanged와 달리 '같은 항목을 다시 선택'해도
             # 신호가 발생한다 — 그래야 이미 '마커'인 상태에서 마커를 다시 눌렀을 때
@@ -561,6 +558,12 @@ class LanesMixin:
             delbtn.clicked.connect(lambda _, i=row: self._delete_lane(i))
             oh.addWidget(up); oh.addWidget(down); oh.addWidget(delbtn)
             self.lane_table.setCellWidget(r, 2, order)
+            combo.ensurePolished(); order.ensurePolished()
+            # Cell widgets need their own font/style-aware height; a fixed 32px
+            # row can clip the combo or name editor with larger Windows fonts.
+            self.lane_table.setRowHeight(r, max(32,
+                self.lane_table.fontMetrics().height() + 12,
+                combo.sizeHint().height() + 2, order.minimumSizeHint().height() + 4))
         if 0 <= selected_row < len(self.lanes):
             self.lane_table.setCurrentCell(selected_row, 0)
             self.gel.selected_lane = self.lanes[selected_row]
@@ -640,8 +643,14 @@ class LanesMixin:
         if not self.lanes:
             self._analysis_stale = False
         count = self.result_table.rowCount()
-        key = "analysis_stale" if getattr(self, "_analysis_stale", False) else (
-            "analysis_ready" if count else "analysis_empty")
+        if getattr(self, "_analysis_stale", False):
+            key = 'analysis_stale'
+        elif count:
+            key = 'analysis_ready'
+        elif any(lane.profile is not None for lane in self.lanes):
+            key = 'analysis_no_bands'
+        else:
+            key = 'analysis_empty'
         self.analysis_notice.setText(tr(key, n=count))
 
     def _set_lane_kind(self, lane, idx, combo):
@@ -738,6 +747,7 @@ class LanesMixin:
             self.status.showMessage(tr("status_analysis_done_smear", n=total, s=n_smear))
         else:
             self.status.showMessage(tr("status_analysis_done", n=total))
+        return True
 
     def _compute_mw(self):
         markers = [l for l in self.lanes if l.kind == "marker"

@@ -130,7 +130,7 @@ class GelInteractionsTest(unittest.TestCase):
             self.assertEqual(win.analysis_notice.text(), tr("analysis_stale"))
             win.run_analysis()
             self.assertFalse(win._analysis_stale)
-            self.assertEqual(win.analysis_notice.text(), tr("analysis_empty"))
+            self.assertEqual(win.analysis_notice.text(), tr("analysis_no_bands"))
             win._select_ribbon_tool('bow')
             self.assertTrue(win.bow_spin.isVisibleTo(win.correction_tabs))
             self.assertFalse(win.shear_spin.isVisibleTo(win.correction_tabs))

@@ -17,7 +17,6 @@ from PyQt5.QtGui import QFontDatabase, QFont
 from PyQt5.QtWidgets import QApplication
 from bandwagon.app import Analyzer
 from bandwagon.export_dialog import ExportDialog
-from bandwagon.straighten_dialog import StraightenDialog
 from bandwagon.models import Lane
 from bandwagon.dialogs import MarkerDialog, MarkerPresetManager
 from bandwagon.composite import CompositeStudio

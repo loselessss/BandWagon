@@ -244,13 +244,12 @@ STRINGS = {
         "band_style_area": "영역 (경계 박스)",
         "band_style_line": "선 (피크 위치)",
         "btn_run_analysis": "밴드 분석 실행",
-        "run_analysis_hint": "레인을 지정한 뒤 분석을 실행하면 이 화면에서 바로 마커 MW를 입력할 수 있습니다.",
         "lane_col_name": "이름",
         "lane_col_type": "유형",
         "lane_col_order_delete": "순서/삭제",
         "tab_lanes": "레인",
         # 분석 탭
-        "analysis_tab_note": "정량은 보정 전 원본에서 계산합니다.\n커브·밝기·대비는 결과에 영향을 주지 않습니다.\n이미지에서 밴드를 클릭하면 이 표의 해당 강도로 이동합니다. 밴드 분석 실행은 '레인' 탭에 있습니다.",
+        "analysis_tab_note": "정량은 보정 전 원본에서 계산합니다.\n커브·밝기·대비는 결과에 영향을 주지 않습니다.\n이미지에서 밴드를 클릭하면 이 표의 해당 강도로 이동합니다. 분석 실행은 상단 분석 리본에 있습니다.",
         "mw_regression_placeholder": "MW 회귀: 마커 레인 2개 이상 + MW 입력 필요",
         "col_lane": "레인",
         "col_band": "밴드",
@@ -384,7 +383,8 @@ STRINGS = {
         "mode_lane_hint": "레인 조정 · 드래그로 추가 / 테두리로 폭 조절 / Esc로 종료",
         "mode_corner_hint": "젤 영역 지정 · 네 꼭짓점을 맞춘 뒤 Enter로 적용 / Esc로 종료",
         "mode_vrange_hint": "분석 범위 · 위아래로 드래그 / Esc로 종료",
-        "analysis_empty": "레인을 지정하고 ‘분석 실행’을 누르세요.",
+        "analysis_empty": "레인을 지정한 뒤 상단 분석 리본에서 ‘밴드 분석 실행’을 누르세요.",
+        "analysis_no_bands": "분석 완료 · 검출된 밴드가 없습니다. 레인 범위와 민감도를 확인하세요.",
         "analysis_stale": "분석 조건이 바뀌었습니다. 다시 분석하세요.",
         "analysis_ready": "밴드 {n}개 · 표와 이미지에서 선택할 수 있습니다.",
         "lane_move_up": "레인 위로 이동",
@@ -585,7 +585,7 @@ STRINGS = {
             "함께 바뀝니다<br>"
             "· <b>밴드 표시 방식</b>: '영역'(경계 박스, 기본)과 '선'(피크 위치 한 줄) 중 "
             "고를 수 있습니다 — 표시만 바뀌고 정량값에는 영향이 없습니다<br>"
-            "· '밴드 분석 실행'으로 검출 후 Up/Dn/삭제로 레인 순서·구성 조정"
+            "· 상단 분석 리본의 '밴드 분석 실행'으로 검출 후 레인 목록에서 순서·구성 조정"
             "</p>"
 
             "<h3>분석 / 정량 탭</h3>"
@@ -815,13 +815,12 @@ STRINGS = {
         "band_style_area": "Area (boundary box)",
         "band_style_line": "Line (peak position)",
         "btn_run_analysis": "Run Band Analysis",
-        "run_analysis_hint": "After assigning lanes, run analysis to enter marker MW values right here.",
         "lane_col_name": "Name",
         "lane_col_type": "Type",
         "lane_col_order_delete": "Order/Delete",
         "tab_lanes": "Lanes",
         # Analysis tab
-        "analysis_tab_note": "Quantification is always computed from the raw image, before adjustments.\nCurve/brightness/contrast do not affect results.\nClick a band on the image to jump to its intensity here. Run band analysis on the Lanes tab.",
+        "analysis_tab_note": "Quantification is always computed from the raw image, before adjustments.\nCurve/brightness/contrast do not affect results.\nClick a band on the image to jump to its intensity here. Run analysis from the top Analysis ribbon.",
         "mw_regression_placeholder": "MW regression: needs 2+ marker lanes with MW values entered",
         "col_lane": "Lane",
         "col_band": "Band",
@@ -955,7 +954,8 @@ STRINGS = {
         "mode_lane_hint": "Lanes · Drag to add / Drag borders to resize / Esc to finish",
         "mode_corner_hint": "Gel region · Adjust four corners, then Enter to apply / Esc to finish",
         "mode_vrange_hint": "Analysis range · Drag vertically / Esc to finish",
-        "analysis_empty": "Assign lanes, then run band analysis.",
+        "analysis_empty": "Assign lanes, then select Run Band Analysis in the top Analysis ribbon.",
+        "analysis_no_bands": "Analysis complete · No bands detected. Check lane ranges and sensitivity.",
         "analysis_stale": "Analysis settings changed. Run analysis again.",
         "analysis_ready": "{n} bands · Select in the table or image.",
         "lane_move_up": "Move lane up",
@@ -1158,7 +1158,7 @@ STRINGS = {
             "(intensity/volume) change along with this setting too<br>"
             "· <b>Band Display Style</b>: choose 'Area' (boundary box, default) or 'Line' (peak "
             "position only) — this only changes what's drawn, not the quantification<br>"
-            "· After 'Run Band Analysis', use Up/Dn/Delete to reorder or adjust lanes"
+            "· Run Band Analysis from the top Analysis ribbon, then reorder or adjust lanes in Lane List"
             "</p>"
 
             "<h3>Analysis / Standard Curve Tabs</h3>"

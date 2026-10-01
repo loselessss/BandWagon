@@ -8,12 +8,11 @@ from PIL import Image, ImageDraw
 from PyQt5.QtCore import Qt, QPoint, QPointF, QEvent
 from PyQt5.QtGui import QMouseEvent
 from PyQt5.QtTest import QTest
-from PyQt5.QtWidgets import QApplication, QPushButton, QDialog, QGroupBox
+from PyQt5.QtWidgets import QApplication, QPushButton, QGroupBox
 
 from bandwagon.app import Analyzer
 from bandwagon.i18n import tr
 from bandwagon.imaging import apply_edit_op, apply_reference_curve, reference_curve
-from bandwagon.straighten_dialog import StraightenDialog
 
 
 class AdjustControlsTest(unittest.TestCase):

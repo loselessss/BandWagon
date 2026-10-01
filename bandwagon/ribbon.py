@@ -72,10 +72,9 @@ class RibbonMixin:
                 ('rotate','rotate'),('flip','flip'),('crop','crop'),('warp','warp'),('bow','curve'),
                 ('shear','shear'),('brightness','adjust'),('curve','curve'),('invert','color'))]),
             ('tab_lanes', [setting(k, 'tool_'+k, sym) for k,sym in (
-                ('auto_lanes','lanes'),('manual_lanes','adjust'),('lane_list','memo'),('range','crop'),('bands','analysis'))]
-                + [action('run','btn_run_analysis','analysis',self.run_analysis)]),
+                ('auto_lanes','lanes'),('manual_lanes','adjust'),('lane_list','memo'),('range','crop'),('bands','analysis'))]),
             ('tab_analysis', [setting('results','tool_results','analysis'),setting('quant','tab_std','quant'),
-                setting('memo','project_memo_label','memo'),action('run','btn_run_analysis','analysis',self.run_analysis)]),
+                setting('memo','project_memo_label','memo'),action('run','btn_run_analysis','analysis',self._run_ribbon_analysis)]),
             ('menu_western', [action('make','menu_western_open','open',self.open_composite_studio),
                 action('import','toolbar_composite_import','open',self.import_composite)]),
             ('menu_info', [action('undo','toolbar_undo','undo',self._undo),action('redo','toolbar_redo','redo',self._redo),
@@ -101,6 +100,11 @@ class RibbonMixin:
         strip = self.ribbon_strips[5]
         strip.buttons['undo'].setEnabled(self.btn_undo.isEnabled())
         strip.buttons['redo'].setEnabled(self.btn_redo.isEnabled())
+
+    def _run_ribbon_analysis(self):
+        self._finish_tool_preview()
+        if self.run_analysis():
+            self._select_ribbon_tool('results')
 
     def _on_ribbon_category(self, index):
         if self._switching_tool: return
