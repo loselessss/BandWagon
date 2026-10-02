@@ -16,16 +16,17 @@ from .i18n import tr
 from .imaging import pil_to_pixmap, render_analysis_overlay
 
 
-DEFAULT_OPTIONS = dict(photo=True, border=True, marker_mw=True, annotation=True,
+DEFAULT_OPTIONS = dict(photo=True, border=True, bands=False, marker_mw=True, lane_mw=False, annotation=True,
                        text_transparency=0, graphic_transparency=0, linked=True)
 
 
-def render_export(source, lanes, options, font_scale=1.0):
+def render_export(source, lanes, options, font_scale=1.0, band_style='area'):
     """The preview and final export use the same rendering path."""
     return render_analysis_overlay(
-        source, lanes, transparent_bg=not options["photo"],
+        source, lanes, transparent_bg=not options["photo"], band_style=band_style,
         show_border=options["border"], show_marker_mw=options["marker_mw"],
-        show_annotation=options["annotation"], show_bands=False, mw_marker_only=True,
+        show_annotation=options["annotation"], show_bands=options.get('bands', False), mw_marker_only=False,
+        show_lane_mw=options.get('lane_mw', False),
         text_opacity=100 - options["text_transparency"],
         graphic_opacity=100 - options["graphic_transparency"],
         image_opacity=100 - options["graphic_transparency"], font_scale=font_scale)
@@ -52,7 +53,7 @@ class ExportPreview(QWidget):
 
 
 class ExportDialog(QDialog):
-    def __init__(self, source, lanes, settings, parent=None, saving=False):
+    def __init__(self, source, lanes, settings, parent=None, saving=False, band_style=None):
         super().__init__(parent)
         _no_help_button(self)
         self.setWindowTitle(tr("export_options_title"))
@@ -61,6 +62,7 @@ class ExportDialog(QDialog):
         self.settings = settings
         self._source = source
         self._lanes = lanes
+        self.band_style = band_style or getattr(parent, '_band_display_style', 'area')
         saved = dict(DEFAULT_OPTIONS)
         try:
             values = json.loads(settings.value("export/options", "{}"))
@@ -77,7 +79,9 @@ class ExportDialog(QDialog):
         controls = QVBoxLayout()
         self.checks = {}
         for key, label in (("photo", "export_include_photo"), ("border", "export_component_border"),
+                           ("bands", "export_component_bands"),
                            ("marker_mw", "export_component_marker_mw"),
+                           ("lane_mw", "export_component_lane_mw"),
                            ("annotation", "export_component_annotation")):
             check = QCheckBox(tr(label)); check.setChecked(saved[key])
             check.setStyleSheet(parent._checkbox_css() if parent else "")
@@ -151,7 +155,8 @@ class ExportDialog(QDialog):
 
     def refresh_preview(self):
         options = self.options()
-        rendered = render_export(self.preview_source, self.preview_lanes, options, self.preview_scale)
+        rendered = render_export(self.preview_source, self.preview_lanes, options,
+                                 self.preview_scale, self.band_style)
         self.preview.pixmap = pil_to_pixmap(rendered)
         self.preview.update()
         visible = rendered.getchannel("A").getbbox() is not None

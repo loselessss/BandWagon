@@ -13,17 +13,57 @@ from PyQt5.QtWidgets import (
     QComboBox, QFormLayout, QGroupBox, QHBoxLayout, QHeaderView,
     QInputDialog, QLabel, QPushButton, QSpinBox, QTableWidget,
     QTableWidgetItem, QTextEdit, QVBoxLayout, QWidget, QScrollArea, QToolButton,
-    QStyledItemDelegate, QLineEdit, QSizePolicy,
+    QStyledItemDelegate, QLineEdit, QSizePolicy, QListView,
 )
 from PyQt5.QtCore import Qt, QTimer, QEvent, QSize, pyqtSignal
 
 from .i18n import tr
 from .imaging import lane_boundary_signal
+from .fluent_icons import icon
 from .theme import *
 from .models import Lane
 from .widgets import StdCurveView, FineSlider
 from .dialogs import MarkerDialog, MarkerPresetManager, _dialog_style, _no_help_button
 from .presets import load_marker_presets, save_marker_presets
+
+
+class LaneKindCombo(QComboBox):
+    """Fit all three lane types, including popup padding and larger fonts."""
+    def __init__(self):
+        super().__init__()
+        self.setView(QListView())
+        self.setMaxVisibleItems(3)
+
+    def showPopup(self):
+        view = self.view()
+        view.ensurePolished()
+        rows = sum(max(view.sizeHintForRow(i), self.fontMetrics().height() + 8)
+                   for i in range(self.count()))
+        view.setMinimumHeight(rows + 2 * view.frameWidth() + 8)
+        super().showPopup()
+
+
+class ResultTable(QTableWidget):
+    """Fit all five result columns while keeping headers and numbers readable."""
+    def fit_columns(self):
+        if not self.columnCount(): return
+        header = self.horizontalHeader()
+        metrics = header.fontMetrics()
+        labels = [self.horizontalHeaderItem(i).text() for i in range(self.columnCount())
+                  if self.horizontalHeaderItem(i) is not None]
+        minimum = max([40, metrics.horizontalAdvance('99999.9') + 14]
+                      + [metrics.horizontalAdvance(label) + 14 for label in labels])
+        header.setMinimumSectionSize(minimum)
+        self.setMinimumWidth(minimum * self.columnCount() + 2 * self.frameWidth()
+                             + self.verticalScrollBar().sizeHint().width())
+
+    def showEvent(self, event):
+        self.fit_columns()
+        super().showEvent(event)
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() in (QEvent.FontChange, QEvent.StyleChange): self.fit_columns()
 
 
 class LaneSettingsScroll(QScrollArea):
@@ -232,6 +272,16 @@ class LanesMixin:
         style_row.addWidget(self.combo_band_style, 1)
         style_wrap = QWidget(); style_wrap.setLayout(style_row); v.addWidget(style_wrap)
 
+        self.band_detect_wrap = QWidget()
+        detect_layout = QVBoxLayout(self.band_detect_wrap); detect_layout.setContentsMargins(0, 4, 0, 0)
+        self.btn_detect_bands = QPushButton(tr('btn_run_analysis'))
+        self.btn_detect_bands.setIcon(icon('analysis'))
+        self.btn_detect_bands.setStyleSheet(self._btn_accent_css())
+        self.btn_detect_bands.setToolTip(tr('ribbon_detect_tip'))
+        self.btn_detect_bands.clicked.connect(lambda _checked=False: self._run_band_detection())
+        detect_layout.addWidget(self.btn_detect_bands)
+        v.addWidget(self.band_detect_wrap)
+
         v.addStretch()
 
         self.lane_table = QTableWidget(0, 3)
@@ -264,16 +314,21 @@ class LanesMixin:
         outer.addStretch()
         self.tabs.addTab(container, tr("tab_lanes"))
         self.lane_tools = {'auto_lanes': box, 'manual_lanes': manual,
-                           'lane_list': management, 'range': vr_box, 'bands': det_box,
+                           'lane_list': management, 'range': vr_box,
                            'marker': marker_box}
+        self.band_settings_box = det_box
         self.lane_style_wrap = style_wrap
         self._show_lane_tool('auto_lanes')
 
     def _show_lane_tool(self, name):
-        for key, widget in self.lane_tools.items(): widget.setVisible(key == name)
+        show_detection = name == 'manual_lanes'
+        for key, widget in self.lane_tools.items():
+            widget.setVisible(key == name)
+        self.band_settings_box.setVisible(show_detection)
         self.band_settings_toggle.hide()
-        self.lane_style_wrap.setVisible(name == 'bands')
-        has_table = name in ('lane_list', 'manual_lanes')
+        self.lane_style_wrap.setVisible(show_detection)
+        self.band_detect_wrap.setVisible(show_detection)
+        has_table = name == 'lane_list'
         self.lane_table.setVisible(has_table)
         self.lane_settings_scroll.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
         self.lane_panel_layout.setStretch(0, 0)
@@ -346,15 +401,13 @@ class LanesMixin:
         self.analysis_notice.setStyleSheet(f"color:{CYAN};font-size:12px;padding:6px;")
         v.addWidget(self.analysis_notice)
 
-        self.result_table = QTableWidget(0, 5)
-        self.result_table.setHorizontalHeaderLabels([tr("col_lane"), tr("col_band"), tr("col_mw_kda"), tr("col_intensity"), tr("col_volume")])
+        self.result_table = ResultTable(0, 5)
+        self.result_table.setHorizontalHeaderLabels([tr("result_col_sample"), tr("col_band"), tr("result_col_mw"), tr("col_intensity"), tr("col_volume")])
         self.result_table.verticalHeader().setVisible(False)
-        self.result_table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
-        for column, width in enumerate((110, 60, 85, 95, 95)):
-            self.result_table.setColumnWidth(column, width)
-        self.result_table.horizontalHeader().setStretchLastSection(True)
+        self.result_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.result_table.verticalHeader().setDefaultSectionSize(30)
-        for column, key in ((3, "intensity_unit_hint"), (4, "volume_unit_hint")):
+        for column, key in enumerate(('result_sample_tip', 'result_band_tip',
+                                      'result_mw_tip', 'intensity_unit_hint', 'volume_unit_hint')):
             self.result_table.horizontalHeaderItem(column).setToolTip(tr(key))
         self.result_table.setStyleSheet(self._table_css())
         self.result_table.setEditTriggers(QTableWidget.NoEditTriggers)  # 요청#9: 결과는 편집 불가(읽기 전용)
@@ -362,7 +415,9 @@ class LanesMixin:
         self.result_table.cellClicked.connect(self._on_result_cell_clicked)
         self.result_table.currentCellChanged.connect(lambda row, col, *_: self._on_result_cell_clicked(row, col))
         v.addWidget(self.result_table, 1)
-        self._add_tab(page, tr("tab_analysis"))
+        # The table already scrolls vertically. Avoid a second scroll area
+        # hiding columns instead of giving the result pane its minimum width.
+        self.tabs.addTab(page, tr("tab_analysis"))
         self.analysis_tab = self.tabs.widget(self.tabs.count() - 1)
 
     def _build_tab_std(self):
@@ -612,8 +667,10 @@ class LanesMixin:
             item = QTableWidgetItem(lane.name); item.setForeground(lane.color)
             item.setToolTip(lane.name)
             self.lane_table.setItem(r, 0, item)
-            combo = QComboBox(); combo.addItems([tr("lane_kind_sample"), tr("lane_kind_marker"), tr("lane_kind_bsa")])
-            combo.setStyleSheet(self._combo_css() + 'QComboBox{padding:2px 4px;padding-right:24px;}')
+            combo = LaneKindCombo(); combo.addItems([tr("lane_kind_sample"), tr("lane_kind_marker"), tr("lane_kind_bsa")])
+            combo.setStyleSheet(self._combo_css() + 'QComboBox{padding:2px 4px;padding-right:24px;combobox-popup:0;}'
+                               'QComboBox QAbstractItemView{padding:0px;}'
+                               'QComboBox QAbstractItemView::item{padding:4px 6px;}')
             combo.setCurrentIndex({"sample": 0, "marker": 1, "bsa": 2}[lane.kind])
             # activated는 currentIndexChanged와 달리 '같은 항목을 다시 선택'해도
             # 신호가 발생한다 — 그래야 이미 '마커'인 상태에서 마커를 다시 눌렀을 때
@@ -707,6 +764,23 @@ class LanesMixin:
             row = self.lanes.index(lane)
             self.lane_table.setCurrentCell(row, 0)
             self.lane_table.scrollToItem(self.lane_table.item(row, 0))
+            if getattr(self, '_active_tool', None) == 'results':
+                table = self.result_table
+                table.blockSignals(True)
+                try:
+                    table.clearSelection()
+                    table.setCurrentCell(-1, -1)
+                    for result_row in range(table.rowCount()):
+                        item = table.item(result_row, 0)
+                        if item is not None and item.data(Qt.UserRole)[0] is lane:
+                            table.setCurrentCell(result_row, 0)
+                            table.selectRow(result_row)
+                            table.scrollToItem(item)
+                            break
+                finally:
+                    table.blockSignals(False)
+                self.gel.selected_band = None
+                self.gel.update()
             if getattr(self, '_active_tool', None) == 'marker':
                 self.marker_lane_combo.setCurrentIndex(row)
 
@@ -731,6 +805,9 @@ class LanesMixin:
         else:
             key = 'analysis_empty'
         self.analysis_notice.setText(tr(key, n=count))
+        # Successful detection is reported only in the bottom status bar.
+        # Keep actionable empty/stale warnings in the results pane.
+        self.analysis_notice.setVisible(key != 'analysis_ready')
 
     def _set_lane_kind(self, lane, idx, combo):
         old_kind = lane.kind
@@ -775,29 +852,28 @@ class LanesMixin:
                 self.status.showMessage(tr('mw_regression_placeholder'))
 
     def _edit_marker(self, lane):
-        """반환값: MW를 실제로 입력/확정했으면 True, 취소했거나 밴드가 없어서
-        입력창을 못 열었으면 False — 호출부(_set_lane_kind)가 이 값으로 유형을
-        되돌릴지 판단한다."""
+        """Apply a matching preset immediately; ask only for manual entry or
+        ambiguous band assignments. Return False on cancellation/no bands."""
         if lane.peaks is None or len(lane.peaks) == 0:
             self._info(tr("no_bands_title"), tr("no_bands_run_analysis_msg"))
             return False
-        dlg = MarkerDialog(len(lane.peaks), lane.marker_mw, self)
+        preset = None
         if getattr(self, '_active_tool', None) == 'marker':
             preset = self.marker_preset_combo.currentData()
+        if preset is not None and len(preset['mw']) == len(lane.peaks):
+            lane.marker_mw = list(preset['mw'])
+        else:
+            dlg = MarkerDialog(len(lane.peaks), lane.marker_mw, self)
             if preset is not None:
                 index = dlg.preset_combo.findText(preset['name'])
                 if index >= 0: dlg.preset_combo.setCurrentIndex(index)
-        if dlg.exec_():
+            if not dlg.exec_():
+                return False
             lane.marker_mw = dlg.values()
-            # run_analysis()가 매번 하는 gel.set_lanes/profile.set_lanes를
-            # 여기서도 해줘야, 젤 이미지 위 kDa 라벨이 "밴드 분석 실행"을
-            # 다시 누르지 않아도 바로 나타난다(실사용 스크린샷으로 확인:
-            # OK 직후엔 라벨이 안 뜨고 재분석해야만 떴었음).
-            self.gel.set_lanes(self.lanes)
-            self.profile.set_lanes(self.lanes)
-            self._compute_mw(); self._refresh_results()
-            return True
-        return False
+        self.gel.set_lanes(self.lanes)
+        self.profile.set_lanes(self.lanes)
+        self._compute_mw(); self._refresh_results()
+        return True
 
     def _open_marker_presets(self):
         """밴드 분석 여부와 무관하게, 레인 탭에서 바로 마커 프리셋을 추가/삭제."""
@@ -848,6 +924,7 @@ class LanesMixin:
             self.status.showMessage(tr("status_analysis_done_smear", n=total, s=n_smear))
         else:
             self.status.showMessage(tr("status_analysis_done", n=total))
+        self.gel.animate_detection_refresh()
         return True
 
     def _compute_mw(self):
@@ -955,6 +1032,10 @@ class LanesMixin:
                     it = QTableWidgetItem(val); it.setForeground(lane.color)
                     it.setTextAlignment((Qt.AlignLeft if c == 0 else Qt.AlignRight) | Qt.AlignVCenter)
                     it.setData(Qt.UserRole, (lane, j))
+                    description = self.result_table.horizontalHeaderItem(c).toolTip()
+                    if c == 2 and mw == '—':
+                        description = tr('result_mw_missing_tip')
+                    it.setToolTip(val + '\n' + description + '\n' + tr('result_cell_tip'))
                     self.result_table.setItem(r, c, it)
         self._update_analysis_notice()
 

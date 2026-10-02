@@ -65,7 +65,7 @@ def main():
                            ("flip", "flip"), ("crop", "crop"), ("warp", "warp"),
                            ("bow", "bow"), ("shear", "shear"), ("brightness", "brightness"),
                            ("manual_lanes", "manual-lanes"), ("lane_list", "lane-list"),
-                           ("bands", "bands"), ("marker", "marker-setup"), ("range", "range")):
+                           ("marker", "marker-setup"), ("range", "range")):
             win._select_ribbon_tool(tool); app.processEvents()
             win.grab().save(str(output / f"{name}-{scale}.png"))
         dialog = ExportDialog(source, win.lanes, win._layout_settings, win)

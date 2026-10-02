@@ -1414,6 +1414,9 @@ class GeometryMixin:
                        tr("corner_click_order")); self._enter_manual_corner_mode(); return
         ordered = self._order_corners(quad)
         self.gel.corners = [tuple(map(float, p)) for p in ordered]
+        # Detected corners must remain visible for the confirmation preview,
+        # but disappear when leaving the corner tool (coordinates are kept).
+        self._enter_manual_corner_mode()
         self.gel.update(); self.corner_label.setText(tr("corner_count_auto"))
         if self._ask(tr("auto_detect_done_title"), tr("auto_detect_done_msg")):
             self._warp(ordered)

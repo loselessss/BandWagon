@@ -110,8 +110,9 @@ class LaneWorkflowTest(unittest.TestCase):
 
     def test_full_workflow_opens_mw_results_after_marker_confirmation(self):
         self.win._auto_lanes()
-        self.win.ribbon_strips[2].buttons['run'].click()
-        self.assertEqual(self.win._active_tool, 'bands')
+        self.win._select_ribbon_tool('manual_lanes')
+        self.win.btn_detect_bands.click()
+        self.assertEqual(self.win._active_tool, 'manual_lanes')
         self.win.ribbon_strips[2].buttons['marker'].click()
         self.assertEqual(self.win._active_tool, 'marker')
         self.win.marker_lane_combo.setCurrentIndex(1)
@@ -136,8 +137,7 @@ class LaneWorkflowTest(unittest.TestCase):
         self.assertEqual(self.win._active_tool, 'marker')
         self.assertEqual(self.win.lanes[0].kind, 'sample')
 
-    def test_preset_can_be_chosen_before_lane_and_carried_to_confirmation(self):
-        from bandwagon.dialogs import MarkerDialog
+    def test_preset_can_be_chosen_before_lane_and_applies_without_dialog(self):
         presets = [{'name': 'Test ladder', 'mw': [100, 50, 25]}]
         with patch('bandwagon.lanes.load_marker_presets', return_value=presets), \
                 patch('bandwagon.dialogs.load_marker_presets', return_value=presets):
@@ -147,18 +147,38 @@ class LaneWorkflowTest(unittest.TestCase):
             self.win._auto_lanes()
             self.assertEqual(self.win.marker_preset_combo.currentText(), 'Test ladder')
             self.win.marker_lane_combo.setCurrentIndex(1)
-            dialogs = []
-            def confirm(dialog):
-                dialogs.append(dialog)
-                self.assertEqual(dialog.preset_combo.currentText(), 'Test ladder')
-                self.assertEqual(dialog.values(), [100, 50, 25])
-                return 1
-            with patch.object(MarkerDialog, 'exec_', confirm):
+            with patch('bandwagon.lanes.MarkerDialog') as dialog:
                 self.win.btn_marker_setup.click()
-            self.assertEqual(len(dialogs), 1)
+                dialog.assert_not_called()
             self.assertEqual(self.win.lanes[0].kind, 'sample')
             self.assertEqual(self.win.lanes[1].marker_mw, [100, 50, 25])
             self.assertEqual(self.win._active_tool, 'results')
+            self.assertTrue(self.win.lanes[0].mw)
+            presets[0]['mw'][0] = 200
+            self.assertEqual(self.win.lanes[1].marker_mw[0], 100)
+            self.win._undo()
+            self.assertEqual(self.win.lanes[1].kind, 'sample')
+            self.win._redo()
+            self.assertEqual(self.win.lanes[1].kind, 'marker')
+            self.assertEqual(self.win.lanes[1].marker_mw, [100, 50, 25])
+
+    def test_matching_preset_reanalyzes_stale_bands_and_applies_immediately(self):
+        presets = [{'name': 'Test ladder', 'mw': [100, 50, 25]}]
+        with patch('bandwagon.lanes.load_marker_presets', return_value=presets):
+            self.win._auto_lanes()
+            self.win._select_ribbon_tool('marker')
+            self.win.marker_preset_combo.setCurrentIndex(1)
+            self.win.sp_prom.setValue(95)
+            self.assertTrue(self.win._analysis_stale)
+            with patch.object(self.win, 'run_analysis', wraps=self.win.run_analysis) as analyze, \
+                    patch('bandwagon.lanes.MarkerDialog') as dialog:
+                self.win.btn_marker_setup.click()
+                analyze.assert_called_once()
+                dialog.assert_not_called()
+            self.assertEqual(self.win.lanes[0].marker_mw, [100, 50, 25])
+            self.assertFalse(self.win._analysis_stale)
+            self.assertEqual(self.win._active_tool, 'results')
+            self.assertTrue(self.win.lanes[1].mw)
 
     def test_preset_mismatch_keeps_band_matching_confirmation_and_cancel(self):
         from bandwagon.dialogs import MarkerDialog

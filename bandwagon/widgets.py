@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import (
     QComboBox, QInputDialog, QDialog, QDialogButtonBox, QFormLayout,
     QScrollArea, QCheckBox,
 )
-from PyQt5.QtCore import Qt, QPoint, QPointF, QRectF, QRect, QSize, pyqtSignal, QTimer, QStandardPaths
+from PyQt5.QtCore import Qt, QPoint, QPointF, QRectF, QRect, QSize, pyqtSignal, QTimer, QStandardPaths, QVariantAnimation
 from PyQt5.QtGui import (
     QPainter, QPen, QColor, QPixmap, QImage, QBrush,
     QPainterPath, QLinearGradient, QFont, QFontMetrics, QPolygonF, QPalette,
@@ -312,6 +312,25 @@ class GelView(QWidget):
         # 재사용한다 — 팬은 _rect 위치만 바꾸고 크기는 그대로라 캐시가 계속
         # 유효하다. 키 형태: ((w, h, mode) -> QPixmap).
         self._scaled_cache = None
+
+        # A brief outline pulse acknowledges a completed refresh, even when
+        # unchanged detection settings produce the same bands. No image fade,
+        # fake progress, or expensive full-resolution rendering is involved.
+        self._refresh_alpha = 0
+        self._refresh_animation = QVariantAnimation(self)
+        self._refresh_animation.setDuration(450)
+        self._refresh_animation.setStartValue(150)
+        self._refresh_animation.setEndValue(0)
+        self._refresh_animation.valueChanged.connect(self._set_refresh_alpha)
+
+    def _set_refresh_alpha(self, alpha):
+        self._refresh_alpha = int(alpha)
+        self.update()
+
+    def animate_detection_refresh(self):
+        self._refresh_animation.stop()
+        self._set_refresh_alpha(self._refresh_animation.startValue())
+        self._refresh_animation.start()
 
     def set_image(self, pm, size):
         self._pm = pm
@@ -664,6 +683,14 @@ class GelView(QWidget):
                     self.selected_band = band
                     self.update()
                     self.bandSelected.emit(*band)
+                elif self.show_overlay and self._rect.contains(e.pos()):
+                    x = self._wx_to_ix(e.x())
+                    lane = next((lane for lane in self.lanes if lane.x1 <= x <= lane.x2), None)
+                    if lane is not None:
+                        self.selected_lane = lane
+                        self.selected_band = None
+                        self.laneSelected.emit(lane)
+                        self.update()
             self._pan_drag = None
             self.setCursor(Qt.CrossCursor if self.mode in ("lane", "corner", "crop", "vrange") else Qt.OpenHandCursor)
             return
@@ -754,6 +781,12 @@ class GelView(QWidget):
         if self._scaled_cache is None or self._scaled_cache[0] != key:
             self._scaled_cache = (key, self._pm.scaled(r.size(), Qt.KeepAspectRatio, mode))
         qp.drawPixmap(r, self._scaled_cache[1])
+
+        if self._refresh_alpha:
+            color = QColor(CYAN); color.setAlpha(self._refresh_alpha)
+            qp.setPen(QPen(color, 3))
+            qp.setBrush(Qt.NoBrush)
+            qp.drawRect(r.adjusted(2, 2, -2, -2))
 
         if self.show_guides:
             self._draw_guides(qp, r)
@@ -893,7 +926,7 @@ class GelView(QWidget):
             qp.setPen(QPen(QColor(CYAN), 2, Qt.DashLine)); qp.setBrush(QColor(63, 180, 230, 35))
             qp.drawRect(QRectF(bx1, by1, bx2 - bx1, by2 - by1))
 
-        if self.corners:
+        if self.mode == "corner" and self.corners:
             wpts = [QPointF(self._ix_to_wx(ix), self._iy_to_wy(iy)) for ix, iy in self.corners]
             if len(wpts) == 4:
                 qp.setPen(Qt.NoPen); qp.setBrush(QColor(63, 180, 230, 45))

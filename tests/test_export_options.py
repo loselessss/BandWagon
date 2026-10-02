@@ -58,6 +58,68 @@ class ExportOptionsTest(unittest.TestCase):
         self.assertEqual(photo.size, self.source.size)
         self.assertEqual(photo.getpixel((0, 0))[3], 64)
 
+    def test_band_ranges_follow_area_or_line_style_and_graphic_transparency(self):
+        self.assertFalse(DEFAULT_OPTIONS['bands'])
+        self.sample.peak_bounds = [(70, 90)]
+        options = dict(DEFAULT_OPTIONS, photo=False, border=False, marker_mw=False,
+                       lane_mw=False, annotation=False)
+        self.assertIsNone(render_export(self.source, self.lanes, options).getchannel('A').getbbox())
+        options['bands'] = True
+        area = render_export(self.source, self.lanes, options, band_style='area')
+        self.assertEqual(area.getpixel((180, 70))[3], 255)
+        self.assertEqual(area.getpixel((180, 80))[3], 55)
+        self.assertEqual(area.getpixel((180, 100))[3], 0)
+        line = render_export(self.source, self.lanes, options, band_style='line')
+        self.assertEqual(line.getpixel((180, 80))[3], 255)
+        self.assertEqual(line.getpixel((180, 70))[3], 0)
+        transparent = render_export(self.source, self.lanes,
+                                    dict(options, graphic_transparency=100), band_style='area')
+        self.assertIsNone(transparent.getchannel('A').getbbox())
+
+    def test_band_option_is_remembered_and_preview_uses_current_style(self):
+        old = {key: value for key, value in DEFAULT_OPTIONS.items() if key != 'bands'}
+        self.settings.setValue('export/options', json.dumps(old))
+        dialog = ExportDialog(self.source, self.lanes, self.settings, band_style='line')
+        self.assertFalse(dialog.checks['bands'].isChecked())
+        for key, check in dialog.checks.items(): check.setChecked(key == 'bands')
+        dialog.refresh_preview()
+        self.assertTrue(dialog.submit.isEnabled())
+        self.assertEqual(dialog.band_style, 'line')
+        self.assertEqual(dialog.preview.pixmap.toImage().pixelColor(180, 80).alpha(), 255)
+        self.assertEqual(dialog.preview.pixmap.toImage().pixelColor(180, 70).alpha(), 0)
+        dialog.accept()
+        restored = ExportDialog(self.source, self.lanes, self.settings, saving=True, band_style='area')
+        self.assertTrue(restored.checks['bands'].isChecked())
+        self.assertEqual(restored.band_style, 'area')
+        dialog.deleteLater(); restored.deleteLater()
+
+    def test_lane_mw_is_off_by_default_and_independent_of_marker_mw(self):
+        self.assertFalse(DEFAULT_OPTIONS['lane_mw'])
+        empty = dict(DEFAULT_OPTIONS, photo=False, border=False, marker_mw=False, annotation=False)
+        for marker, sample in ((False, True), (True, False), (True, True)):
+            rendered = render_export(self.source, self.lanes,
+                                     dict(empty, marker_mw=marker, lane_mw=sample))
+            self.assertEqual(rendered.crop((20, 0, 100, 160)).getchannel('A').getbbox() is not None, marker)
+            self.assertEqual(rendered.crop((140, 0, 220, 160)).getchannel('A').getbbox() is not None, sample)
+        self.sample.kind = 'bsa'
+        rendered = render_export(self.source, self.lanes, dict(empty, lane_mw=True))
+        self.assertIsNotNone(rendered.crop((140, 0, 220, 160)).getchannel('A').getbbox())
+
+    def test_old_saved_options_default_lane_mw_off_and_new_selection_is_remembered(self):
+        old = {key: value for key, value in DEFAULT_OPTIONS.items() if key != 'lane_mw'}
+        self.settings.setValue('export/options', json.dumps(old))
+        dialog = ExportDialog(self.source, self.lanes, self.settings)
+        self.assertFalse(dialog.checks['lane_mw'].isChecked())
+        dialog.checks['lane_mw'].setChecked(True)
+        dialog.accept()
+        restored = ExportDialog(self.source, self.lanes, self.settings, saving=True)
+        self.assertTrue(restored.checks['lane_mw'].isChecked())
+        restored.text_alpha.setValue(100)
+        rendered = render_export(self.source, self.lanes,
+                                 dict(restored.options(), photo=False, border=False, annotation=False))
+        self.assertIsNone(rendered.getchannel('A').getbbox())
+        dialog.deleteLater(); restored.deleteLater()
+
     def test_dialog_remembers_accepted_options_and_cancel_does_not_save(self):
         dialog = ExportDialog(self.source, self.lanes, self.settings)
         dialog.linked.setChecked(False)

@@ -385,7 +385,7 @@ class FileIOMixin:
         options = self._export_options(src)
         if options is None:
             return
-        out_img = render_export(src, self.lanes, options)
+        out_img = render_export(src, self.lanes, options, band_style=self._band_display_style)
         copy_pil_image_to_clipboard(out_img, QApplication.clipboard())
         self.status.showMessage(tr("status_copied_to_clipboard"))
 
@@ -403,7 +403,7 @@ class FileIOMixin:
         path, _ = QFileDialog.getSaveFileName(self, tr("toolbar_save_result"), default_path, "PNG (*.png);;TIFF (*.tif)")
         if path:
             self._last_dir = str(Path(path).parent)
-            out_img = render_export(src, self.lanes, options)
+            out_img = render_export(src, self.lanes, options, band_style=self._band_display_style)
             out_img.save(path); self.status.showMessage(tr("status_saved", path=path))
 
     def save_project(self):

@@ -75,9 +75,8 @@ class RibbonMixin:
                 ('shear','shear'),('brightness','adjust'),('curve','curve'))]
                 + [action('invert','tool_invert','color',self._invert_ribbon_colors)]),
             ('tab_lanes', [setting(k, 'tool_'+k, sym) for k,sym in (
-                ('auto_lanes','lanes'),('manual_lanes','adjust'),('lane_list','memo'),('range','crop'),('bands','analysis'))]
-                + [action('run','btn_run_analysis','analysis',self._run_ribbon_analysis),
-                setting('marker','tool_marker','marker'),
+                ('auto_lanes','lanes'),('manual_lanes','adjust'),('lane_list','memo'),('range','crop'))]
+                + [setting('marker','tool_marker','marker'),
                 setting('results','tool_results','analysis'),setting('quant','tab_std','quant'),
                 action('marker_presets','tool_marker_presets','marker',self._open_marker_presets)]),
             ('menu_western', [action('make','menu_western_open','open',self.open_composite_studio),
@@ -88,16 +87,23 @@ class RibbonMixin:
                 action('update','toolbar_check_updates','download',lambda: self.check_for_updates(True)),
                 action('language','menu_language','color',lambda: self.m_language.exec_(self.ribbon.mapToGlobal(self.ribbon.rect().bottomLeft())))])]
         category_icons = ('open', 'adjust', 'lanes', 'open', 'help')
+        existing_tips = {
+            'save': 'toolbar_project_save_tip', 'save_as': 'toolbar_project_save_as_tip',
+            'copy': 'toolbar_copy_result_tip', 'image': 'toolbar_save_result_tip',
+            'make': 'toolbar_composite_studio_tip', 'import': 'toolbar_composite_import_tip',
+            'undo': 'toolbar_undo_tip', 'redo': 'toolbar_redo_tip',
+            'marker_presets': 'marker_preset_btn_tip', 'invert': 'invert_hint',
+        }
         for index, (title, commands) in enumerate(pages):
             strip = ToolStrip(commands); self.ribbon.addTab(strip, tr(title)); self.ribbon_strips.append(strip)
             self.ribbon.setTabIcon(index, icon(category_icons[index]))
             for key, _, _, _, selectable in commands:
                 if selectable: self.ribbon_tools[key] = (index, strip.buttons[key])
-                if key == 'marker_presets': strip.buttons[key].setToolTip(tr('marker_preset_btn_tip'))
-                if key == 'invert': strip.buttons[key].setToolTip(tr('invert_hint'))
+                strip.buttons[key].setToolTip(tr(existing_tips.get(key, 'ribbon_tip_' + key)))
         self.ribbon.currentChanged.connect(self._on_ribbon_category)
         self.ribbon.setCurrentIndex(1)
         self._select_ribbon_tool('rotate')
+        self.ribbon.setCurrentIndex(0)
         self.btn_undo.changed.connect(self._sync_ribbon_history)
         self.btn_redo.changed.connect(self._sync_ribbon_history)
         self._sync_ribbon_history()
@@ -108,10 +114,12 @@ class RibbonMixin:
         strip.buttons['undo'].setEnabled(self.btn_undo.isEnabled())
         strip.buttons['redo'].setEnabled(self.btn_redo.isEnabled())
 
-    def _run_ribbon_analysis(self):
+    def _run_band_detection(self):
         self._finish_tool_preview()
         if self.run_analysis():
-            self._select_ribbon_tool('bands')
+            self._select_ribbon_tool('manual_lanes')
+            button = self.btn_detect_bands
+            self.lane_settings_scroll.ensureWidgetVisible(button, 8, 0)
 
     def _invert_ribbon_colors(self):
         if self._orig is None: return

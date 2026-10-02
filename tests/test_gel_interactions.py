@@ -19,6 +19,64 @@ from bandwagon.models import Lane
 
 
 class GelInteractionsTest(unittest.TestCase):
+    def test_corner_guides_are_hidden_outside_corner_mode_without_losing_points(self):
+        win = Analyzer()
+        try:
+            win._orig = Image.new('RGB', (160, 200), 'white')
+            win._after_load('corner-guides.png')
+            win.show(); self.app.processEvents()
+            points = [(10, 10), (145, 15), (150, 185), (15, 180)]
+            for tool in ('auto_lanes', 'manual_lanes', 'lane_list', 'marker', 'results'):
+                win._select_ribbon_tool(tool)
+                for mode in ('view', 'lane', 'vrange'):
+                    with self.subTest(tool=tool, mode=mode):
+                        win.gel.set_mode(mode)
+                        win.gel.corners = []
+                        plain = win.gel.grab().toImage()
+                        win.gel.corners = list(points)
+                        self.assertEqual(win.gel.grab().toImage(), plain)
+                        self.assertEqual(win.gel.corners, points)
+            win.gel.set_mode('corner')
+            with_guides = win.gel.grab().toImage()
+            win.gel.corners = []
+            self.assertNotEqual(win.gel.grab().toImage(), with_guides)
+            win.gel.corners = list(points)
+            win._select_ribbon_tool('auto_lanes')
+            self.assertEqual(win.gel.mode, 'view')
+            self.assertEqual(win.gel.corners, points)
+        finally:
+            win._saved_snapshot = win._project_state_snapshot()
+            win.close()
+
+    def test_lane_click_in_mw_results_scrolls_to_sample_without_selecting_band(self):
+        win = Analyzer()
+        try:
+            win._orig = Image.new('RGB', (160, 200), 'white')
+            win._after_load('lane-results.png')
+            win.lanes = [Lane(0, 10, 60), Lane(1, 90, 140)]
+            for lane in win.lanes:
+                lane.peaks = np.arange(20, 180, 5)
+                lane.peak_bounds = [(int(y), int(y) + 1) for y in lane.peaks]
+                lane.peak_area = np.full(len(lane.peaks), 30.0)
+                lane.peak_volume = np.full(len(lane.peaks), 150.0)
+            win._rebuild_lane_table(); win._refresh_results(); win.gel.set_lanes(win.lanes)
+            win._select_ribbon_tool('results'); win.resize(900, 620); win.show()
+            self.app.processEvents()
+            pos = QPoint(round(win.gel._ix_to_wx(115)), round(win.gel._iy_to_wy(190)))
+            QTest.mouseClick(win.gel, Qt.LeftButton, pos=pos)
+            self.app.processEvents()
+            row = len(win.lanes[0].peaks)
+            self.assertEqual(win.result_table.currentRow(), row)
+            self.assertEqual(win.result_table.currentColumn(), 0)
+            self.assertIs(win.gel.selected_lane, win.lanes[1])
+            self.assertIsNone(win.gel.selected_band)
+            self.assertIs(win.tabs.currentWidget(), win.analysis_tab)
+            rect = win.result_table.visualItemRect(win.result_table.item(row, 0))
+            self.assertTrue(win.result_table.viewport().rect().intersects(rect))
+        finally:
+            win._saved_snapshot = win._project_state_snapshot()
+            win.close()
+
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])

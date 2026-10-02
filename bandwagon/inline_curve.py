@@ -121,7 +121,7 @@ class InlineCurve(QWidget):
             grip = self.line_grip()
             if abs(event.x() - grip.x()) <= 10 and abs(event.y() - grip.y()) <= 16:
                 self.drag = 'all'
-                self.group_start = (event.y(), list(self.points))
+                self.group_start = (event.y(), list(self.points), self.baseline)
                 return True
             for i, (x, y) in enumerate(self.points):
                 if (self.gel._ix_to_wx(x) - event.x()) ** 2 + (self.gel._iy_to_wy(y) - event.y()) ** 2 <= 144:
@@ -146,11 +146,14 @@ class InlineCurve(QWidget):
     def move_point(self, event):
         i = self.drag
         if i == 'all':
-            start_y, points = self.group_start
+            start_y, points, baseline = self.group_start
             delta = (event.y() - start_y) * self.height / max(1, self.gel._rect.height())
             delta = float(np.clip(delta, -min(y for _, y in points),
                                   self.height - 1 - max(y for _, y in points)))
             self.points = [(x, y + delta) for x, y in points]
+            # Reposition the reference, not the image: translating both the
+            # line and its target preserves every column's correction offset.
+            self.baseline = baseline + delta
         else:
             x, y = self.gel._wpos_to_img(event.x(), event.y())
             x = self.points[i][0] if i in (0, 4) else float(np.clip(x, self.points[i-1][0] + .01, self.points[i+1][0] - .01))

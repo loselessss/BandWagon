@@ -228,7 +228,8 @@ def render_analysis_overlay(base_img, lanes, band_style="area", transparent_bg=F
                             show_mw=True, marker_and_border_only=False,
                             show_border=True, show_marker_mw=True, show_annotation=True,
                             show_bands=True, mw_marker_only=False, text_opacity=100,
-                            graphic_opacity=100, image_opacity=100, font_scale=1.0):
+                            graphic_opacity=100, image_opacity=100, font_scale=1.0,
+                            show_lane_mw=None):
     """base_img 위에 레인 경계·검출 밴드·MW 라벨을 그려 합성한 새 이미지를
     반환한다(화면 캡처가 아니라 원본 좌표 기준으로 직접 그림 — 저장 해상도가
     화면 크기에 좌우되지 않음).
@@ -382,7 +383,10 @@ def render_analysis_overlay(base_img, lanes, band_style="area", transparent_bg=F
 
     # ── 3패스: MW 값 — 이미지 영역 안(header_h만큼 오프셋)에 그린다 ──
     for lane in lanes:
-        if not show_mw or not show_marker_mw or ((marker_and_border_only or mw_marker_only) and lane.kind != "marker"):
+        if not show_mw or ((marker_and_border_only or mw_marker_only) and lane.kind != "marker"):
+            continue
+        enabled = show_marker_mw if lane.kind == 'marker' or show_lane_mw is None else show_lane_mw
+        if not enabled:
             continue
         if lane.peaks is None:
             continue

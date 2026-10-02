@@ -234,7 +234,8 @@ class AdjustControlsTest(unittest.TestCase):
         self.win._select_ribbon_tool('crop')
         self.win._select_ribbon_tool('manual_lanes')
         self.assertEqual(self.win.gel.mode, 'view')
-        self.assertTrue(self.win.lane_table.isVisible())
+        self.assertFalse(self.win.lane_table.isVisible())
+        self.assertTrue(self.win.sp_prom.isVisible())
         self.win.btn_lane.click()
         self.win._select_ribbon_tool('range')
         self.assertFalse(self.win.btn_lane.isChecked())
@@ -318,6 +319,7 @@ class AdjustControlsTest(unittest.TestCase):
         editor.preview()
         self.app.processEvents()
         points = np.array(editor.points)
+        expected = apply_reference_curve(self.source, editor.points, editor.baseline).tobytes()
         image = self.win.gel._pm.toImage()
         grip = editor.line_grip().toPoint()
         end = grip + QPoint(0, -18)
@@ -330,12 +332,37 @@ class AdjustControlsTest(unittest.TestCase):
         np.testing.assert_array_equal(points[:, 0], moved[:, 0])
         np.testing.assert_allclose(moved[:, 1] - points[:, 1], moved[0, 1] - points[0, 1])
         self.assertLess(moved[0, 1], points[0, 1])
-        self.assertNotEqual(self.win.gel._pm.toImage(), image)
+        self.assertEqual(self.win.gel._pm.toImage(), image)
         self.assertEqual(self.win._orig.tobytes(), self.source.tobytes())
         QTest.mouseRelease(self.win.gel, Qt.LeftButton, pos=end)
         editor.apply()
+        self.assertEqual(self.win._orig.tobytes(), expected)
         self.win.btn_undo.trigger()
         self.assertEqual(self.win._orig.tobytes(), self.source.tobytes())
+        self.win.btn_redo.trigger()
+        self.assertEqual(self.win._orig.tobytes(), expected)
+
+    def test_flat_reference_line_moves_without_image_edit_or_history(self):
+        self.win.btn_reference_bow.click()
+        editor = self.win._inline_curve
+        editor.preview()
+        image = self.win.gel._pm.toImage()
+        points = np.array(editor.points)
+        grip = editor.line_grip().toPoint()
+        end = grip + QPoint(0, -25)
+        QTest.mousePress(self.win.gel, Qt.LeftButton, pos=grip)
+        for dy in (-10, -25):
+            pos = grip + QPoint(0, dy)
+            self.app.sendEvent(self.win.gel, QMouseEvent(QEvent.MouseMove, QPointF(pos),
+                               Qt.NoButton, Qt.LeftButton, Qt.NoModifier))
+        QTest.mouseRelease(self.win.gel, Qt.LeftButton, pos=end)
+        editor.preview()
+        self.assertLess(editor.baseline, points[0, 1])
+        np.testing.assert_allclose(np.array(editor.points)[:, 1], editor.baseline)
+        self.assertEqual(self.win.gel._pm.toImage(), image)
+        editor.apply()
+        self.assertEqual(self.win._orig.tobytes(), self.source.tobytes())
+        self.assertEqual(self.win._edit_ops, [])
 
     def test_asymmetric_reference_flattens_band_and_preserves_uv_alignment(self):
         points = [[0, 55], [35, 48], [80, 70], [145, 85], [199, 60]]
