@@ -157,8 +157,9 @@ class LanesMixin:
         self.btn_marker_setup.setStyleSheet(self._btn_accent_css())
         self.btn_marker_setup.clicked.connect(lambda _checked=False: self._configure_marker_lane())
         marker_layout.addWidget(self.btn_marker_setup)
+        h.addWidget(manual)
         v.addWidget(box)
-        v.addWidget(manual); v.addWidget(management); v.addWidget(marker_box)
+        v.addWidget(management); v.addWidget(marker_box)
 
         vr_box = QGroupBox(tr("group_vrange")); vr_box.setStyleSheet(self._group_css())
         vrv = QVBoxLayout(vr_box); vrv.setSpacing(5)
@@ -313,12 +314,12 @@ class LanesMixin:
         self.lane_panel_bottom_index = outer.count()
         outer.addStretch()
         self.tabs.addTab(container, tr("tab_lanes"))
-        self.lane_tools = {'auto_lanes': box, 'manual_lanes': manual,
+        self.lane_tools = {'manual_lanes': box,
                            'lane_list': management, 'range': vr_box,
                            'marker': marker_box}
         self.band_settings_box = det_box
         self.lane_style_wrap = style_wrap
-        self._show_lane_tool('auto_lanes')
+        self._show_lane_tool('manual_lanes')
 
     def _show_lane_tool(self, name):
         show_detection = name == 'manual_lanes'
@@ -575,8 +576,8 @@ class LanesMixin:
 
     @staticmethod
     def _split_lanes_by_count(sm, n_target, W):
-        """평활화된 세로-평균 강도 프로파일 sm을 정확히 n_target개 구간으로
-        나눈다. 균등 경계 주변 ±25%에서 낮은 신호 구간의 중앙을 찾되
+        """뚜렷한 중심이 N개 있으면 인접 중심 사이의 저신호 구간으로 나눈다.
+        중심이 불확실하면 균등 경계 주변 ±25%에서 낮은 신호 구간의 중앙을 찾되
         실제 이동은 ±15%로 제한하고,
         간격 사전값을 함께 고려한다. 신호 차이가 없으면 균등 경계를 유지한다.
 
@@ -591,6 +592,54 @@ class LanesMixin:
         if len(sm) != W or W < 2 * n_target or n_target <= 0 or not np.all(np.isfinite(sm)) or sm.max() <= 0:
             return None
         seg_w = W / n_target
+        # Use observed lane centres when all lanes have broad, distinct evidence.
+        # Unlike independent snaps around an equal grid, this tolerates cumulative
+        # spacing drift. Ambiguous/missing peaks retain the conservative fallback.
+        from scipy.ndimage import gaussian_filter1d
+        from scipy.signal import find_peaks
+        smooth = gaussian_filter1d(np.asarray(sm, dtype=float), max(1, seg_w * .06))
+        amplitude = float(np.ptp(smooth))
+        if amplitude > max(.001, float(smooth.max()) * .08):
+            peaks, props = find_peaks(smooth, prominence=amplitude * .12,
+                                      width=max(2, seg_w * .15),
+                                      distance=max(1, int(seg_w * .45)))
+            observed = set(peaks)
+            # A weak lane must not discard every reliable centre. Fill only
+            # oversized internal gaps, with a small missing-lane budget; never
+            # invent lanes at the image margins or force arbitrary peak counts.
+            if max(3, n_target - max(1, n_target // 5)) <= len(peaks) < n_target:
+                spacing = float(np.median(np.diff(peaks)))
+                gaps = np.diff(peaks)
+                missing = np.maximum(0, np.floor(gaps / spacing + .55).astype(int) - 1)
+                if (spacing >= seg_w * .6
+                        and int(missing.sum()) == n_target - len(peaks)):
+                    completed = [int(peaks[0])]
+                    for left, right, count in zip(peaks, peaks[1:], missing):
+                        completed.extend(int(round(left + (right - left) * j / (count + 1)))
+                                         for j in range(1, count + 1))
+                        completed.append(int(right))
+                    peaks = np.asarray(completed)
+            if (len(peaks) == n_target
+                    and peaks[0] < seg_w and peaks[-1] > W - seg_w
+                    and np.all(np.diff(peaks) >= seg_w * .5)
+                    and np.all(np.diff(peaks) <= seg_w * 1.6)):
+                bounds = [0]
+                for left, right in zip(peaks, peaks[1:]):
+                    if left not in observed or right not in observed:
+                        bounds.append(int(round((left + right) / 2)))
+                        continue
+                    lo = int(left + (right - left) * .2)
+                    hi = int(right - (right - left) * .2) + 1
+                    local = smooth[lo:hi]
+                    floor = float(local.min())
+                    shoulder = min(smooth[left], smooth[right])
+                    low = np.flatnonzero(local <= floor + max(0., shoulder - floor) * .12)
+                    groups = np.split(low, np.flatnonzero(np.diff(low) > 1) + 1)
+                    gap = min(groups, key=lambda g: abs(lo + (g[0] + g[-1]) / 2
+                                                       - (left + right) / 2))
+                    bounds.append(lo + int(round((gap[0] + gap[-1]) / 2)))
+                bounds.append(W)
+                return [(a, b - 1) for a, b in zip(bounds, bounds[1:])]
         snap_r = max(1, int(seg_w * 0.25))
         move_r = max(1, int(seg_w * 0.15))
         bounds = [0]

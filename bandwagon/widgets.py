@@ -346,6 +346,8 @@ class GelView(QWidget):
         self.update()
 
     def set_mode(self, m):
+        if self.mode == "lane" and m != "lane":
+            self.selected_lane = None
         self.mode = m
         self.modeChanged.emit(m)
         self._lane_a = self._lane_b = None

@@ -7,7 +7,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import cv2
 import numpy as np
 from PIL import Image
-from PyQt5.QtCore import QPoint, Qt, QElapsedTimer
+from PyQt5.QtCore import QPoint, QPointF, Qt, QElapsedTimer, QEvent
+from PyQt5.QtGui import QMouseEvent
 from PyQt5.QtTest import QTest
 from PyQt5.QtWidgets import QApplication, QLineEdit
 
@@ -19,6 +20,41 @@ from bandwagon.models import Lane
 
 
 class GelInteractionsTest(unittest.TestCase):
+    def test_lane_width_drag_highlight_clears_on_tool_switch(self):
+        win = Analyzer()
+        try:
+            win._orig = Image.new('RGB', (200, 200), 'white')
+            win._after_load('lane-highlight.png')
+            lane = Lane(0, 30, 100)
+            win.lanes = [lane]
+            win._rebuild_lane_table()
+            win.gel.set_lanes(win.lanes)
+            win._select_ribbon_tool('manual_lanes')
+            win.show(); self.app.processEvents()
+            win.btn_lane.click()
+            gel = win.gel
+            start = QPoint(round(gel._ix_to_wx(lane.x2)), round(gel._rect.center().y()))
+            end = QPoint(round(gel._ix_to_wx(120)), start.y())
+            QTest.mousePress(gel, Qt.LeftButton, pos=start)
+            QApplication.sendEvent(gel, QMouseEvent(QEvent.MouseMove, QPointF(end),
+                                                   Qt.NoButton, Qt.LeftButton, Qt.NoModifier))
+            QTest.mouseRelease(gel, Qt.LeftButton, pos=end)
+            lane = win.lanes[0]
+            self.assertGreater(lane.x2, 100)
+            self.assertIs(gel.selected_lane, lane)
+            win._select_ribbon_tool('lane_list')
+            self.assertEqual(gel.mode, 'view')
+            self.assertIsNone(gel.selected_lane)
+            self.assertIsNone(gel._lane_edge_drag)
+            win._select_ribbon_tool('manual_lanes')
+            win.btn_lane.click()
+            gel.selected_lane = lane
+            QTest.keyClick(win, Qt.Key_Escape)
+            self.assertIsNone(gel.selected_lane)
+        finally:
+            win._saved_snapshot = win._project_state_snapshot()
+            win.close()
+
     def test_corner_guides_are_hidden_outside_corner_mode_without_losing_points(self):
         win = Analyzer()
         try:

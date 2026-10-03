@@ -120,13 +120,12 @@ class GeometryMixin:
         crop_hint = QLabel(tr("crop_hint")); crop_hint.setWordWrap(True); crv.addWidget(crop_hint)
         self.btn_crop = QPushButton(tr("crop_select")); self.btn_crop.setCheckable(True)
         self.btn_crop.setStyleSheet(self._btn_css())
-        self.btn_crop.toggled.connect(lambda on: self._set_exclusive_mode("corner", on))
+        self.btn_crop.toggled.connect(self._toggle_crop_mode)
         crv.addWidget(self.btn_crop)
         crop_apply = QPushButton(tr("crop_apply")); crop_apply.setStyleSheet(self._btn_accent_css())
         crop_apply.clicked.connect(self._apply_crop); crv.addWidget(crop_apply)
         crop_clear = QPushButton(tr("btn_reset_corners")); crop_clear.clicked.connect(self._clear_corners)
         crop_clear.setStyleSheet(self._btn_css()); crv.addWidget(crop_clear)
-        v.addWidget(crop)
 
         region = QGroupBox(tr("tool_warp")); region.setStyleSheet(self._group_css())
         rgl = QVBoxLayout(region); rgl.setSpacing(5)
@@ -158,7 +157,8 @@ class GeometryMixin:
         wc = QPushButton(tr("btn_reset_corners")); wc.clicked.connect(self._clear_corners); wc.setStyleSheet(self._btn_css())
         wrow.addWidget(wr); wrow.addWidget(wc)
         rgl.addLayout(wrow)
-        v.addWidget(region)
+        crv.addWidget(region)
+        v.addWidget(crop)
 
         bow = QGroupBox(tr("group_bow_correction")); bow.setStyleSheet(self._group_css())
         bv = QVBoxLayout(bow)
@@ -296,7 +296,7 @@ class GeometryMixin:
             lambda _: self._on_tab_changed(self.tabs.currentIndex()))
         self.correct_tools = {
             'rotate': (0, rot), 'flip': (0, flip), 'crop': (0, crop),
-            'warp': (0, region), 'bow': (0, bow), 'shear': (0, shear),
+            'bow': (0, bow), 'shear': (0, shear),
             'brightness': (1, brightness), 'curve': (1, curve_group),
         }
         self.correction_tabs.tabBar().hide()
@@ -1372,7 +1372,19 @@ class GeometryMixin:
         self.gel.show_overlay = on
         self.gel.update()
 
+    def _toggle_crop_mode(self, on):
+        if on:
+            self.btn_corner.blockSignals(True)
+            self.btn_corner.setChecked(False)
+            self.btn_corner.setText(tr("btn_corner_mode_off"))
+            self.btn_corner.blockSignals(False)
+        self._set_exclusive_mode("corner", on)
+
     def _toggle_corner_mode(self, on):
+        if on:
+            self.btn_crop.blockSignals(True)
+            self.btn_crop.setChecked(False)
+            self.btn_crop.blockSignals(False)
         self._set_exclusive_mode("corner", on)
         self.btn_corner.setText(tr("btn_corner_mode_on") if on else tr("btn_corner_mode_off"))
 

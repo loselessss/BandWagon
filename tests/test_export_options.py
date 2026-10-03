@@ -35,6 +35,21 @@ class ExportOptionsTest(unittest.TestCase):
         self.settings = None
         self.temp.cleanup()
 
+    def test_select_all_preserves_transparency_and_persists(self):
+        for saving in (False, True):
+            dialog = ExportDialog(self.source, self.lanes, self.settings, saving=saving)
+            for check in dialog.checks.values():
+                check.setChecked(False)
+            dialog.text_alpha.setValue(25)
+            dialog.select_all.click()
+            self.assertTrue(all(dialog.options()[key] for key in dialog.checks))
+            self.assertEqual(dialog.options()['text_transparency'], 25)
+            self.assertEqual(dialog.options()['graphic_transparency'], 25)
+            dialog.accept()
+            saved = json.loads(self.settings.value('export/options'))
+            self.assertTrue(all(saved[key] for key in dialog.checks))
+            dialog.close()
+
     def test_three_overlay_components_are_independent(self):
         empty = dict(DEFAULT_OPTIONS, photo=False, border=False, marker_mw=False, annotation=False)
         self.assertIsNone(render_export(self.source, self.lanes, empty).getchannel("A").getbbox())

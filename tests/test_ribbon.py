@@ -102,7 +102,9 @@ class RibbonTest(unittest.TestCase):
                 button.click()
                 analyze.assert_called_once()
             win._select_ribbon_tool('auto_lanes')
-            self.assertFalse(button.isVisible())
+            self.assertTrue(button.isVisible())
+            self.assertNotIn('auto_lanes', win.ribbon_strips[2].buttons)
+            self.assertEqual(win.ribbon_strips[2].buttons['manual_lanes'].text(), tr('tool_lane_adjust'))
         finally:
             win._saved_snapshot = win._project_state_snapshot()
             win.close()

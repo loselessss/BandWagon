@@ -7,7 +7,7 @@ from PyQt5.QtCore import Qt, QTimer, QRectF
 from PyQt5.QtGui import QColor, QPainter
 from PyQt5.QtWidgets import (
     QDialog, QDialogButtonBox, QFormLayout, QHBoxLayout,
-    QLabel, QSpinBox, QVBoxLayout, QWidget,
+    QLabel, QPushButton, QSpinBox, QVBoxLayout, QWidget,
 )
 
 from .dialogs import _dialog_style, _no_help_button
@@ -77,6 +77,9 @@ class ExportDialog(QDialog):
         root = QVBoxLayout(self)
         columns = QHBoxLayout()
         controls = QVBoxLayout()
+        self.select_all = QPushButton(tr("export_select_all"))
+        self.select_all.clicked.connect(self._select_all)
+        controls.addWidget(self.select_all)
         self.checks = {}
         for key, label in (("photo", "export_include_photo"), ("border", "export_component_border"),
                            ("bands", "export_component_bands"),
@@ -140,6 +143,11 @@ class ExportDialog(QDialog):
         return {**{key: check.isChecked() for key, check in self.checks.items()},
                 "text_transparency": self.text_alpha.value(),
                 "graphic_transparency": self.graphic_alpha.value(), "linked": self.linked.isChecked()}
+
+    def _select_all(self):
+        for check in self.checks.values():
+            check.setChecked(True)
+        self.schedule_preview()
 
     def _alpha_changed(self, other, value):
         if self.linked.isChecked():

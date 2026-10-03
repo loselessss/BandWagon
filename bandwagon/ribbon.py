@@ -1,5 +1,5 @@
 """Horizontal task ribbon and tool-specific settings routing."""
-from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtCore import Qt, QSize, QPoint
 from PyQt5.QtWidgets import QWidget, QHBoxLayout, QToolButton, QScrollArea, QTabWidget, QButtonGroup
 from .fluent_icons import icon
 from .i18n import tr
@@ -48,12 +48,16 @@ class ToolStrip(QWidget):
 
 
 class RibbonMixin:
+    def _show_ribbon_menu(self, category, key, menu):
+        button = self.ribbon_strips[category].buttons[key]
+        menu.popup(button.mapToGlobal(QPoint(0, button.height())))
+
     def _build_ribbon(self):
         self.ribbon = QTabWidget(); self.ribbon.setFixedHeight(110)
         self.ribbon.setStyleSheet(self._tabs_css() + 'QTabBar::tab{padding:8px 12px;}')
         self.ribbon_strips = []; self.ribbon_tools = {}
-        self._ribbon_last = {1: 'rotate', 2: 'auto_lanes'}
-        self._lane_last_tool = 'auto_lanes'
+        self._ribbon_last = {1: 'rotate', 2: 'manual_lanes'}
+        self._lane_last_tool = 'manual_lanes'
         self._active_tool = 'rotate'; self._switching_tool = False
         def action(key, label, symbol, fn): return (key, label, symbol, fn, False)
         def setting(key, label, symbol):
@@ -61,7 +65,7 @@ class RibbonMixin:
         pages = [
             ('menu_file', [action('open','dlg_open_title','open',self.open_anything),
                 action('new','menu_new_window','open',self.new_window),
-                action('recent','menu_recent_files','open',lambda: self.m_recent.exec_(self.ribbon.mapToGlobal(self.ribbon.rect().bottomLeft()))),
+                action('recent','menu_recent_files','open',lambda: self._show_ribbon_menu(0, 'recent', self.m_recent)),
                 action('paste','toolbar_paste','paste',self.paste_image),
                 action('save','toolbar_project_save','save',self.save_project),
                 action('save_as','toolbar_project_save_as','save',self.save_project_as),
@@ -71,11 +75,11 @@ class RibbonMixin:
                 action('csv','toolbar_export_csv','download',self.export_csv),
                 setting('memo','project_memo_label','memo')]),
             ('tab_adjust', [setting(k,'tool_'+k, sym) for k,sym in (
-                ('rotate','rotate'),('flip','flip'),('crop','crop'),('warp','warp'),('bow','curve'),
+                ('rotate','rotate'),('flip','flip'),('crop','crop'),('bow','curve'),
                 ('shear','shear'),('brightness','adjust'),('curve','curve'))]
                 + [action('invert','tool_invert','color',self._invert_ribbon_colors)]),
-            ('tab_lanes', [setting(k, 'tool_'+k, sym) for k,sym in (
-                ('auto_lanes','lanes'),('manual_lanes','adjust'),('lane_list','memo'),('range','crop'))]
+            ('tab_lanes', [setting(k, 'tool_lane_adjust' if k == 'manual_lanes' else 'tool_'+k, sym) for k,sym in (
+                ('manual_lanes','lanes'),('lane_list','memo'),('range','crop'))]
                 + [setting('marker','tool_marker','marker'),
                 setting('results','tool_results','analysis'),setting('quant','tab_std','quant'),
                 action('marker_presets','tool_marker_presets','marker',self._open_marker_presets)]),
@@ -85,7 +89,7 @@ class RibbonMixin:
                 action('reset','toolbar_reset_all','reset',self.reset_all),
                 action('help','toolbar_help','help',self._show_help),action('about','toolbar_about','help',self._show_about),
                 action('update','toolbar_check_updates','download',lambda: self.check_for_updates(True)),
-                action('language','menu_language','color',lambda: self.m_language.exec_(self.ribbon.mapToGlobal(self.ribbon.rect().bottomLeft())))])]
+                action('language','menu_language','color',lambda: self._show_ribbon_menu(4, 'language', self.m_language))])]
         category_icons = ('open', 'adjust', 'lanes', 'open', 'help')
         existing_tips = {
             'save': 'toolbar_project_save_tip', 'save_as': 'toolbar_project_save_as_tip',
@@ -147,6 +151,8 @@ class RibbonMixin:
         if pending: self._refresh_after_pixels_changed()
 
     def _select_ribbon_tool(self, name):
+        if name == 'auto_lanes':
+            name = 'manual_lanes'
         if self._switching_tool: return
         if getattr(self, '_active_tool', None) != name:
             self._finish_tool_preview()

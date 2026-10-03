@@ -75,12 +75,34 @@ class AdjustControlsTest(unittest.TestCase):
         layout = self.win.correction_tabs.widget(0).widget().layout()
         titles = [layout.itemAt(i).widget().title() for i in range(layout.count())
                   if isinstance(layout.itemAt(i).widget(), QGroupBox)]
-        self.assertEqual(titles, [tr("tool_rotate"), tr("tool_flip"), tr("tool_crop"), tr("tool_warp"),
+        self.assertEqual(titles, [tr("tool_rotate"), tr("tool_flip"), tr("tool_crop"),
                                   tr("group_bow_correction"), tr("group_shear_correction")])
         for name in self.win.correct_tools:
             self.win._select_ribbon_tool(name)
             self.assertEqual([key for key, (_, group) in self.win.correct_tools.items()
                               if group.isVisibleTo(self.win.tabs)], [name])
+
+    def test_crop_ribbon_includes_warp_and_enter_uses_selected_operation(self):
+        self.win._select_ribbon_tool('crop')
+        self.assertNotIn('warp', self.win.ribbon_strips[1].buttons)
+        crop_group = self.win.correct_tools['crop'][1]
+        self.assertTrue(self.win.btn_corner.isVisibleTo(crop_group))
+        self.assertTrue(self.win.chk_warp_curve.isVisibleTo(crop_group))
+        self.assertTrue(self.win.btn_crop.isChecked())
+        self.win.gel.corners = [(20, 20), (170, 20), (170, 140), (20, 140)]
+        self.win.btn_corner.click()
+        self.assertTrue(self.win.btn_corner.isChecked())
+        self.assertFalse(self.win.btn_crop.isChecked())
+        with patch.object(self.win, '_manual_warp') as warp, patch.object(self.win, '_apply_crop') as crop:
+            QTest.keyClick(self.win, Qt.Key_Return)
+            warp.assert_called_once()
+            crop.assert_not_called()
+        self.win.btn_crop.click()
+        self.assertFalse(self.win.btn_corner.isChecked())
+        with patch.object(self.win, '_manual_warp') as warp, patch.object(self.win, '_apply_crop') as crop:
+            QTest.keyClick(self.win, Qt.Key_Return)
+            crop.assert_called_once()
+            warp.assert_not_called()
 
     def test_geometry_value_fields_fit_sign_and_units_at_minimum_window(self):
         self.win.resize(900, 620)
