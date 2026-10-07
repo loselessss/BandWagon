@@ -603,31 +603,17 @@ class LanesMixin:
             peaks, props = find_peaks(smooth, prominence=amplitude * .12,
                                       width=max(2, seg_w * .15),
                                       distance=max(1, int(seg_w * .45)))
-            observed = set(peaks)
-            # A weak lane must not discard every reliable centre. Fill only
-            # oversized internal gaps, with a small missing-lane budget; never
-            # invent lanes at the image margins or force arbitrary peak counts.
+            # Missing peaks can reflect merged bands, not empty lanes. Optimize
+            # all boundaries together instead of inserting guessed centres into
+            # the largest gap (which can split a genuine wide lane).
             if max(3, n_target - max(1, n_target // 5)) <= len(peaks) < n_target:
-                spacing = float(np.median(np.diff(peaks)))
-                gaps = np.diff(peaks)
-                missing = np.maximum(0, np.floor(gaps / spacing + .55).astype(int) - 1)
-                if (spacing >= seg_w * .6
-                        and int(missing.sum()) == n_target - len(peaks)):
-                    completed = [int(peaks[0])]
-                    for left, right, count in zip(peaks, peaks[1:], missing):
-                        completed.extend(int(round(left + (right - left) * j / (count + 1)))
-                                         for j in range(1, count + 1))
-                        completed.append(int(right))
-                    peaks = np.asarray(completed)
+                return LanesMixin._global_lane_partition(smooth, n_target, W)
             if (len(peaks) == n_target
                     and peaks[0] < seg_w and peaks[-1] > W - seg_w
                     and np.all(np.diff(peaks) >= seg_w * .5)
                     and np.all(np.diff(peaks) <= seg_w * 1.6)):
                 bounds = [0]
                 for left, right in zip(peaks, peaks[1:]):
-                    if left not in observed or right not in observed:
-                        bounds.append(int(round((left + right) / 2)))
-                        continue
                     lo = int(left + (right - left) * .2)
                     hi = int(right - (right - left) * .2) + 1
                     local = smooth[lo:hi]
@@ -680,6 +666,38 @@ class LanesMixin:
         bounds[-1] = max(bounds[-1], W)
         spans = [(bounds[i], min(bounds[i + 1], W) - 1) for i in range(len(bounds) - 1)]
         return spans
+
+    @staticmethod
+    def _global_lane_partition(signal, count, width):
+        """Bounded-resolution DP: weak boundary evidence plus a soft width prior.
+
+        Each transition makes one lane. Fixed endpoints and positive widths
+        guarantee exactly count contiguous, non-overlapping output intervals.
+        Sampling bounds work independently of camera resolution.
+        """
+        size = min(width, 2048)
+        sampled = np.interp(np.linspace(0, width - 1, size), np.arange(width), signal)
+        evidence = (sampled - sampled.min()) / max(float(np.ptp(sampled)), 1e-9)
+        pitch = size / count
+        min_width = max(1, int(pitch * .65))
+        max_width = max(min_width + 1, int(np.ceil(pitch * 1.4)))
+        cost = np.full((count + 1, size + 1), np.inf)
+        previous = np.zeros((count + 1, size + 1), dtype=np.int32)
+        cost[0, 0] = 0
+        for lane in range(1, count + 1):
+            low = max(lane * min_width, size - (count - lane) * max_width)
+            high = min(lane * max_width, size - (count - lane) * min_width)
+            for end in range(low, high + 1):
+                starts = np.arange(max(0, end - max_width), end - min_width + 1)
+                values = cost[lane - 1, starts] + .8 * ((end - starts) / pitch - 1) ** 2
+                best = int(np.argmin(values))
+                cost[lane, end] = values[best] + (evidence[min(end, size - 1)] if lane < count else 0)
+                previous[lane, end] = starts[best]
+        bounds = [size]
+        for lane in range(count, 0, -1):
+            bounds.append(int(previous[lane, bounds[-1]]))
+        bounds = [round(x * width / size) for x in reversed(bounds)]
+        return [(a, b - 1) for a, b in zip(bounds, bounds[1:])]
 
     def _clear_lanes(self):
         """레인 목록을 비우는 저수준 동작 — 기하변환으로 좌표가 무효화될

@@ -5,6 +5,30 @@ from bandwagon.lanes import LanesMixin
 
 
 class LaneBoundaryTest(unittest.TestCase):
+    def test_global_partition_does_not_split_wide_gap_into_narrow_lanes(self):
+        x = np.arange(750)
+        centres = [30, 82, 134, 184, 225, 268, 312, 355, 400, 444,
+                   488, 532, 579, 635, 706]
+        signal = sum((.03 if i in (4, 5) else 1.) *
+                     np.exp(-.5 * ((x - c) / 13) ** 2)
+                     for i, c in enumerate(centres))
+        spans = LanesMixin._split_lanes_by_count(signal, 15, 750)
+        self.assertEqual(len(spans), 15)
+        for (left, right), centre in zip(spans, centres):
+            self.assertLess(left, centre)
+            self.assertGreater(right, centre)
+            self.assertGreaterEqual(right - left + 1, 32)
+
+    def test_global_partition_large_image_covers_every_pixel(self):
+        x = np.arange(6000)
+        signal = 1 + np.cos(x * 2 * np.pi / 400)
+        spans = LanesMixin._global_lane_partition(signal, 15, len(x))
+        self.assertEqual(len(spans), 15)
+        self.assertEqual(spans[0][0], 0)
+        self.assertEqual(spans[-1][1], 5999)
+        self.assertTrue(all(a <= b for a, b in spans))
+        self.assertTrue(all(a[1] + 1 == b[0] for a, b in zip(spans, spans[1:])))
+
     def test_missing_internal_lane_keeps_observed_centres(self):
         x = np.arange(600)
         centres = [35, 115, 195, 275, 355, 435, 515]
