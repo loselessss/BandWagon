@@ -30,3 +30,7 @@ Thumbs.db
 /.claude/
 /AGENTS.local.backup.md
 /Test/
+
+# Local MSIX signing material
+*.pfx
+*.p12

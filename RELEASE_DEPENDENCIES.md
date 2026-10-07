@@ -33,6 +33,7 @@ python -m pip install PyQt5 Pillow numpy scipy opencv-python
 | --- | --- | --- |
 | PyInstaller | `BandWagon.exe` onedir 빌드 | https://pypi.org/project/pyinstaller/ |
 | Inno Setup 6 | Windows 설치 파일 생성 | https://jrsoftware.org/isinfo.php |
+| Windows 10/11 SDK | MakeAppx MSIX 패키징·SignTool 서명 | https://developer.microsoft.com/windows/downloads/windows-sdk/ |
 
 릴리스 자동화는 GitHub Actions의 `windows-latest`에서 실행되며, CPython 3.14.6과
 `requirements-build.lock`에 고정된 패키지로 `scripts/build_windows.py`를 실행한 뒤 다음 순서로 빌드합니다.
@@ -41,6 +42,9 @@ python -m pip install PyQt5 Pillow numpy scipy opencv-python
 2. Inno Setup으로 `BandWagon_Setup_@VERSION@.exe`를 생성합니다.
 3. onedir 폴더를 `BandWagon_Portable_@VERSION@.zip`으로 압축합니다.
 4. 설치 파일과 포터블 파일의 `latest` 별칭을 만듭니다.
+5. `scripts/build_msix.py`로 MSIX를 생성하고 Windows SDK로 검증합니다.
+   서명 인증서가 설정되어 있으면 서명된 패키지, 없으면 `_unsigned.msix` 준비용
+   패키지를 만듭니다. 자세한 설정은 [MSIX 배포 안내](docs/MSIX.md)에 있습니다.
 
 정확한 명령은 `.github/workflows/release.yml`에 고정되어 있습니다. macOS 앱은
 Windows 릴리스 잡과 별개로 실제 macOS 환경에서 `build_mac.sh`를 사용합니다.

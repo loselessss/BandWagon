@@ -105,6 +105,7 @@ class UpdateDialog(QDialog):
         if update.asset is None:
             self.install_button.setEnabled(False)
             self.status_label.setText(tr(
+                "update_no_msix" if getattr(service, 'msix', False) else
                 "update_no_portable" if service.portable else "update_no_installer"))
         elif not update.asset.sha256:
             self.install_button.setEnabled(False)

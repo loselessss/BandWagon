@@ -21,6 +21,8 @@ _INSTALLER_RE = re.compile(
     r"^BandWagon_Setup_(\d+\.\d+\.\d+)\.exe$", re.IGNORECASE)
 _PORTABLE_RE = re.compile(
     r"^BandWagon_Portable_(\d+\.\d+\.\d+)\.zip$", re.IGNORECASE)
+_MSIX_RE = re.compile(
+    r"^BandWagon_(\d+\.\d+\.\d+)_x64\.msix$", re.IGNORECASE)
 _SHA256_RE = re.compile(r"^sha256:([0-9a-fA-F]{64})$")
 _MAX_RELEASE_JSON_BYTES = 2 * 1024 * 1024
 
@@ -75,10 +77,26 @@ def _trusted_github_url(value, release_asset=False):
     return not release_asset or "/download/" in parsed.path.casefold()
 
 
+def is_msix_runtime():
+    """Ask Windows for package identity; a folder name is not sufficient."""
+    if sys.platform != 'win32':
+        return False
+    import ctypes
+    from ctypes import wintypes
+    try:
+        function = ctypes.WinDLL('kernel32', use_last_error=True).GetCurrentPackageFullName
+        function.argtypes = [ctypes.POINTER(wintypes.UINT), wintypes.LPWSTR]
+        function.restype = wintypes.LONG
+        length = wintypes.UINT(0)
+        return function(ctypes.byref(length), None) == 122  # ERROR_INSUFFICIENT_BUFFER
+    except (AttributeError, OSError):
+        return False
+
+
 def is_portable_runtime(executable=None, frozen=None):
     """Inno 설치본에는 실행 파일 옆에 unins*.exe가 있다는 점으로 구분한다."""
     is_frozen = getattr(sys, "frozen", False) if frozen is None else frozen
-    if not is_frozen:
+    if not is_frozen or is_msix_runtime():
         return False
     app_dir = Path(executable or sys.executable).resolve().parent
     return not any(app_dir.glob("unins*.exe"))
@@ -87,11 +105,13 @@ def is_portable_runtime(executable=None, frozen=None):
 class GitHubUpdateService:
     def __init__(self, current_version, opener=urlopen, download_root=None,
                  portable=None, app_dir=None, popen=subprocess.Popen,
-                 script_root=None):
+                 script_root=None, msix=None, startfile=None):
         self.current_version = current_version
         self._open = opener
         self._download_root = download_root
-        self.portable = is_portable_runtime() if portable is None else portable
+        self.msix = is_msix_runtime() if msix is None else msix
+        self.portable = False if self.msix else (is_portable_runtime() if portable is None else portable)
+        self._startfile = startfile if startfile is not None else getattr(os, 'startfile', None)
         self.app_dir = Path(app_dir or sys.executable).resolve()
         if self.app_dir.is_file():
             self.app_dir = self.app_dir.parent
@@ -140,7 +160,8 @@ class GitHubUpdateService:
     def _select_asset(self, assets, version):
         if not isinstance(assets, list):
             return None
-        expected = (f"BandWagon_Portable_{version}.zip" if self.portable
+        expected = (f"BandWagon_{version}_x64.msix" if self.msix else
+                    f"BandWagon_Portable_{version}.zip" if self.portable
                     else f"BandWagon_Setup_{version}.exe")
         candidates = [
             item for item in assets if isinstance(item, dict)
@@ -151,7 +172,7 @@ class GitHubUpdateService:
         item = candidates[0]
         name = str(item.get("name", ""))
         download_url = str(item.get("browser_download_url", ""))
-        name_pattern = _PORTABLE_RE if self.portable else _INSTALLER_RE
+        name_pattern = _MSIX_RE if self.msix else _PORTABLE_RE if self.portable else _INSTALLER_RE
         if (Path(name).name != name or not name_pattern.fullmatch(name)
                 or not _trusted_github_url(download_url, release_asset=True)):
             raise UpdateError("릴리스 설치 파일 정보가 안전하지 않습니다.")
@@ -167,7 +188,7 @@ class GitHubUpdateService:
     def download(self, update, progress=None, cancel=None):
         asset = update.asset
         if asset is None:
-            package = "포터블 ZIP" if self.portable else "Windows 설치 파일"
+            package = "서명된 MSIX 패키지" if self.msix else "포터블 ZIP" if self.portable else "Windows 설치 파일"
             raise UpdateError(f"이 릴리스에는 {package}이 없습니다.")
         if not asset.sha256:
             raise UpdateError("설치 파일의 SHA-256 정보가 없어 자동 업데이트할 수 없습니다.")
@@ -230,10 +251,24 @@ class GitHubUpdateService:
             raise UpdateError(f"업데이트 설치 파일을 실행하지 못했습니다: {error}")
 
     def launch_update(self, path):
-        if self.portable:
+        if self.msix:
+            self.launch_msix_update(path)
+        elif self.portable:
             self.launch_portable_update(path)
         else:
             self.launch_installer(path)
+
+    def launch_msix_update(self, path):
+        """Windows App Installer validates publisher/signature and updates atomically."""
+        package = Path(path).resolve()
+        if not package.is_file() or not _MSIX_RE.fullmatch(package.name):
+            raise UpdateError("실행할 MSIX 업데이트 파일이 올바르지 않습니다.")
+        if self._startfile is None:
+            raise UpdateError("Windows 앱 설치 관리자를 사용할 수 없습니다.")
+        try:
+            self._startfile(str(package), 'open')
+        except OSError as error:
+            raise UpdateError(f"MSIX 앱 설치 관리자를 열지 못했습니다: {error}")
 
     def launch_portable_update(self, path):
         archive = Path(path).resolve()

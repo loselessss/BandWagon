@@ -9,11 +9,11 @@ import time
 import unittest
 import zipfile
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from bandwagon.updater import (
     GitHubUpdateService, UpdateError, _PORTABLE_UPDATE_SCRIPT,
-    is_portable_runtime, version_tuple,
+    is_msix_runtime, is_portable_runtime, version_tuple,
 )
 
 
@@ -62,6 +62,46 @@ def release_payload(tag="v2.2.0", content=b"installer", url=None):
 
 
 class UpdateServiceTests(unittest.TestCase):
+    def test_msix_selects_signed_package_and_never_falls_back_to_exe_or_zip(self):
+        payload = json.loads(release_payload())
+        signed = dict(payload['assets'][0], name='BandWagon_2.2.0_x64.msix',
+                      browser_download_url='https://github.com/loselessss/BandWagon/releases/download/v2.2.0/BandWagon_2.2.0_x64.msix')
+        unsigned = dict(signed, name='BandWagon_2.2.0_x64_unsigned.msix')
+        payload['assets'].append(unsigned)
+        opener = lambda _request, timeout: FakeResponse(json.dumps(payload).encode())
+        service = GitHubUpdateService('2.1.0', msix=True, portable=True, opener=opener)
+        self.assertFalse(service.portable)
+        self.assertIsNone(service.check().asset)
+        payload['assets'].append(signed)
+        self.assertEqual(service.check().asset.name, signed['name'])
+
+    def test_msix_launch_uses_windows_app_installer_only(self):
+        with tempfile.TemporaryDirectory() as temp:
+            package = Path(temp) / 'BandWagon_2.2.0_x64.msix'
+            package.write_bytes(b'msix')
+            startfile = Mock()
+            popen = Mock()
+            service = GitHubUpdateService('2.1.0', msix=True, startfile=startfile, popen=popen)
+            service.launch_update(package)
+            startfile.assert_called_once_with(str(package.resolve()), 'open')
+            popen.assert_not_called()
+            unsigned = package.with_name('BandWagon_2.2.0_x64_unsigned.msix')
+            unsigned.write_bytes(b'msix')
+            with self.assertRaises(UpdateError):
+                service.launch_update(unsigned)
+
+    def test_msix_identity_detection_uses_windows_api(self):
+        function = Mock(return_value=122)
+        with patch('bandwagon.updater.sys.platform', 'win32'), \
+                patch('ctypes.WinDLL', return_value=Mock(GetCurrentPackageFullName=function), create=True):
+            self.assertTrue(is_msix_runtime())
+            function.return_value = 15700  # APPMODEL_ERROR_NO_PACKAGE
+            self.assertFalse(is_msix_runtime())
+
+    def test_msix_is_not_misidentified_as_portable(self):
+        with patch('bandwagon.updater.is_msix_runtime', return_value=True):
+            self.assertFalse(is_portable_runtime(frozen=True))
+
     def test_version_comparison_is_numeric(self):
         self.assertGreater(version_tuple("v2.10.0"), version_tuple("2.9.9"))
 
