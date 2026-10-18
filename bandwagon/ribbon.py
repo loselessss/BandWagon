@@ -17,9 +17,9 @@ class ToolStrip(QWidget):
         content = QWidget(); row = QHBoxLayout(content); row.setContentsMargins(2, 2, 2, 2); row.setSpacing(3)
         self.buttons = {}; self.group = QButtonGroup(self); self.group.setExclusive(True)
         for key, label, symbol, callback, selectable in commands:
-            button = QToolButton(); button.setText(tr(label)); button.setIcon(icon(symbol)); button.setIconSize(QSize(24, 24))
-            button.setToolButtonStyle(Qt.ToolButtonTextUnderIcon); button.setToolTip(tr(label)); button.setAccessibleName(tr(label))
-            button.setMinimumSize(65, 62)
+            button = QToolButton(); button.setText(tr(label)); button.setIcon(icon(symbol)); button.setIconSize(QSize(18, 18))
+            button.setToolButtonStyle(Qt.ToolButtonTextBesideIcon); button.setToolTip(tr(label)); button.setAccessibleName(tr(label))
+            button.setMinimumHeight(34)
             button.setCheckable(selectable)
             if selectable: self.group.addButton(button)
             button.clicked.connect(lambda checked=False, fn=callback: fn())
@@ -32,7 +32,7 @@ class ToolStrip(QWidget):
         bar.rangeChanged.connect(lambda *_: self.update_arrows())
         bar.valueChanged.connect(lambda *_: self.update_arrows())
         self.setStyleSheet(f'QToolButton{{border:1px solid transparent;border-radius:5px;padding:4px;color:{INKT};background:transparent;}}'
-                          f'QToolButton:hover{{background:{INK3};}}QToolButton:checked{{background:#254553;border-color:{CYAN};}}'
+                          f'QToolButton:hover{{background:{INK3};}}QToolButton:checked{{background:{INK3};border-bottom:2px solid {CYAN};}}'
                           f'QToolButton:focus{{border-color:{CYAN};}}QToolButton:pressed{{background:{INK4};}}')
         self.update_arrows()
 
@@ -53,7 +53,7 @@ class RibbonMixin:
         menu.popup(button.mapToGlobal(QPoint(0, button.height())))
 
     def _build_ribbon(self):
-        self.ribbon = QTabWidget(); self.ribbon.setFixedHeight(110)
+        self.ribbon = QTabWidget(); self.ribbon.setFixedHeight(84)
         self.ribbon.setStyleSheet(self._tabs_css() + 'QTabBar::tab{padding:8px 12px;}')
         self.ribbon_strips = []; self.ribbon_tools = {}
         self._ribbon_last = {1: 'rotate', 2: 'manual_lanes'}
@@ -172,7 +172,7 @@ class RibbonMixin:
                 self.tabs.setCurrentIndex({'results': 2, 'quant': 3, 'memo': 4}[name])
             self._on_tab_changed(self.tabs.currentIndex())
             self.settings_title.setText(self.ribbon_tools[name][1].text())
-            self.profile.setVisible(self.tabs.currentIndex() in (1, 2, 3))
+            self.profile_section.setVisible(self.tabs.currentIndex() in (1, 2, 3))
             if name == 'crop': self.btn_crop.setChecked(True)
         finally:
             self._switching_tool = False

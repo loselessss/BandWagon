@@ -2,9 +2,24 @@ import unittest
 import numpy as np
 from bandwagon.imaging import lane_boundary_signal
 from bandwagon.lanes import LanesMixin
+from bandwagon.lane_geometry import valid_lane_spans
 
 
 class LaneBoundaryTest(unittest.TestCase):
+    def test_detection_never_overlaps_or_leaves_image_for_varied_counts(self):
+        rng = np.random.default_rng(21)
+        for width, count in ((60, 30), (200, 15), (730, 15), (1200, 60), (6000, 15)):
+            for kind in ('noise', 'smooth', 'flat'):
+                signal = rng.uniform(.01, 1, width)
+                if kind == 'smooth':
+                    from scipy.ndimage import gaussian_filter1d
+                    signal = gaussian_filter1d(signal, width / count * .12)
+                elif kind == 'flat':
+                    signal[:] = 1
+                spans = LanesMixin._split_lanes_by_count(signal, count, width)
+                with self.subTest(width=width, count=count, kind=kind):
+                    self.assertTrue(valid_lane_spans(spans, width, count=count, contiguous=True))
+
     def test_global_partition_does_not_split_wide_gap_into_narrow_lanes(self):
         x = np.arange(750)
         centres = [30, 82, 134, 184, 225, 268, 312, 355, 400, 444,

@@ -124,22 +124,28 @@ class GeometryMixin:
         crv.addWidget(self.btn_crop)
         crop_apply = QPushButton(tr("crop_apply")); crop_apply.setStyleSheet(self._btn_accent_css())
         crop_apply.clicked.connect(self._apply_crop); crv.addWidget(crop_apply)
-        crop_clear = QPushButton(tr("btn_reset_corners")); crop_clear.clicked.connect(self._clear_corners)
-        crop_clear.setStyleSheet(self._btn_css()); crv.addWidget(crop_clear)
+        crop_clear = QPushButton(tr('crop_reset')); crop_clear.clicked.connect(self._reset_crop)
+        crop_clear.setStyleSheet(self._btn_css())
+        crop_cancel = QPushButton(tr('btn_cancel')); crop_cancel.clicked.connect(self._cancel_crop)
+        crop_cancel.setStyleSheet(self._btn_css())
+        crop_actions = QHBoxLayout(); crop_actions.addWidget(crop_clear); crop_actions.addWidget(crop_cancel)
+        crv.addLayout(crop_actions)
+        self.crop_size_label = QLabel()
+        self.crop_size_label.setStyleSheet(f'color:{MUTE};font-size:11px;')
+        crv.addWidget(self.crop_size_label)
 
-        region = QGroupBox(tr("tool_warp")); region.setStyleSheet(self._group_css())
+        region = QGroupBox(tr('manual_perspective')); region.setStyleSheet(self._group_css())
         rgl = QVBoxLayout(region); rgl.setSpacing(5)
         info = QLabel(tr("warp_short_hint"))
         info.setToolTip(tr("warp_intro"))
         info.setStyleSheet(f"color:{MUTE};font-size:11px;"); info.setWordWrap(True)
         rgl.addWidget(info)
         auto = QPushButton(tr("btn_auto_warp")); auto.clicked.connect(self._auto_warp); auto.setStyleSheet(self._btn_accent_css())
-        rgl.addWidget(auto)
+        self.btn_auto_warp = auto
+        crv.insertWidget(0, auto)
         self.chk_warp_curve = QCheckBox(tr("warp_then_curve"))
         self.chk_warp_curve.setStyleSheet(f"color:{INKT};font-size:11px;" + self._checkbox_css())
-        rgl.addWidget(self.chk_warp_curve)
-        sub = QLabel(tr("warp_or_manual_corners")); sub.setStyleSheet(f"color:{MUTE};font-size:10px;"); sub.setAlignment(Qt.AlignCenter)
-        rgl.addWidget(sub)
+        crv.insertWidget(1, self.chk_warp_curve)
         self.btn_corner = QPushButton(tr("btn_corner_mode_off")); self.btn_corner.setCheckable(True)
         self.btn_corner.clicked.connect(self._toggle_corner_mode); self.btn_corner.setStyleSheet(self._btn_css())
         rgl.addWidget(self.btn_corner)
@@ -319,19 +325,23 @@ class GeometryMixin:
 
     @memory_safe_edit
     def _apply_crop(self):
-        if self._orig is None or len(self.gel.corners) != 4:
+        if self._orig is None or self.gel.crop_rect is None:
             self._info(tr('tool_crop'), tr('crop_hint'))
             return
         self._finalize_pending_rotation(); self._finalize_pending_bow(); self._finalize_pending_shear()
-        points = np.asarray(self.gel.corners)
+        x1, y1, x2, y2 = self.gel.crop_rect
         w, h = self._orig.size
-        left = max(0, min(w - 1, int(np.floor(points[:, 0].min()))))
-        top = max(0, min(h - 1, int(np.floor(points[:, 1].min()))))
-        right = max(left + 1, min(w, int(np.ceil(points[:, 0].max()))))
-        bottom = max(top + 1, min(h, int(np.ceil(points[:, 1].max()))))
+        left = max(0, min(w - 1, int(np.floor(x1))))
+        top = max(0, min(h - 1, int(np.floor(y1))))
+        right = max(left + 1, min(w, int(np.ceil(x2))))
+        bottom = max(top + 1, min(h, int(np.ceil(y2))))
+        if (left, top, right, bottom) == (0, 0, w, h):
+            self._cancel_crop()
+            return
         self._record_op('crop', {'box': [left, top, right, bottom]})
         self.btn_crop.blockSignals(True); self.btn_crop.setChecked(False); self.btn_crop.blockSignals(False)
         self.gel.set_mode('view'); self._after_geometry_change()
+        self.status.showMessage(tr('status_crop_done', w=right - left, h=bottom - top))
 
     def _on_curve_changed(self):
         # 커브 점을 드래그하는 중(changed) — 축소본에만 적용해 가볍게 미리보기.
@@ -1209,6 +1219,12 @@ class GeometryMixin:
             if hasattr(self, "corner_label"):
                 self.corner_label.setText(tr("corner_count", n=0))
         self._after_geometry_change()
+        if undone_op == 'crop':
+            self._select_ribbon_tool('crop')
+            self.gel.crop_rect = tuple(undone_params['box'])
+            self.gel._crop_fresh = False
+            self.gel.cropChanged.emit(self.gel.crop_rect)
+            self.gel.update()
         if hasattr(self, "btn_undo"):
             self.btn_undo.setEnabled(self._edit_pos >= 0)
         if hasattr(self, "btn_redo"):
@@ -1250,6 +1266,7 @@ class GeometryMixin:
         건드리지 않는다(예전엔 여기서 무조건 0으로 밀어버려서, 되돌리기로
         곡률보정이 적용된 지점에 돌아왔을 때 이미지는 보정된 채인데
         슬라이더만 0으로 보이는 불일치가 있었다)."""
+        self._cancel_crop()
         self._refresh_after_pixels_changed()
 
     def _on_tab_changed(self, i):
@@ -1304,7 +1321,7 @@ class GeometryMixin:
             self._finalize_pending_shear()
             if had_pending:
                 self._refresh_after_pixels_changed()
-            if hasattr(self, 'btn_crop') and (which != 'corner' or getattr(self, '_active_tool', None) != 'crop'):
+            if hasattr(self, 'btn_crop') and which != 'crop':
                 self.btn_crop.blockSignals(True); self.btn_crop.setChecked(False); self.btn_crop.blockSignals(False)
             for btn, m in [(self.btn_lane, "lane"), (self.btn_corner, "corner"),
                            (getattr(self, "btn_vrange", None), "vrange")]:
@@ -1378,7 +1395,24 @@ class GeometryMixin:
             self.btn_corner.setChecked(False)
             self.btn_corner.setText(tr("btn_corner_mode_off"))
             self.btn_corner.blockSignals(False)
-        self._set_exclusive_mode("corner", on)
+        self._set_exclusive_mode('crop', on)
+
+    def _reset_crop(self):
+        if self._orig is None:
+            return
+        self.btn_crop.setChecked(True)
+        self.gel.reset_crop()
+
+    def _cancel_crop(self):
+        self.btn_crop.blockSignals(True); self.btn_crop.setChecked(False); self.btn_crop.blockSignals(False)
+        if self.gel.mode == 'crop':
+            self.gel.set_mode('view')
+        else:
+            self.gel.cancel_crop()
+
+    def _on_crop_changed(self, rect):
+        if hasattr(self, 'crop_size_label'):
+            self.crop_size_label.setText(tr('crop_selected_size', w=rect[2] - rect[0], h=rect[3] - rect[1]) if rect else '')
 
     def _toggle_corner_mode(self, on):
         if on:
@@ -1440,8 +1474,7 @@ class GeometryMixin:
     def _enter_manual_corner_mode(self):
         """코너 지정 모드를 켜고 버튼 상태를 맞춘다 (자동 인식 실패/거절 시 공통 사용)."""
         self.btn_corner.setChecked(True)
-        self.btn_corner.setText(tr("btn_corner_mode_on"))
-        self.gel.set_mode("corner")
+        self._toggle_corner_mode(True)
 
     def _warp(self, src):
         # 실제 퍼스펙티브 계산은 apply_edit_op()의 "warp" 분기가 그대로

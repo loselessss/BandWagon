@@ -238,8 +238,8 @@ class AdjustControlsTest(unittest.TestCase):
         self.win._wb_gray_override = np.asarray(self.source.convert('L')).copy()
         self.win._pristine_wb_gray_override = self.win._wb_gray_override.copy()
         self.win._select_ribbon_tool('crop')
-        self.assertEqual(self.win.gel.mode, 'corner')
-        self.win.gel.corners = [[100, 80], [700, 80], [700, 600], [100, 600]]
+        self.assertEqual(self.win.gel.mode, 'crop')
+        self.win.gel.crop_rect = (100, 80, 700, 600)
         QTest.keyClick(self.win, Qt.Key_Return)
         self.assertEqual(self.win._orig.size, (600, 520))
         np.testing.assert_array_equal(self.win._wb_gray_override,

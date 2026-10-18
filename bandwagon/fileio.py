@@ -244,6 +244,7 @@ class FileIOMixin:
         self._current_project_path = None
         self._clear_lanes()
         self.gel.clear_corners(); self.corner_label.setText(tr("corner_count", n=0))
+        self.gel.cancel_crop()
         self.gel.clear_vrange()
         self._rot_base = None
         self._rot_session_pushed = False
@@ -360,6 +361,7 @@ class FileIOMixin:
         self._base_title = f"{name} — {APP_NAME} v{APP_VERSION}"
         self._pristine_orig = self._orig.copy()   # 전체 초기화 시 복귀할 기준
         self._reset_session_state()   # _saved_snapshot을 방금 리셋한 상태 기준으로 갱신
+        self._select_ribbon_tool('rotate')
         self._refresh_title()
 
     def _refresh_title(self):

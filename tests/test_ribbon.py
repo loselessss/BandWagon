@@ -92,7 +92,7 @@ class RibbonTest(unittest.TestCase):
             self.assertTrue(button.isVisible())
             panel = button.parentWidget().parentWidget()
             self.assertGreaterEqual(button.mapTo(panel, QPoint(0, 0)).y(),
-                win.lane_style_wrap.mapTo(panel, QPoint(0, win.lane_style_wrap.height())).y())
+                win.band_basic_box.mapTo(panel, QPoint(0, win.band_basic_box.height())).y())
             with patch.object(win, 'run_analysis', wraps=win.run_analysis) as analyze:
                 win.sp_prom.setValue(80)
                 win.sp_dist.setValue(9)
@@ -307,8 +307,13 @@ class RibbonTest(unittest.TestCase):
             self.assertNotIn('bands', win.ribbon_strips[2].buttons)
             self.assertFalse(win.lane_table.isVisible())
             self.assertTrue(win.btn_lane.isVisible())
-            for widget in (win.sp_prom, win.sp_dist, win.sl_band_thresh,
-                           win.sp_smear, win.combo_band_style, win.btn_detect_bands):
+            for widget in (win.sp_prom, win.sp_dist, win.btn_detect_bands):
+                self.assertTrue(widget.isVisible())
+            self.assertFalse(win.sl_band_thresh.isVisible())
+            self.assertFalse(win.combo_band_style.isVisible())
+            win.band_settings_toggle.click()
+            win.lane_style_toggle.click()
+            for widget in (win.sl_band_thresh, win.sp_smear, win.combo_band_style):
                 self.assertTrue(widget.isVisible())
             with patch.object(win, 'run_analysis', wraps=win.run_analysis) as analyze:
                 win.sp_prom.setValue(80)
@@ -382,6 +387,7 @@ class RibbonTest(unittest.TestCase):
             self.assertEqual(win._active_tool, 'memo')
             win._orig = Image.new('RGB', (100, 100), 'white')
             win._after_load('empty.png')
+            win._select_ribbon_tool('memo')
             with patch.object(win, '_info') as info:
                 win.btn_detect_bands.click()
             info.assert_called_once()

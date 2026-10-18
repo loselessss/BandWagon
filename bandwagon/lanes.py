@@ -22,7 +22,9 @@ from .imaging import lane_boundary_signal
 from .fluent_icons import icon
 from .theme import *
 from .models import Lane
+from .lane_geometry import valid_lane_spans
 from .widgets import StdCurveView, FineSlider
+from .checkbox import TickCheckBox
 from .dialogs import MarkerDialog, MarkerPresetManager, _dialog_style, _no_help_button
 from .presets import load_marker_presets, save_marker_presets
 
@@ -110,8 +112,9 @@ class LanesMixin:
         settings_scroll.setFrameShape(QScrollArea.NoFrame)
         settings_scroll.setWidget(page)
         outer.addWidget(settings_scroll, 1)
-        box = QGroupBox(tr("group_lane_assign")); box.setStyleSheet(self._group_css())
+        box = QWidget()
         h = QVBoxLayout(box)
+        h.setContentsMargins(0, 0, 0, 0)
 
         nrow = QHBoxLayout(); nrow.setSpacing(6)
         nlabel = QLabel(tr("chk_lane_count")); nlabel.setStyleSheet(f"color:{INKT};")
@@ -120,21 +123,18 @@ class LanesMixin:
         self.sp_lane_n.setStyleSheet(self._spin_css())
         nrow.addWidget(self.sp_lane_n)
         h.addLayout(nrow)
-        nhint = QLabel(tr("lane_count_hint"))
-        nhint.setStyleSheet(f"color:{MUTE};font-size:10px;"); nhint.setWordWrap(True)
-        h.addWidget(nhint)
+        self.sp_lane_n.setToolTip(tr('lane_count_hint'))
 
         auto = QPushButton(tr("btn_auto_detect_lanes")); auto.clicked.connect(self._auto_lanes)
-        auto.setStyleSheet(self._btn_accent_css())
+        auto.setStyleSheet(self._btn_css())
         h.addWidget(auto)
-        manual = QGroupBox(tr('tool_manual_lanes')); manual.setStyleSheet(self._group_css())
+        manual = QWidget()
         mh = QVBoxLayout(manual)
+        mh.setContentsMargins(0, 0, 0, 0)
         self.btn_lane = QPushButton(tr("btn_manual_lane_on")); self.btn_lane.setCheckable(True); self.btn_lane.setChecked(True)
         self.btn_lane.clicked.connect(self._toggle_lane_mode); self.btn_lane.setStyleSheet(self._btn_css())
         mh.addWidget(self.btn_lane)
-        hint = QLabel(tr("lane_manual_hint"))
-        hint.setStyleSheet(f"color:{MUTE};font-size:10px;"); hint.setWordWrap(True)
-        mh.addWidget(hint)
+        self.btn_lane.setToolTip(tr('lane_manual_hint'))
         management = QGroupBox(tr('tool_lane_list')); management.setStyleSheet(self._group_css())
         lh = QVBoxLayout(management)
         clear = QPushButton(tr("btn_clear_all_lanes")); clear.clicked.connect(self._on_clear_lanes_clicked); clear.setStyleSheet(self._danger_btn_css())
@@ -180,8 +180,13 @@ class LanesMixin:
         vrv.addWidget(vr_reset)
         v.addWidget(vr_box)
 
+        self.band_basic_box = QWidget()
+        basic_form = QFormLayout(self.band_basic_box)
+        basic_form.setContentsMargins(0, 4, 0, 4)
+        basic_form.setRowWrapPolicy(QFormLayout.WrapLongRows)
+        v.addWidget(self.band_basic_box)
         details_toggle = QToolButton()
-        details_toggle.setText(tr("group_band_detect"))
+        details_toggle.setText(tr('group_band_advanced'))
         details_toggle.setCheckable(True)
         details_toggle.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
         details_toggle.setArrowType(Qt.RightArrow)
@@ -203,8 +208,8 @@ class LanesMixin:
         self.sp_dist.valueChanged.connect(self._on_document_value_changed)
         self.sp_prom.editingFinished.connect(self._commit_document_state)
         self.sp_dist.editingFinished.connect(self._commit_document_state)
-        f.addRow(tr("label_sensitivity"), self.sp_prom)
-        f.addRow(tr("label_min_band_spacing"), self.sp_dist)
+        basic_form.addRow(tr("label_sensitivity"), self.sp_prom)
+        basic_form.addRow(tr("label_min_band_spacing"), self.sp_dist)
 
         # 밴드 경계(=정량 적분 범위) 임계값 — '피크 높이의 N%까지 떨어지는
         # 지점을 경계로 본다'. find_peaks의 left/right_bases(인접 피크
@@ -271,7 +276,29 @@ class LanesMixin:
         self.combo_band_style.setStyleSheet(self._combo_css())
         self.combo_band_style.currentIndexChanged.connect(self._on_band_style_changed)
         style_row.addWidget(self.combo_band_style, 1)
-        style_wrap = QWidget(); style_wrap.setLayout(style_row); v.addWidget(style_wrap)
+        self.lane_style_toggle = QToolButton()
+        self.lane_style_toggle.setText(tr('group_overlay_display'))
+        self.lane_style_toggle.setCheckable(True)
+        self.lane_style_toggle.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self.lane_style_toggle.setArrowType(Qt.RightArrow)
+        self.lane_style_toggle.setStyleSheet(self._disclosure_css())
+        v.addWidget(self.lane_style_toggle)
+        style_wrap = QWidget()
+        style_layout = QVBoxLayout(style_wrap)
+        style_layout.setContentsMargins(0, 0, 0, 0)
+        style_layout.addLayout(style_row)
+        self.chk_focus_overlay = TickCheckBox(tr('focus_overlay'))
+        self.chk_focus_overlay.setToolTip(tr('focus_overlay_tip'))
+        self.chk_focus_overlay.setStyleSheet(self._checkbox_css())
+        self.chk_focus_overlay.setChecked(self._layout_settings.value('view/focus_overlay', True, type=bool))
+        self.gel.focus_overlay = self.chk_focus_overlay.isChecked()
+        self.chk_focus_overlay.toggled.connect(self._set_focus_overlay)
+        style_layout.addWidget(self.chk_focus_overlay)
+        v.addWidget(style_wrap)
+        style_wrap.hide()
+        self.lane_style_toggle.toggled.connect(style_wrap.setVisible)
+        self.lane_style_toggle.toggled.connect(lambda expanded:
+            self.lane_style_toggle.setArrowType(Qt.DownArrow if expanded else Qt.RightArrow))
 
         self.band_detect_wrap = QWidget()
         detect_layout = QVBoxLayout(self.band_detect_wrap); detect_layout.setContentsMargins(0, 4, 0, 0)
@@ -281,7 +308,7 @@ class LanesMixin:
         self.btn_detect_bands.setToolTip(tr('ribbon_detect_tip'))
         self.btn_detect_bands.clicked.connect(lambda _checked=False: self._run_band_detection())
         detect_layout.addWidget(self.btn_detect_bands)
-        v.addWidget(self.band_detect_wrap)
+        v.insertWidget(v.indexOf(self.band_basic_box) + 1, self.band_detect_wrap)
 
         v.addStretch()
 
@@ -325,9 +352,11 @@ class LanesMixin:
         show_detection = name == 'manual_lanes'
         for key, widget in self.lane_tools.items():
             widget.setVisible(key == name)
-        self.band_settings_box.setVisible(show_detection)
-        self.band_settings_toggle.hide()
-        self.lane_style_wrap.setVisible(show_detection)
+        self.band_basic_box.setVisible(show_detection)
+        self.band_settings_box.setVisible(show_detection and self.band_settings_toggle.isChecked())
+        self.band_settings_toggle.setVisible(show_detection)
+        self.lane_style_toggle.setVisible(show_detection)
+        self.lane_style_wrap.setVisible(show_detection and self.lane_style_toggle.isChecked())
         self.band_detect_wrap.setVisible(show_detection)
         has_table = name == 'lane_list'
         self.lane_table.setVisible(has_table)
@@ -339,6 +368,12 @@ class LanesMixin:
         if name == 'marker':
             self._update_marker_presets()
             self._update_marker_controls()
+
+    def _set_focus_overlay(self, enabled):
+        self.gel.focus_overlay = enabled
+        self.gel.update()
+        self._layout_settings.setValue('view/focus_overlay', enabled)
+        self._layout_settings.sync()
 
     def _update_marker_presets(self):
         previous = self.marker_preset_combo.currentData()
@@ -510,6 +545,13 @@ class LanesMixin:
         self.btn_lane.setText(tr("btn_manual_lane_on") if on else tr("btn_manual_lane_off"))
 
     def _on_lane_added(self, x1, x2):
+        if self._gray_orig is None:
+            return False
+        width = self._gray_orig.shape[1]
+        x1, x2 = sorted((max(0, min(width - 1, int(x1))), max(0, min(width - 1, int(x2)))))
+        if not valid_lane_spans([(item.x1, item.x2) for item in self.lanes] + [(x1, x2)], width):
+            self.status.showMessage(tr('status_lane_overlap'), 7000)
+            return False
         lane = Lane(len(self.lanes), x1, x2)
         self.lanes.append(lane)
         self._renumber_lanes()
@@ -518,6 +560,7 @@ class LanesMixin:
         self.status.showMessage(tr("status_lane_added", name=lane.name, x1=x1, x2=x2))
         if not self._suppress_lane_commit:
             self._commit_lanes()
+        return True
 
     def _on_lane_edge_changed(self):
         """레인 경계를 드래그해 폭을 조정하거나, 레인 라벨을 드래그해 위치를
@@ -557,7 +600,7 @@ class LanesMixin:
         if sm.max() <= 0:
             self._info(tr("detect_fail_title"), tr("detect_fail_no_signal")); return
         spans = self._split_lanes_by_count(sm, n_target, W)
-        if spans is None:
+        if spans is None or not valid_lane_spans(spans, W, count=n_target, contiguous=True):
             self._info(tr("detect_fail_title"), tr("detect_fail_count_msg", n=n_target))
             return
 

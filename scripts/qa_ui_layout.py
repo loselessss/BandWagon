@@ -62,12 +62,29 @@ def main():
         win.resize(900, 620); app.processEvents()
         win.grab().save(str(output / f"narrow-{scale}.png"))
         for tool, name in (("rotate", "geometry"), ("curve", "color"),
-                           ("flip", "flip"), ("crop", "crop"), ("warp", "warp"),
+                           ("flip", "flip"), ("crop", "crop"),
                            ("bow", "bow"), ("shear", "shear"), ("brightness", "brightness"),
                            ("manual_lanes", "manual-lanes"), ("lane_list", "lane-list"),
                            ("marker", "marker-setup"), ("range", "range")):
             win._select_ribbon_tool(tool); app.processEvents()
             win.grab().save(str(output / f"{name}-{scale}.png"))
+        win._select_ribbon_tool('crop')
+        win.gel.crop_rect = (60, 45, 660, 480)
+        win.gel._crop_fresh = False
+        win.gel.cropChanged.emit(win.gel.crop_rect)
+        win.gel.update(); app.processEvents()
+        win.grab().save(str(output / f'crop-handles-{scale}.png'))
+        win._select_ribbon_tool('manual_lanes')
+        win.gel.selected_lane = win.lanes[2]
+        win.resize(1200, 800); win.gel.update(); app.processEvents()
+        win.grab().save(str(output / f'calm-selected-{scale}.png'))
+        win.band_settings_toggle.setChecked(True)
+        win.lane_style_toggle.setChecked(True)
+        win.profile_toggle.setChecked(True)
+        app.processEvents()
+        win.grab().save(str(output / f'calm-expanded-{scale}.png'))
+        win.resize(900, 620); app.processEvents()
+        win.grab().save(str(output / f'calm-expanded-narrow-{scale}.png'))
         dialog = ExportDialog(source, win.lanes, win._layout_settings, win)
         dialog.checks["photo"].setChecked(False)
         dialog.refresh_preview(); dialog.show(); app.processEvents()

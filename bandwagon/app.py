@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QLabel, QPushButton, QAction, QSizePolicy, QMessageBox, QSplitter,
     QStatusBar, QMenu, QTabWidget, QDialog, QDialogButtonBox,
-    QScrollArea,
+    QScrollArea, QToolButton,
 )
 from PyQt5.QtCore import Qt, QTimer, QStandardPaths, QSettings, QByteArray, QEvent
 from . import i18n
@@ -300,7 +300,7 @@ class Analyzer(RibbonMixin, StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, 
         m_lang.addAction(a)
 
         central = QWidget(); self.setCentralWidget(central)
-        root = QVBoxLayout(central); root.setContentsMargins(10, 10, 10, 10); root.setSpacing(10)
+        root = QVBoxLayout(central); root.setContentsMargins(8, 8, 8, 8); root.setSpacing(6)
         split = QSplitter(Qt.Horizontal); root.addWidget(split, 1)
         self._main_splitter = split
         self._layout_settings = QSettings(
@@ -313,7 +313,7 @@ class Analyzer(RibbonMixin, StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, 
         zoom_row = QHBoxLayout(); zoom_row.setSpacing(6)
         zoom_out = QPushButton(tr("zoom_out")); zoom_out.setFixedWidth(48); zoom_out.setStyleSheet(self._btn_css())
         zoom_in = QPushButton(tr("zoom_in")); zoom_in.setFixedWidth(48); zoom_in.setStyleSheet(self._btn_css())
-        zoom_reset = QPushButton("100%"); zoom_reset.setFixedWidth(48); zoom_reset.setStyleSheet(self._btn_css())
+        zoom_reset = QPushButton(tr('curve_fit')); zoom_reset.setStyleSheet(self._btn_css())
         zoom_reset.setToolTip(tr("zoom_reset_tip"))
         from .fluent_icons import icon
         for button, name, label in ((zoom_out, 'zoom_out', tr('zoom_out')),
@@ -323,16 +323,13 @@ class Analyzer(RibbonMixin, StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, 
         self.zoom_label = QLabel("100%")
         self.zoom_label.setStyleSheet(f"color:{MUTE};font-size:10px;")
         self.zoom_label.setFixedWidth(40); self.zoom_label.setAlignment(Qt.AlignCenter)
-        zoom_hint = QLabel(tr("zoom_hint"))
-        zoom_hint.setStyleSheet(f"color:{MUTE};font-size:10px;")
-        zoom_hint.setWordWrap(True)
-        zoom_hint.setToolTip(tr("zoom_hint"))
+        left.setToolTip(tr('zoom_hint'))
         zoom_out.clicked.connect(lambda: self._zoom_step(1 / 1.25))
         zoom_in.clicked.connect(lambda: self._zoom_step(1.25))
         zoom_reset.clicked.connect(self._zoom_reset)
         zoom_row.addWidget(zoom_out); zoom_row.addWidget(zoom_in)
         zoom_row.addWidget(self.zoom_label); zoom_row.addWidget(zoom_reset)
-        zoom_row.addWidget(zoom_hint); zoom_row.addStretch()
+        zoom_row.addStretch()
         self.chk_overlay = QCheckBox(tr("chk_show_overlay"))
         self.chk_overlay.setChecked(True)
         self.chk_overlay.setStyleSheet(f"color:{MUTE};font-size:10px;" + self._checkbox_css())
@@ -351,6 +348,8 @@ class Analyzer(RibbonMixin, StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, 
         self.gel.laneAdded.connect(self._on_lane_added)
         self.gel.laneEdgeChanged.connect(self._on_lane_edge_changed)
         self.gel.cornerChanged.connect(self._on_corner_changed)
+        self.gel.cropChanged.connect(self._on_crop_changed)
+        self.gel.cropApplyRequested.connect(self._apply_crop)
         self.gel.vrangeChanged.connect(self._on_vrange_changed)
         self.gel.bandSelected.connect(self._on_gel_band_selected)
         self.gel.laneSelected.connect(self._on_gel_lane_selected)
@@ -358,13 +357,29 @@ class Analyzer(RibbonMixin, StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, 
         self.gel.zoomChanged.connect(self._on_zoom_changed)
         lv.addWidget(self.gel, 1)
         self.profile = ProfileView()
-        lv.addWidget(self.profile)
+        self.profile_section = QWidget()
+        profile_layout = QVBoxLayout(self.profile_section)
+        profile_layout.setContentsMargins(0, 0, 0, 0); profile_layout.setSpacing(2)
+        self.profile_toggle = QToolButton()
+        self.profile_toggle.setText(tr('profile_disclosure'))
+        self.profile_toggle.setCheckable(True)
+        self.profile_toggle.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self.profile_toggle.setStyleSheet(self._disclosure_css())
+        self.profile_toggle.setToolTip(tr('profile_disclosure_tip'))
+        profile_layout.addWidget(self.profile_toggle)
+        profile_layout.addWidget(self.profile)
+        self.profile_toggle.toggled.connect(self._set_profile_expanded)
+        expanded = self._layout_settings.value('view/profile_expanded', False, type=bool)
+        self.profile_toggle.setChecked(expanded)
+        self.profile.setVisible(expanded)
+        self.profile_toggle.setArrowType(Qt.DownArrow if expanded else Qt.RightArrow)
+        lv.addWidget(self.profile_section)
         split.addWidget(left)
 
         right = QWidget(); right.setMinimumWidth(330)
         rv = QVBoxLayout(right); rv.setContentsMargins(4, 4, 4, 4); rv.setSpacing(8)
         self.settings_title = QLabel()
-        self.settings_title.setStyleSheet(f"color:{INKT};font-size:16px;font-weight:600;padding:4px;")
+        self.settings_title.setStyleSheet(f"color:{INKT};font-size:13px;font-weight:500;padding:4px;")
         rv.addWidget(self.settings_title)
         self.tabs = QTabWidget(); self.tabs.setStyleSheet(self._tabs_css())
         self.tabs.setUsesScrollButtons(True)
@@ -412,6 +427,12 @@ class Analyzer(RibbonMixin, StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, 
             QTimer.singleShot(0, lambda: split.restoreState(saved_layout))
         split.setChildrenCollapsible(False)
         split.splitterMoved.connect(self._save_panel_layout)
+
+    def _set_profile_expanded(self, expanded):
+        self.profile.setVisible(expanded)
+        self.profile_toggle.setArrowType(Qt.DownArrow if expanded else Qt.RightArrow)
+        self._layout_settings.setValue('view/profile_expanded', expanded)
+        self._layout_settings.sync()
 
     def _save_panel_layout(self, *_args):
         """Remember the user's panel split across windows and app restarts."""
@@ -617,8 +638,8 @@ class Analyzer(RibbonMixin, StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, 
         return m.exec_() == QMessageBox.Yes
 
     def _update_mode_hint(self, mode):
-        active = mode in ("lane", "corner", "vrange")
-        key = 'crop_hint' if mode == 'corner' and getattr(self, '_active_tool', None) == 'crop' else "mode_" + mode + "_hint"
+        active = mode in ("lane", "corner", "crop", "vrange")
+        key = 'crop_hint' if mode == 'crop' else "mode_" + mode + "_hint"
         self.canvas_mode_hint.setText(tr(key) if active else "")
         self.canvas_mode_hint.setVisible(active)
 
@@ -652,7 +673,7 @@ class Analyzer(RibbonMixin, StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, 
                     self.copy_image()
         elif e.key() in (Qt.Key_Return, Qt.Key_Enter):
             # 젤 영역 지정 모드에서 코너 4개가 있으면 Enter로 바로 변환 적용
-            if self.btn_crop.isChecked() and len(self.gel.corners) == 4:
+            if self.gel.mode == 'crop' and self.gel.crop_rect is not None:
                 self._apply_crop()
             elif getattr(self, "btn_corner", None) is not None and self.btn_corner.isChecked() \
                     and len(self.gel.corners) == 4:

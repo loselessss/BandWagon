@@ -23,6 +23,8 @@ from PyQt5.QtGui import (
 from .theme import *
 from .i18n import tr
 from .models import CurveModel
+from .crop_tool import CropToolMixin
+from .lane_geometry import lane_limits
 from .imaging import pil_to_pixmap
 
 
@@ -260,7 +262,7 @@ class ChannelBar(QWidget):
 
 
 
-class GelView(QWidget):
+class GelView(CropToolMixin, QWidget):
     laneAdded = pyqtSignal(int, int)
     laneEdgeChanged = pyqtSignal()   # 기존 레인의 x1/x2를 드래그로 조정 완료
     cornerChanged = pyqtSignal(int)
@@ -269,6 +271,8 @@ class GelView(QWidget):
     bandSelected = pyqtSignal(object, int)  # 이미지에서 선택한 (레인, 밴드 번호)
     laneSelected = pyqtSignal(object)
     modeChanged = pyqtSignal(str)
+    cropChanged = pyqtSignal(object)
+    cropApplyRequested = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -282,6 +286,7 @@ class GelView(QWidget):
         self.lanes = []
         self.mode = "lane"
         self.show_overlay = True  # 라이브 프리뷰에서 레인/밴드/MW 오버레이 표시 여부
+        self.focus_overlay = True  # 화면 강조만 변경; 내보내기 렌더러와 독립
         self.band_display_style = "area"  # "area"(경계 영역) 또는 "line"(피크 위치 한 줄)
         self.selected_band = None  # (lane, band_index) — 결과 표에서 고른 밴드를 캔버스에서 굵게 강조
         self.selected_lane = None
@@ -291,6 +296,9 @@ class GelView(QWidget):
         self._lane_edge_drag = None   # (lane, "x1"|"x2") 레인 경계를 드래그 중일 때
         self._lane_move_drag = None   # (lane, drag_start_wx, orig_x1, orig_x2) 레인 라벨을 잡고 평행이동 중일 때
         self.corners = []
+        self.crop_rect = None
+        self._crop_drag = None
+        self._crop_fresh = True
         self._corner_drag = None
         self._box_a = None          # 코너 모드 박스 드래그 시작점(이미지 좌표)
         self._box_b = None          # 코너 모드 박스 드래그 현재점
@@ -346,16 +354,20 @@ class GelView(QWidget):
         self.update()
 
     def set_mode(self, m):
+        if self.mode == 'crop' and m != 'crop':
+            self.cancel_crop()
         if self.mode == "lane" and m != "lane":
             self.selected_lane = None
         self.mode = m
+        if m == 'crop' and self.crop_rect is None:
+            self.reset_crop()
         self.modeChanged.emit(m)
         self._lane_a = self._lane_b = None
         self._lane_edge_drag = None
         self._lane_move_drag = None
         self._vrange_a = self._vrange_b = None
         self._vrange_edge_drag = None
-        if m in ("lane", "corner", "vrange"):
+        if m in ("lane", "corner", "crop", "vrange"):
             self.setCursor(Qt.CrossCursor)
         else:
             self.setCursor(Qt.OpenHandCursor)  # view 모드: 좌클릭 드래그로 패닝 가능
@@ -547,6 +559,9 @@ class GelView(QWidget):
             return
         if e.button() != Qt.LeftButton:
             return
+        if self.mode == 'crop':
+            self._crop_press(e)
+            return
         if self.mode == "corner":
             hit = self._corner_hit(e.x(), e.y())
             if hit is not None:
@@ -609,6 +624,9 @@ class GelView(QWidget):
                 self._recompute_rect()
                 self.update()
             return
+        if self.mode == 'crop':
+            self._crop_move(e)
+            return
         if self.mode == "vrange" and self._vrange_edge_drag is not None:
             iy = self._wpos_to_img(e.x(), e.y())[1]
             ih = self._img_size[1]
@@ -633,9 +651,11 @@ class GelView(QWidget):
             cur_ix = self._wx_to_ix(e.x())
             delta = cur_ix - start_wx_img
             width = orig_x2 - orig_x1
-            img_w = self._img_size[0]
+            lower, upper = lane_limits(self.lanes, lane, self._img_size[0])
+            if upper - lower < width:
+                return
             new_x1 = orig_x1 + delta
-            new_x1 = max(0, min(new_x1, img_w - width))  # 이미지 폭 안에서만 이동
+            new_x1 = max(lower, min(new_x1, upper - width))
             lane.x1 = new_x1
             lane.x2 = new_x1 + width
             self.update()
@@ -644,12 +664,15 @@ class GelView(QWidget):
             lane, edge = self._lane_edge_drag
             ix = self._wx_to_ix(e.x())
             other = lane.x2 if edge == "x1" else lane.x1
+            lower, upper = lane_limits(self.lanes, lane, self._img_size[0])
             MIN_W = 3
+            if upper - lower < MIN_W:
+                return
             if edge == "x1":
-                ix = min(ix, other - MIN_W)
+                ix = max(lower, min(ix, other - MIN_W))
             else:
-                ix = max(ix, other + MIN_W)
-            setattr(lane, edge, max(0, ix))
+                ix = min(upper, max(ix, other + MIN_W))
+            setattr(lane, edge, ix)
             lane.x1, lane.x2 = min(lane.x1, lane.x2), max(lane.x1, lane.x2)
             self.update()
             return
@@ -676,6 +699,9 @@ class GelView(QWidget):
             self.update()
 
     def mouseReleaseEvent(self, e):
+        if self.mode == 'crop' and e.button() == Qt.LeftButton and self._pan_drag is None:
+            self._crop_release(e)
+            return
         if self._pan_drag is not None and e.button() in (Qt.MiddleButton, Qt.LeftButton):
             start_x, start_y = self._pan_drag[:2]
             if (self.mode == "view" and e.button() == Qt.LeftButton
@@ -790,29 +816,35 @@ class GelView(QWidget):
             qp.setBrush(Qt.NoBrush)
             qp.drawRect(r.adjusted(2, 2, -2, -2))
 
-        if self.show_guides:
+        if self.show_guides and self.mode != 'crop':
             self._draw_guides(qp, r)
 
         for lane in self.lanes:
+            if self.mode == 'crop':
+                continue
             if not self.show_overlay and self.mode != "lane":
                 continue
             x1 = self._ix_to_wx(lane.x1); x2 = self._ix_to_wx(lane.x2)
-            col = QColor(lane.color); col.setAlpha(40)
-            qp.fillRect(QRectF(x1, r.top(), x2 - x1, r.height()), col)
-            col.setAlpha(200); qp.setPen(QPen(col, 1.5))
+            selected = lane is self.selected_lane or (self.selected_band is not None and self.selected_band[0] is lane)
+            col = QColor(CYAN if selected else MUTE) if self.focus_overlay else QColor(lane.color)
+            if not self.focus_overlay or selected:
+                fill = QColor(col); fill.setAlpha(10 if self.focus_overlay else 40)
+                qp.fillRect(QRectF(x1, r.top(), x2 - x1, r.height()), fill)
+            col.setAlpha(220 if selected or not self.focus_overlay else 90 if self.mode == 'lane' else 40)
+            qp.setPen(QPen(col, 2 if selected and self.focus_overlay else 1))
             qp.drawRect(QRectF(x1, r.top(), x2 - x1, r.height()))
-            if lane is self.selected_lane:
+            if lane is self.selected_lane and not self.focus_overlay:
                 qp.setPen(QPen(QColor(255, 255, 255), 3))
                 qp.drawRect(QRectF(x1, r.top(), x2 - x1, r.height()))
             if self.mode == "lane":
                 # 레인 모드에서는 좌우 경계를 드래그 핸들처럼 두껍게 강조
-                handle = QPen(QColor(255, 255, 255), 3)
+                handle = QPen(col if self.focus_overlay else QColor(255, 255, 255), 2 if self.focus_overlay else 3)
                 qp.setPen(handle)
                 qp.drawLine(QPointF(x1, r.top()), QPointF(x1, r.bottom()))
                 qp.drawLine(QPointF(x2, r.top()), QPointF(x2, r.bottom()))
             if not self.show_overlay:
                 continue  # lane 모드에서도 경계만 보이고 라벨/밴드선/MW는 숨김
-            if lane.peaks is not None:
+            if lane.peaks is not None and (not self.focus_overlay or selected or lane.kind == 'marker'):
                 bounds = lane.peak_bounds if lane.peak_bounds else [
                     (max(0, int(py) - 5), int(py) + 5) for py in lane.peaks]
                 if self.band_display_style == "line":
@@ -821,15 +853,20 @@ class GelView(QWidget):
                     for j, py in enumerate(lane.peaks):
                         wy = self._iy_to_wy(float(py))
                         is_sel = self.selected_band == (lane, j)
-                        qp.setPen(QPen(QColor(lane.color), 4 if is_sel else 2))
+                        band_color = QColor(CYAN if selected else MUTE) if self.focus_overlay else QColor(lane.color)
+                        band_color.setAlpha(220 if selected or not self.focus_overlay else 100)
+                        qp.setPen(QPen(band_color, 3 if is_sel else 1))
                         qp.drawLine(QPointF(x1, wy), QPointF(x2, wy))
                 else:
                     for j, (top, bot) in enumerate(bounds):
                         wtop = self._iy_to_wy(float(top)); wbot = self._iy_to_wy(float(bot))
                         is_sel = self.selected_band == (lane, j)
-                        band_col = QColor(lane.color); band_col.setAlpha(90 if is_sel else 60)
+                        band_col = QColor(CYAN if selected else MUTE) if self.focus_overlay else QColor(lane.color)
+                        band_col.setAlpha((45 if is_sel else 15) if self.focus_overlay else (90 if is_sel else 60))
                         qp.fillRect(QRectF(x1, wtop, x2 - x1, wbot - wtop), band_col)
-                        qp.setPen(QPen(QColor(lane.color), 3 if is_sel else 1.4))
+                        edge_color = QColor(CYAN if selected else MUTE) if self.focus_overlay else QColor(lane.color)
+                        edge_color.setAlpha(220 if selected or not self.focus_overlay else 100)
+                        qp.setPen(QPen(edge_color, 2 if is_sel else 1))
                         qp.drawLine(QPointF(x1, wtop), QPointF(x2, wtop))
                         qp.drawLine(QPointF(x1, wbot), QPointF(x2, wbot))
                         if is_sel:
@@ -841,13 +878,15 @@ class GelView(QWidget):
         # 텍스트(레인 제목 + MW)는 모든 레인 박스를 다 그린 뒤 별도 패스로 그린다.
         # 한 루프 안에서 레인마다 박스→글자를 순서대로 그리면, 다음 레인의 박스가
         # 이전 레인의 글자를 덮어버리는 문제가 있어 분리했다.
-        if self.show_overlay:
+        if self.show_overlay and self.mode != 'crop':
             for lane in self.lanes:
                 x1 = self._ix_to_wx(lane.x1); x2 = self._ix_to_wx(lane.x2)
                 tag = lane.name
                 if lane.kind == "marker": tag += " [M]"
                 elif lane.kind == "bsa":  tag += " [BSA]"
-                qp.setPen(QColor(lane.color)); qp.setFont(QFont("DejaVu Sans", 8, QFont.Bold))
+                selected = lane is self.selected_lane or (self.selected_band is not None and self.selected_band[0] is lane)
+                qp.setPen(QColor(CYAN if selected else MUTE) if self.focus_overlay else QColor(lane.color))
+                qp.setFont(QFont("DejaVu Sans", 8, QFont.Normal if self.focus_overlay else QFont.Bold))
                 name_w = max(40, x2 - x1)
                 fm_name = qp.fontMetrics()
                 # 레인 이름이 길면 최대 3줄까지 줄바꿈 허용 — 그 이상은 (드물게 아주
@@ -858,8 +897,12 @@ class GelView(QWidget):
                                                Qt.TextWordWrap, tag)
                 name_h = min(natural.height(), fm_name.lineSpacing() * 3)
                 name_rect = QRectF(x1 + 2, r.top() + 2, name_w, name_h)
+                if self.focus_overlay:
+                    qp.setPen(QColor(0, 0, 0, 180))
+                    qp.drawText(name_rect.translated(1, 1), Qt.TextWordWrap | Qt.AlignHCenter | Qt.AlignTop, tag)
+                    qp.setPen(QColor(CYAN if selected else INKT))
                 qp.drawText(name_rect, Qt.TextWordWrap | Qt.AlignHCenter | Qt.AlignTop, tag)
-                if lane.peaks is None:
+                if lane.peaks is None or (self.focus_overlay and not selected and lane.kind != 'marker'):
                     continue
                 font_mw = QFont("DejaVu Sans Mono", 7, QFont.Bold)
                 qp.setFont(font_mw)
@@ -953,6 +996,17 @@ class GelView(QWidget):
                 qp.setPen(QColor(CYAN)); qp.drawText(chip, Qt.AlignCenter, names[i])
 
         qp.setPen(QPen(QColor(LINE), 1)); qp.setBrush(Qt.NoBrush); qp.drawRect(r)
+        if self.mode == 'crop':
+            self._draw_crop_overlay(qp)
+
+    def mouseDoubleClickEvent(self, e):
+        if self.mode == 'crop' and e.button() == Qt.LeftButton and self.crop_rect is not None:
+            x, y = self._wpos_to_img(e.x(), e.y())
+            left, top, right, bottom = self.crop_rect
+            if left <= x <= right and top <= y <= bottom:
+                self.cropApplyRequested.emit()
+                return
+        super().mouseDoubleClickEvent(e)
 
     def dragEnterEvent(self, e):
         if e.mimeData().hasUrls():
