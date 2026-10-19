@@ -588,15 +588,19 @@ class GelView(CropToolMixin, QWidget):
                 self.selected_lane = label_lane
                 self.laneSelected.emit(label_lane)
                 self._lane_move_drag = (label_lane, self._wx_to_ix(e.x()), label_lane.x1, label_lane.x2)
+                self.update()
                 return
             hit = self._lane_edge_hit(e.x())
             if hit is not None:
                 self.selected_lane = hit[0]
                 self.laneSelected.emit(hit[0])
                 self._lane_edge_drag = hit
+                self._lane_edge_start = (hit[0].x1, hit[0].x2)
+                self.update()
                 return
             self._lane_a = self._wx_to_ix(e.x())
             self._lane_b = self._lane_a
+            self._lane_press_pos = e.pos()
             return
         # view 모드(레인/코너/자르기 모두 꺼진 기본 상태)에서는 좌클릭 드래그로도
         # 패닝할 수 있게 한다. 다른 모드는 좌클릭이 이미 다른 용도로 쓰이고 있어
@@ -723,12 +727,16 @@ class GelView(CropToolMixin, QWidget):
             self.setCursor(Qt.CrossCursor if self.mode in ("lane", "corner", "crop", "vrange") else Qt.OpenHandCursor)
             return
         if self.mode == "lane" and self._lane_move_drag is not None:
+            lane, _, left, right = self._lane_move_drag
             self._lane_move_drag = None
-            self.laneEdgeChanged.emit()
+            if (lane.x1, lane.x2) != (left, right): self.laneEdgeChanged.emit()
+            self.update()
             return
         if self.mode == "lane" and self._lane_edge_drag is not None:
+            lane = self._lane_edge_drag[0]
             self._lane_edge_drag = None
-            self.laneEdgeChanged.emit()
+            if (lane.x1, lane.x2) != self._lane_edge_start: self.laneEdgeChanged.emit()
+            self.update()
             return
         if self.mode == "corner" and self._box_a is not None and e.button() == Qt.LeftButton:
             (ax, ay), (bx, by) = self._box_a, self._box_b
@@ -764,9 +772,19 @@ class GelView(CropToolMixin, QWidget):
             return
         if self.mode == "lane" and self._lane_a is not None and e.button() == Qt.LeftButton:
             a, b = self._lane_a, self._lane_b
+            self._lane_a = self._lane_b = None
             if abs(b - a) > 3:
                 self.laneAdded.emit(min(a, b), max(a, b))
-            self._lane_a = self._lane_b = None
+            elif (e.pos() - self._lane_press_pos).manhattanLength() <= 4:
+                band = self._band_hit(e.x(), e.y())
+                if band is not None:
+                    self.selected_band = band
+                    self.bandSelected.emit(*band)
+                elif self.show_overlay and self._rect.contains(e.pos()):
+                    lane = next((lane for lane in self.lanes if lane.x1 <= a <= lane.x2), None)
+                    if lane is not None:
+                        self.selected_lane = lane; self.selected_band = None
+                        self.laneSelected.emit(lane)
             self.update()
 
     def _draw_guides(self, qp, r):
@@ -996,8 +1014,46 @@ class GelView(CropToolMixin, QWidget):
                 qp.setPen(QColor(CYAN)); qp.drawText(chip, Qt.AlignCenter, names[i])
 
         qp.setPen(QPen(QColor(LINE), 1)); qp.setBrush(Qt.NoBrush); qp.drawRect(r)
+        if self.mode == 'lane' and self.selected_lane in self.lanes:
+            self._draw_lane_edit_highlight(qp, r)
         if self.mode == 'crop':
             self._draw_crop_overlay(qp)
+
+    def _draw_lane_edit_highlight(self, painter, image_rect):
+        """Draw last so neighbouring lanes cannot cover the editing feedback."""
+        lane = self.selected_lane
+        left, right = self._ix_to_wx(lane.x1), self._ix_to_wx(lane.x2)
+        bounds = QRectF(left, image_rect.top(), right - left, image_rect.height())
+        moving = self._lane_move_drag is not None and self._lane_move_drag[0] is lane
+        active_edge = self._lane_edge_drag[1] if self._lane_edge_drag is not None and self._lane_edge_drag[0] is lane else None
+        selected_color, dragging_color = QColor(CYAN), QColor('#ffd166')
+        painter.save()
+        painter.setBrush(Qt.NoBrush)
+        painter.setPen(QPen(QColor(0, 0, 0, 170), 5))
+        painter.drawRect(bounds)
+        painter.setPen(QPen(dragging_color if moving else selected_color, 3))
+        painter.drawRect(bounds)
+        for edge, x in (('x1', left), ('x2', right)):
+            color = dragging_color if moving or active_edge == edge else selected_color
+            if moving or active_edge == edge:
+                painter.setPen(QPen(dragging_color, 4))
+                painter.drawLine(QPointF(x, bounds.top()), QPointF(x, bounds.bottom()))
+            painter.setPen(QPen(QColor(255, 255, 255), 1))
+            painter.setBrush(color)
+            painter.drawRect(QRectF(x - 4, bounds.center().y() - 4, 8, 8))
+        # A compact name badge also identifies the lane without relying on color.
+        painter.setFont(QFont(self.font().family(), 9, QFont.Bold))
+        metrics = painter.fontMetrics()
+        visible = image_rect.intersected(self.rect())
+        label = metrics.elidedText(lane.name, Qt.ElideRight, max(1, visible.width() - 40))
+        height = metrics.height() + 10
+        badge = QRectF(visible.left() + 8, visible.bottom() - height - 8,
+                       metrics.horizontalAdvance(label) + 16, height)
+        painter.setPen(Qt.NoPen); painter.setBrush(QColor(20, 20, 20, 225))
+        painter.drawRoundedRect(badge, 4, 4)
+        painter.setPen(dragging_color if moving or active_edge else selected_color)
+        painter.drawText(badge, Qt.AlignCenter, label)
+        painter.restore()
 
     def mouseDoubleClickEvent(self, e):
         if self.mode == 'crop' and e.button() == Qt.LeftButton and self.crop_rect is not None:

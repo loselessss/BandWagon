@@ -17,9 +17,47 @@ from bandwagon.geometry import GeometryMixin
 from bandwagon.imaging import find_gel_quad
 from bandwagon.i18n import tr
 from bandwagon.models import Lane
+from bandwagon.widgets import GelView
+from bandwagon.imaging import pil_to_pixmap
 
 
 class GelInteractionsTest(unittest.TestCase):
+    def test_manual_lane_drag_has_distinct_feedback_in_all_overlay_modes(self):
+        gel = GelView()
+        try:
+            gel.resize(640, 480)
+            gel.set_image(pil_to_pixmap(Image.new('RGB', (200, 160), '#8a96a0')), (200, 160))
+            first, second = Lane(0, 30, 99), Lane(1, 100, 170)
+            # Paint the neighbour last to catch highlights hidden by its border.
+            gel.set_lanes([first, second]); gel.set_mode('lane'); gel.show()
+            self.app.processEvents()
+            def edge_color(x):
+                return gel.grab().toImage().pixelColor(round(gel._ix_to_wx(x)),
+                    round(gel._rect.center().y() + 25)).getRgb()[:3]
+            for focus in (True, False):
+                gel.focus_overlay = focus
+                for overlay in (True, False):
+                    gel.show_overlay = overlay
+                    for kind in ('x1', 'x2', 'move'):
+                        with self.subTest(focus=focus, overlay=overlay, kind=kind):
+                            x = first.x1 if kind == 'x1' else first.x2 if kind == 'x2' else 60
+                            y = gel._rect.top() + 4 if kind == 'move' else gel._rect.center().y()
+                            point = QPoint(round(gel._ix_to_wx(x)), round(y))
+                            QTest.mousePress(gel, Qt.LeftButton, pos=point)
+                            self.assertIs(gel.selected_lane, first)
+                            color = edge_color(first.x1 if kind == 'move' else x)
+                            self.assertGreater(color[0], 210)
+                            self.assertGreater(color[1], 160)
+                            self.assertLess(color[2], 160)
+                            QTest.mouseRelease(gel, Qt.LeftButton, pos=point)
+                            self.assertIs(gel.selected_lane, first)
+                            color = edge_color(first.x1)
+                            self.assertLess(color[0], 150)
+                            self.assertGreater(color[1], 170)
+                            self.assertGreater(color[2], 220)
+        finally:
+            gel.close()
+
     def test_lane_width_drag_highlight_clears_on_tool_switch(self):
         win = Analyzer()
         try:
@@ -31,7 +69,6 @@ class GelInteractionsTest(unittest.TestCase):
             win.gel.set_lanes(win.lanes)
             win._select_ribbon_tool('manual_lanes')
             win.show(); self.app.processEvents()
-            win.btn_lane.click()
             gel = win.gel
             start = QPoint(round(gel._ix_to_wx(lane.x2)), round(gel._rect.center().y()))
             end = QPoint(round(gel._ix_to_wx(120)), start.y())
@@ -44,10 +81,9 @@ class GelInteractionsTest(unittest.TestCase):
             self.assertIs(gel.selected_lane, lane)
             win._select_ribbon_tool('lane_list')
             self.assertEqual(gel.mode, 'view')
-            self.assertIsNone(gel.selected_lane)
+            self.assertIs(gel.selected_lane, lane)
             self.assertIsNone(gel._lane_edge_drag)
             win._select_ribbon_tool('manual_lanes')
-            win.btn_lane.click()
             gel.selected_lane = lane
             QTest.keyClick(win, Qt.Key_Escape)
             self.assertIsNone(gel.selected_lane)
@@ -78,7 +114,7 @@ class GelInteractionsTest(unittest.TestCase):
             self.assertNotEqual(win.gel.grab().toImage(), with_guides)
             win.gel.corners = list(points)
             win._select_ribbon_tool('auto_lanes')
-            self.assertEqual(win.gel.mode, 'view')
+            self.assertEqual(win.gel.mode, 'lane')
             self.assertEqual(win.gel.corners, points)
         finally:
             win._saved_snapshot = win._project_state_snapshot()
@@ -214,7 +250,7 @@ class GelInteractionsTest(unittest.TestCase):
             editor.setText("Discard this")
             QTest.keyClick(editor, Qt.Key_Escape)
             self.assertEqual(win.lanes[0].name, "Lane 1")
-            win.btn_lane.click()
+            win._select_ribbon_tool('manual_lanes')
             self.assertEqual(win.gel.mode, "lane")
             QTest.keyClick(win, Qt.Key_Escape)
             self.assertEqual(win.gel.mode, "view")

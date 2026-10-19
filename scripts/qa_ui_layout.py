@@ -74,10 +74,18 @@ def main():
         win.gel.cropChanged.emit(win.gel.crop_rect)
         win.gel.update(); app.processEvents()
         win.grab().save(str(output / f'crop-handles-{scale}.png'))
+        win._cancel_crop()
         win._select_ribbon_tool('manual_lanes')
-        win.gel.selected_lane = win.lanes[2]
+        win._on_gel_lane_selected(win.lanes[2])
         win.resize(1200, 800); win.gel.update(); app.processEvents()
         win.grab().save(str(output / f'calm-selected-{scale}.png'))
+        selected = win.gel.selected_lane
+        win.gel.set_mode('lane'); win.gel.update(); app.processEvents()
+        win.grab().save(str(output / f'lane-edit-selected-{scale}.png'))
+        win.gel._lane_edge_drag = (selected, 'x2')
+        win.gel.update(); app.processEvents()
+        win.grab().save(str(output / f'lane-edit-dragging-{scale}.png'))
+        win.gel.set_mode('view'); win.gel.selected_lane = selected
         win.band_settings_toggle.setChecked(True)
         win.lane_style_toggle.setChecked(True)
         win.profile_toggle.setChecked(True)

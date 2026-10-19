@@ -36,6 +36,20 @@ class WindowCleanupTest(unittest.TestCase):
             QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
             self.assertTrue(sip.isdeleted(win))
 
+    def test_close_before_first_layout_cancels_deferred_restore(self):
+        seed = self.make_window()
+        seed._save_panel_layout()
+        seed.close()
+        QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+        win = self.make_window()
+        timer = win._layout_restore_timer
+        self.assertTrue(timer.isActive())
+        win.close()
+        self.assertFalse(timer.isActive())
+        QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+        self.app.processEvents()
+        self.assertTrue(sip.isdeleted(win))
+
     def test_cancel_preserves_window_and_image(self):
         win = self.make_window()
         original = win._orig

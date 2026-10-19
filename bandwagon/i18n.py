@@ -43,6 +43,29 @@ CURRENT_LANG = load_lang_setting()  # "ko" 또는 "en" — tr()이 참조하는 
 
 STRINGS = {
     "ko": {
+        "workflow_prepare": "이미지 준비",
+        "workflow_select_lane_hint": "이미지에서 레인을 선택하면 이름과 폭을 확인할 수 있습니다.",
+        "workflow_selected_lane": "선택: {name}\n왼쪽 {left}px · 오른쪽 {right}px · 폭 {width}px",
+        "workflow_lanes": "레인·밴드 확인",
+        "workflow_marker": "마커 지정",
+        "workflow_results": "결과·내보내기",
+        "workflow_file_tip": "파일 열기·저장, 메모, 웨스턴블롯 및 앱 설정을 엽니다.",
+        "workflow_back": "← 이전",
+        "workflow_back_tip": "작업 내용을 유지하고 이전 단계로 돌아갑니다.",
+        "workflow_to_lanes": "다음: 레인·밴드 확인 →",
+        "workflow_to_marker": "다음: 마커 지정 →",
+        "workflow_to_results": "다음: 결과 확인 →",
+        "workflow_empty_hint": "이미지를 열거나 붙여넣어 시작하세요. 프로젝트 파일도 열 수 있습니다.",
+        "workflow_prepare_hint": "방향과 곡률을 먼저 맞추고 젤을 자르세요. 조정값은 즉시 반영되며 Ctrl+Z로 되돌릴 수 있습니다.",
+        "workflow_lanes_hint": "이미지에서 레인 경계를 직접 조정하세요. 확인이 끝나면 마커를 지정합니다.",
+        "workflow_marker_hint": "프리셋과 마커 레인을 고르고 마커 지정을 누르세요. 이미지에서 레인을 골라도 됩니다.",
+        "workflow_results_hint": "이미지에서 레인·밴드를 고르면 해당 결과로 이동합니다. 복사 옵션에서 내보낼 항목을 선택하세요.",
+        "workflow_detect_hint": "레인을 지정하고 밴드 검출을 실행하세요. 상단 단계는 언제든 자유롭게 이동할 수 있습니다.",
+        "workflow_stale_hint": "이미지·레인·검출 설정이 바뀌었습니다. 레인·밴드 확인으로 돌아가 밴드를 다시 검출하세요.",
+        "workflow_pending_title": "편집 중인 미리보기",
+        "workflow_pending_text": "자르기 또는 기준선 편집이 아직 적용되지 않았습니다. 이동하기 전에 어떻게 할까요?",
+        "workflow_apply_continue": "적용하고 이동",
+        "workflow_discard_continue": "편집 취소 후 이동",
         "wb_bright_bands": "UV: 어두운 배경의 밝은 밴드",
         "wb_bright_bands_hint": "UV 밴드가 밝으면 체크하세요. 흰 배경의 검은 밴드 사진은 해제하세요. 합성할 신호를 선택하고 분석 영상은 어두운 밴드 기준으로 변환합니다.",
         "autosave_failed": "자동 저장에 실패했습니다. Ctrl+S로 작업을 저장해 주세요.",
@@ -221,7 +244,7 @@ STRINGS = {
         "tool_range": "세로 범위",
         "tool_results": "MW 결과",
         "tool_marker": "마커 설정",
-        "marker_setup_hint": "프리셋과 레인을 고른 뒤 ‘마커 지정’을 누르면 MW가 바로 적용됩니다. 밴드 개수가 다르면 대응을 확인합니다. MW 값 편집은 리본 맨 뒤의 마커 프리셋에서 하세요.",
+        "marker_setup_hint": "밴드 개수가 다르면 대응을 확인합니다. 기준 MW 값은 마커 프리셋에서 편집하세요.",
         "marker_lane_label": "적용할 레인:",
         "marker_setup_action": "마커 지정",
         "marker_setup_no_lanes": "먼저 레인을 지정하세요.",
@@ -276,7 +299,7 @@ STRINGS = {
         "lane_col_order_delete": "순서/삭제",
         "tab_lanes": "레인",
         # 분석 탭
-        "analysis_tab_note": "화면용 밝기·대비·톤 커브는 정량값을 바꾸지 않습니다.\n레인을 누르면 샘플 행으로, 밴드를 누르면 강도 칸으로 이동합니다.\n재검출은 레인 → 수동 조정 아래쪽에서 실행하세요.",
+        "analysis_tab_note": "화면용 밝기·대비·톤 커브는 정량값을 바꾸지 않습니다.\n레인을 누르면 샘플 행으로, 밴드를 누르면 강도 칸으로 이동합니다.\n재검출은 레인·밴드 확인 → 레인 조정 아래쪽에서 실행하세요.",
         "mw_regression_placeholder": "MW 계산 대기 · 마커 한 레인에 유효한 기준점 2개 이상을 입력하세요.",
         "col_lane": "레인",
         "result_col_sample": "샘플",
@@ -447,7 +470,7 @@ STRINGS = {
         "mode_lane_hint": "레인 조정 · 드래그로 추가 / 테두리로 폭 조절 / Esc로 종료",
         "mode_corner_hint": "젤 영역 지정 · 네 꼭짓점을 맞춘 뒤 Enter로 적용 / Esc로 종료",
         "mode_vrange_hint": "분석 범위 · 위아래로 드래그 / Esc로 종료",
-        "analysis_empty": "레인을 지정한 뒤 레인 리본에서 밴드 검출 → 마커 설정 순서로 진행하세요.",
+        "analysis_empty": "레인·밴드 확인에서 밴드를 검출한 뒤 마커 지정 단계로 진행하세요.",
         "analysis_no_bands": "분석 완료 · 검출된 밴드가 없습니다. 레인 범위와 민감도를 확인하세요.",
         "analysis_stale": "분석 조건이 바뀌었습니다. 다시 분석하세요.",
         "analysis_ready": "밴드 {n}개 · 표와 이미지에서 선택할 수 있습니다.",
@@ -545,16 +568,16 @@ STRINGS = {
         "corner_name_bl": "4 좌하",
         "help_html":
             "<h3>기본 흐름</h3>"
-            "<p>이미지 열기 -> (필요시) <b>보정/펴기</b>로 다듬기 -> <b>레인</b>에서 레인 지정 후 분석 "
-            "-> 마커 MW 입력 -> 레인 리본의 <b>결과</b>·<b>정량</b>에서 확인 -> 저장</p>"
+            "<p><b>이미지 준비 → 레인·밴드 확인 → 마커 지정 → 결과·내보내기</b> 순서로 진행합니다. "
+            "각 단계는 자유롭게 오갈 수 있고, 오른쪽 아래 다음 버튼으로도 이어갈 수 있습니다.</p>"
 
             "<h3>리본 구성</h3>"
             "<p><b>파일</b>(새 창·열기·최근 파일·붙여넣기·프로젝트 저장/새로 저장/현재 위치 열기·"
-            "결과 이미지 내보내기·메모) · <b>웨스턴블롯</b>(합성 만들기·기존 합성 파일 불러오기) · "
-            "<b>보정</b> · <b>레인</b>(자동 검출·수동 조정/밴드 검출·레인 목록·세로 범위·마커 설정·MW 결과·정량·마커 프리셋) · "
-            "<b>정보</b>(되돌리기·다시하기·전체 초기화·사용법·개발자 정보·업데이트·언어).</p>"
+            "결과 이미지 내보내기·메모) 안에 <b>웨스턴블롯</b>(합성 만들기·기존 합성 파일 불러오기), "
+            "<b>편집</b>(초기화·되돌리기), <b>정보</b>(사용법·개발자 정보·업데이트·언어)가 있습니다. "
+            "저장·되돌리기·다시하기는 왼쪽 위에서 항상 사용할 수 있습니다.</p>"
             "<p>상단 아이콘을 누르면 오른쪽에 그 도구의 설정만 표시됩니다. "
-            "도구를 바꾸면 미확정 보정도 적용해 유지합니다. 취소하려면 전환 전에 Esc/Ctrl+Z를 누르세요.</p>"
+            "슬라이더 조정은 즉시 반영됩니다. 자르기·기준선을 편집하다 이동하면 적용/편집 취소/이동 취소를 묻습니다.</p>"
 
             "<h3>이미지 불러오기 / 저장</h3>"
             "<p>"
@@ -589,7 +612,7 @@ STRINGS = {
             "· 마우스 휠: 확대/축소 (커서 위치 기준)<br>"
             "· 좌클릭 드래그(기본 상태) 또는 휠버튼 드래그: 화면 이동<br>"
             "· '분석 오버레이 표시' 체크: 레인 박스·밴드선·MW 표시를 화면에서만 켜고 끄기<br>"
-            "· 보정 탭의 '가이드 표시' 체크: 격자+중앙 십자선 가이드를 켜고 끄기"
+            "· 이미지 준비의 '가이드 표시' 체크: 격자+중앙 십자선 가이드를 켜고 끄기"
             "</p>"
 
             "<h3>기하 보정 도구</h3>"
@@ -607,14 +630,14 @@ STRINGS = {
             "· 이 탭을 포함해 곳곳의 슬라이더는 <b>Alt를 누른 채로 드래그</b>하면 "
             "이동량이 1/8로 줄어 미세 조정하기 쉽습니다.</p>"
 
-            "<h3>보정 리본</h3>"
+            "<h3>이미지 준비</h3>"
             "<p>회전(90°/180°/정밀회전) · 좌우·상하 반전 · 자르기 · 색상 반전 · 밝기/대비.<br>"
             "밝기·대비는 화면 표시용일 뿐 분석 결과에는 영향을 주지 않습니다. "
-            "기하 보정은 분석 좌표에도 반영됩니다. 자르기와 원근 펴기는 별도 도구이며, "
+            "기하 보정은 분석 좌표에도 반영됩니다. 자르기 설정 안에서 원근 펴기도 사용할 수 있으며, "
             "곡률 펴기는 메인 미리보기에서 보라색 점을 끌어 조절합니다. "
             "합성 파일의 UV 분석 신호는 화면 색상 반전의 영향을 받지 않습니다.</p>"
 
-            "<h3>웨스턴블롯 메뉴 (합성)</h3>"
+            "<h3>파일 → 웨스턴블롯 메뉴 (합성)</h3>"
             "<p>가시광 사진(마커가 보이는 일반 사진)과 UV 사진(밴드가 보이는 형광 사진)을 "
             "정렬해 하나로 합치는 기능은 메인 창과 별개인 <b>합성 스튜디오</b> 창에서 합니다.<br>"
             "· <b>만들기</b>: 합성 스튜디오를 새로 엽니다. 빈 썸네일을 클릭해 파일에서 열거나 "
@@ -635,11 +658,11 @@ STRINGS = {
             "그레이스케일만 담고 있어, 원본 가시광/UV 사진 두 장으로 다시 코너를 맞추는 "
             "작업은 못 합니다(그러려면 처음부터 '만들기'로 새로 해야 합니다).</p>"
 
-            "<h3>레인 탭</h3>"
+            "<h3>레인·밴드 확인</h3>"
             "<p>"
             "· <b>레인 자동 검출</b>: 젤에 로딩한 레인 개수를 입력해야 합니다(촬영한 사람은 "
             "이미 아는 값이라, 그 개수로 폭을 정확히 나눕니다)<br>"
-            "· <b>레인 수동 조정</b> 켜고 이미지 위에서 좌우 드래그 = 레인 추가<br>"
+            "· <b>레인 조정</b>을 고르고 이미지 위에서 좌우 드래그 = 레인 추가<br>"
             "· 레인 경계선 드래그 = 폭 조정, 레인 이름(라벨) 드래그 = 레인 통째로 이동<br>"
             "· 테이블에서 유형을 '마커'로 바꾸면 MW 입력창이 바로 열립니다(다시 선택하면 재오픈)<br>"
             "· 민감도는 <b>값이 클수록 더 약한 밴드까지</b> 검출합니다<br>"
@@ -649,22 +672,22 @@ STRINGS = {
             "함께 바뀝니다<br>"
             "· <b>밴드 표시 방식</b>: '영역'(경계 박스, 기본)과 '선'(피크 위치 한 줄) 중 "
             "고를 수 있습니다 — 표시만 바뀌고 정량값에는 영향이 없습니다<br>"
-            "· 상단 레인 리본의 '밴드 검출'로 밴드를 확인하고 '마커 설정'에서 MW 입력"
+            "· 레인 조정 설정 아래의 '밴드 검출'로 밴드를 확인하고 다음 '마커 지정' 단계에서 프리셋과 레인을 선택"
             "</p>"
 
-            "<h3>결과 / 정량</h3>"
+            "<h3>결과·내보내기 / 정량</h3>"
             "<p>검출된 밴드의 MW·강도·Volume 표를 보여줍니다. "
             "MW는 마커 레인에 입력한 값을 기준으로 곡선 보간하여 계산되며, "
             "정량 계산은 항상 보정 전 원본 데이터를 사용합니다.</p>"
 
             "<h3>메모</h3>"
-            "<p>파일 리본의 메모 아이콘에서 여는 자유 메모장입니다. 이 분석에 대한 메모를 남기면 "
+            "<p>파일 메뉴의 메모에서 여는 자유 메모장입니다. 이 분석에 대한 메모를 남기면 "
             "프로젝트 저장/불러오기 시 함께 저장·복원됩니다. 새 이미지를 열면(같은 창에서 "
             "새로 시작하면) 초기화됩니다.</p>"
 
             "<h3>마커 프리셋</h3>"
             "<p>자주 쓰는 마커(밴드별 분자량)를 등록해두면 다음에 같은 마커를 쓸 때 "
-            "'관리…'에서 선택만으로 자동 입력됩니다. 밴드 개수가 다르면 수동으로 매칭할 수 있습니다. "
+            "마커 지정 단계에서 프리셋을 골라 자동 입력합니다. 밴드 개수가 다르면 수동으로 매칭할 수 있습니다. "
             "'내보내기…'/'가져오기…'로 CSV 파일로 백업하거나 다른 컴퓨터/동료와 공유할 수 있습니다.</p>"
 
             "<h3>오픈소스 라이선스 고지</h3>"
@@ -678,6 +701,29 @@ STRINGS = {
             "</p>",
     },
     "en": {
+        "workflow_prepare": "Prepare image",
+        "workflow_select_lane_hint": "Select a lane on the image to inspect its name and width.",
+        "workflow_selected_lane": "Selected: {name}\nLeft {left}px · Right {right}px · Width {width}px",
+        "workflow_lanes": "Check lanes & bands",
+        "workflow_marker": "Assign marker",
+        "workflow_results": "Results & export",
+        "workflow_file_tip": "Open files, save projects, edit notes, use Western blot tools, or access app settings.",
+        "workflow_back": "← Back",
+        "workflow_back_tip": "Return to the previous step without losing your work.",
+        "workflow_to_lanes": "Next: lanes & bands →",
+        "workflow_to_marker": "Next: assign marker →",
+        "workflow_to_results": "Next: view results →",
+        "workflow_empty_hint": "Open or paste an image to start. Saved projects can be opened too.",
+        "workflow_prepare_hint": "Set orientation and curvature before cropping. Adjustments appear immediately and can be undone with Ctrl+Z.",
+        "workflow_lanes_hint": "Adjust lane edges directly on the image, then continue to marker assignment.",
+        "workflow_marker_hint": "Choose a preset and marker lane, then assign it. You can also select the lane on the image.",
+        "workflow_results_hint": "Select a lane or band on the image to find its result. Choose exported layers in the copy options.",
+        "workflow_detect_hint": "Define lanes and detect bands. You can freely visit any step using the top navigation.",
+        "workflow_stale_hint": "The image, lanes, or detection settings changed. Return to lanes & bands and run detection again.",
+        "workflow_pending_title": "Unapplied preview",
+        "workflow_pending_text": "The crop or reference-line edit has not been applied. What would you like to do before leaving?",
+        "workflow_apply_continue": "Apply and continue",
+        "workflow_discard_continue": "Discard and continue",
         "wb_bright_bands": "UV: bright bands on a dark background",
         "wb_bright_bands_hint": "Check for bright UV bands; uncheck for dark bands on white. This selects the signal for blending; analysis is normalized to dark bands.",
         "autosave_failed": "Autosave failed. Please save your work with Ctrl+S.",
@@ -856,7 +902,7 @@ STRINGS = {
         "tool_range": "Range",
         "tool_results": "MW Results",
         "tool_marker": "Marker setup",
-        "marker_setup_hint": "Choose a preset and lane, then click Set marker to apply MW immediately. If band counts differ, confirm assignments. Edit MW values in Marker presets at the end of the ribbon.",
+        "marker_setup_hint": "If band counts differ, confirm assignments. Edit reference MW values in Marker presets.",
         "marker_lane_label": "Apply to lane:",
         "marker_setup_action": "Set marker",
         "marker_setup_no_lanes": "Assign lanes first.",
@@ -911,7 +957,7 @@ STRINGS = {
         "lane_col_order_delete": "Order/Delete",
         "tab_lanes": "Lanes",
         # Analysis tab
-        "analysis_tab_note": "Display brightness, contrast and tone curves do not change quantification.\nClick a lane for its sample row, or a band for its intensity.\nDetect again at the bottom of Lanes → Manual adjustment.",
+        "analysis_tab_note": "Display brightness, contrast and tone curves do not change quantification.\nClick a lane for its sample row, or a band for its intensity.\nDetect again at the bottom of Check lanes & bands → Lane adjustment.",
         "mw_regression_placeholder": "MW pending · Enter at least two valid reference points in one marker lane.",
         "col_lane": "Lane",
         "result_col_sample": "Sample",
@@ -1082,7 +1128,7 @@ STRINGS = {
         "mode_lane_hint": "Lanes · Drag to add / Drag borders to resize / Esc to finish",
         "mode_corner_hint": "Gel region · Adjust four corners, then Enter to apply / Esc to finish",
         "mode_vrange_hint": "Analysis range · Drag vertically / Esc to finish",
-        "analysis_empty": "Assign lanes, then use Detect bands → Marker setup in the Lanes ribbon.",
+        "analysis_empty": "Detect bands in Check lanes & bands, then continue to Assign marker.",
         "analysis_no_bands": "Analysis complete · No bands detected. Check lane ranges and sensitivity.",
         "analysis_stale": "Analysis settings changed. Run analysis again.",
         "analysis_ready": "{n} bands · Select in the table or image.",
@@ -1180,17 +1226,16 @@ STRINGS = {
         "corner_name_bl": "4 BL",
         "help_html":
             "<h3>Basic Workflow</h3>"
-            "<p>Open an image -> (if needed) clean up in <b>Adjust/Warp</b> -> assign lanes in <b>Lanes</b> and run analysis "
-            "-> enter marker MW -> check <b>Results</b>/<b>Standard Curve</b> in the Lanes ribbon -> save</p>"
+            "<p><b>Prepare image → Check lanes &amp; bands → Assign marker → Results &amp; export.</b> "
+            "Visit steps freely, or use the next-step button below the settings.</p>"
 
             "<h3>Ribbon Layout</h3>"
             "<p><b>File</b> (New Window, Open, Recent Files, Paste, Save/Save As/Open Project Location, "
-            "Export Result Image, Notes) · "
-            "<b>Western Blot</b> (Create composite, Load existing composite file) · "
-            "<b>Adjust</b> · <b>Lanes</b> (Auto detection, Manual adjustment/Detect bands, Lane list, Vertical range, Marker setup, MW Results, Standard Curve, Marker presets) · "
-            "<b>Info</b> (Undo, Redo, Reset All, Help, About, Updates, Language).</p>"
+            "Export Result Image, Notes) also contains <b>Western Blot</b> (Create/load composite), "
+            "<b>Edit</b> (Reset All, Undo, Redo), and <b>Info</b> (Help, About, Updates, Language). "
+            "Save, Undo and Redo stay visible at the top left.</p>"
             "<p>Select an icon to show only that tool's settings beside the main preview. "
-            "Switching tools applies pending corrections; use Esc/Ctrl+Z beforehand to cancel them.</p>"
+            "Slider adjustments appear immediately. Leaving a crop/reference-line edit asks whether to apply, discard, or keep editing.</p>"
 
             "<h3>Opening / Saving Images</h3>"
             "<p>"
@@ -1226,7 +1271,7 @@ STRINGS = {
             "· Mouse wheel: zoom in/out (centered on the cursor)<br>"
             "· Left-click drag (default) or middle-button drag: pan<br>"
             "· 'Show analysis overlay' checkbox: toggles lane boxes/band lines/MW labels on screen only<br>"
-            "· 'Show guides' on the Adjust tab: toggles the grid + center crosshair guide (rotate/warp)"
+            "· 'Show guides' in Prepare image: toggles the grid + center crosshair guide (rotate/warp)"
             "</p>"
 
             "<h3>Geometry Tools</h3>"
@@ -1244,13 +1289,13 @@ STRINGS = {
             "· Sliders here and elsewhere support <b>Alt+drag</b> for fine control — movement "
             "is scaled down to 1/8 speed.</p>"
 
-            "<h3>Adjust Ribbon</h3>"
+            "<h3>Prepare Image</h3>"
             "<p>Rotate (90°/180°/fine) · flip horizontal/vertical · crop · invert colors · brightness/contrast.<br>"
             "Brightness/contrast are display-only and don't affect analysis results. "
-            "Geometry tools also transform analysis coordinates. Crop and perspective straightening are separate tools. "
+            "Geometry tools also transform analysis coordinates. Perspective straightening is available within the crop settings. "
             "Drag purple curvature handles directly in the main preview. Display inversion does not change a composite's UV analysis signal.</p>"
 
-            "<h3>Western Blot Menu (Composite)</h3>"
+            "<h3>File → Western Blot Menu (Composite)</h3>"
             "<p>Aligning and merging a visible-light photo (showing markers) with a UV photo "
             "(showing fluorescent bands) happens in its own <b>Composite Studio</b> window, "
             "separate from the main window.<br>"
@@ -1272,11 +1317,11 @@ STRINGS = {
             "blended view plus the analysis-only UV grayscale, so it can't be reopened in the "
             "studio to redo the corner alignment (start over with 'Create' for that).</p>"
 
-            "<h3>Lanes Tab</h3>"
+            "<h3>Check Lanes &amp; Bands</h3>"
             "<p>"
             "· <b>Auto-Detect Lanes</b>: you must enter the number of lanes loaded on the gel "
             "(you already know this, so it splits the width by exactly that count)<br>"
-            "· Turn on <b>Manual Lane Mode</b> and drag left-right on the image to add a lane<br>"
+            "· Select <b>Lane adjustment</b> and drag left-right on the image to add a lane<br>"
             "· Drag a lane edge to resize it; drag a lane's name label to move the whole lane<br>"
             "· Switching a lane's type to 'Marker' opens the MW entry dialog right away (reselecting reopens it)<br>"
             "· Higher sensitivity detects <b>even weaker bands</b><br>"
@@ -1286,22 +1331,22 @@ STRINGS = {
             "(intensity/volume) change along with this setting too<br>"
             "· <b>Band Display Style</b>: choose 'Area' (boundary box, default) or 'Line' (peak "
             "position only) — this only changes what's drawn, not the quantification<br>"
-            "· Use Detect bands in the Lanes ribbon to check bands, then enter MW in Marker setup"
+            "· Use Detect bands below the lane settings, then choose a preset and lane in Assign marker"
             "</p>"
 
-            "<h3>Analysis / Standard Curve Tabs</h3>"
+            "<h3>Results &amp; Export / Standard Curve</h3>"
             "<p>Shows a table of MW/intensity/volume for detected bands. "
             "MW is computed by curve interpolation from the values you entered on marker lanes, and "
             "quantification always uses the raw image data, before any adjustments.</p>"
 
             "<h3>Notes</h3>"
-            "<p>Open the free-form notes box using the Notes icon in the File ribbon. Anything you write here "
+            "<p>Open the free-form notes box using Notes in the File menu. Anything you write here "
             "is saved with the project and restored when you reopen it. Opening a new image (starting "
             "fresh in the same window) clears it.</p>"
 
             "<h3>Marker Presets</h3>"
             "<p>Save frequently-used markers (molecular weight per band) so you can fill them in automatically "
-            "next time via 'Manage…'. If the band count differs, you can match them manually. "
+            "next time by selecting a preset in Assign marker. If the band count differs, you can match them manually. "
             "Use 'Export…'/'Import…' to back them up as a CSV file or share them with another computer or colleague.</p>"
 
             "<h3>Open-Source License Notice</h3>"

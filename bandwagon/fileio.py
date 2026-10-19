@@ -371,6 +371,7 @@ class FileIOMixin:
         dirty = self._project_state_snapshot() != getattr(self, "_saved_snapshot", None)
         base = getattr(self, "_base_title", f"{APP_NAME} v{APP_VERSION}")
         self.setWindowTitle(f"* {base}" if dirty else base)
+        self._update_workflow_state()
 
     def _export_options(self, src, saving=False):
         dialog = ExportDialog(src, self.lanes, self._layout_settings, self, saving=saving)

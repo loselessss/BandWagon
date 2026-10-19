@@ -210,7 +210,7 @@ class Analyzer(RibbonMixin, StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, 
         # ── 파일: 열기/붙여넣기 + 프로젝트 저장 + 결과 이미지 내보내기를
         # 전부 한 메뉴로 묶는다. 웨스턴블롯은 성격이 다른(별도 창에서
         # 작업하는) 흐름이라 여기 안 넣고 따로 분리한다.
-        m_file = mb.addMenu(tr("menu_file"))
+        m_file = mb.addMenu(tr("menu_file")); self.m_file = m_file
         a = QAction(tr("menu_new_window"), self); a.triggered.connect(self.new_window)
         a.setShortcut("Ctrl+N"); a.setToolTip(tr("menu_new_window_tip")); m_file.addAction(a)
         a = QAction(tr("dlg_open_title"), self); a.triggered.connect(self.open_anything)
@@ -252,7 +252,7 @@ class Analyzer(RibbonMixin, StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, 
         # 창 상태를 전혀 참조하지 않는 독립 창이라, 자세한 이유는
         # composite.py 모듈 docstring 참고) '저장/다른 이름으로 저장' 짝
         # 대신 이 형태로 갔다.
-        m_wb = mb.addMenu(tr("menu_western"))
+        m_wb = mb.addMenu(tr("menu_western")); self.m_western = m_wb
         a = QAction(tr("menu_western_open"), self); a.triggered.connect(self.open_composite_studio)
         a.setToolTip(tr("toolbar_composite_studio_tip")); m_wb.addAction(a)
         a = QAction(tr("toolbar_composite_import"), self)
@@ -260,7 +260,7 @@ class Analyzer(RibbonMixin, StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, 
         a.setToolTip(tr("toolbar_composite_import_tip")); m_wb.addAction(a)
 
         # ── 편집 ─────────────────────────────────────────────────────
-        m_edit = mb.addMenu(tr("menu_edit"))
+        m_edit = mb.addMenu(tr("menu_edit")); self.m_edit = m_edit
         a = QAction(tr("toolbar_reset_all"), self); a.triggered.connect(self.reset_all)
         m_edit.addAction(a)
         m_edit.addSeparator()
@@ -278,7 +278,7 @@ class Analyzer(RibbonMixin, StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, 
         m_edit.addAction(self.btn_redo)
 
         # ── 정보 ─────────────────────────────────────────────────────
-        m_info = mb.addMenu(tr("menu_info"))
+        m_info = mb.addMenu(tr("menu_info")); self.m_info = m_info
         a = QAction(tr("toolbar_check_updates"), self)
         a.triggered.connect(lambda _checked=False: self.check_for_updates(True))
         m_info.addAction(a)
@@ -384,7 +384,8 @@ class Analyzer(RibbonMixin, StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, 
         self.tabs = QTabWidget(); self.tabs.setStyleSheet(self._tabs_css())
         self.tabs.setUsesScrollButtons(True)
         self.tabs.tabBar().setExpanding(True)
-        rv.addWidget(self.tabs)
+        rv.addWidget(self.tabs, 1)
+        rv.addWidget(self._build_workflow_footer())
         split.addWidget(right)
         split.setStretchFactor(0, 3); split.setStretchFactor(1, 1)
 
@@ -424,7 +425,12 @@ class Analyzer(RibbonMixin, StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, 
         if isinstance(saved_layout, QByteArray):
             # Restore after the first layout pass, when the splitter has its
             # actual width; restoring earlier lets stretch factors distort it.
-            QTimer.singleShot(0, lambda: split.restoreState(saved_layout))
+            # A parent-owned timer is cancelled if the window closes before its
+            # first layout pass; a static singleShot can outlive the splitter.
+            self._layout_restore_timer = QTimer(split)
+            self._layout_restore_timer.setSingleShot(True)
+            self._layout_restore_timer.timeout.connect(lambda: split.restoreState(saved_layout))
+            self._layout_restore_timer.start(0)
         split.setChildrenCollapsible(False)
         split.splitterMoved.connect(self._save_panel_layout)
 

@@ -56,9 +56,9 @@ class CropWorkflowTest(unittest.TestCase):
         self.win.ribbon.setCurrentIndex(0)
         with patch.object(self.win, '_read_clipboard_image', return_value=self.source.copy()):
             self.win.ribbon_strips[0].buttons['paste'].click()
-        self.assertEqual(self.win.ribbon.currentIndex(), 1)
+        self.assertEqual(self.win.ribbon.currentIndex(), 0)
         self.assertEqual(self.win._active_tool, 'rotate')
-        self.assertTrue(self.win.ribbon_strips[1].buttons['rotate'].isChecked())
+        self.assertTrue(self.win.ribbon_strips[0].buttons['rotate'].isChecked())
         self.assertEqual(self.win.settings_title.text(), tr('tool_rotate'))
         self.assertTrue(self.win.rot_spin.isVisible())
 
@@ -162,7 +162,7 @@ class CropWorkflowTest(unittest.TestCase):
         self.win.gel.set_lanes(self.win.lanes); self.win._rebuild_lane_table()
         self.assertFalse(self.win._on_lane_added(60, 120))
         self.assertEqual(len(self.win.lanes), 2)
-        self.win._select_ribbon_tool('manual_lanes'); self.win.btn_lane.click()
+        self.win._select_ribbon_tool('manual_lanes')
         self.drag((80, 80), (160, 80))
         spans = [(lane.x1, lane.x2) for lane in self.win.lanes]
         self.assertTrue(valid_lane_spans(spans, 200))

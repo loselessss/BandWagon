@@ -72,11 +72,13 @@ class RibbonTest(unittest.TestCase):
                 finally:
                     win.close()
 
-    def test_new_window_starts_on_file_ribbon(self):
+    def test_new_window_starts_on_prepare_step_with_file_menu(self):
         win = Analyzer()
         try:
             self.assertEqual(win.ribbon.currentIndex(), 0)
-            self.assertEqual(win.ribbon.tabText(0), tr('menu_file'))
+            self.assertEqual(win.ribbon.tabText(0), '1  ' + tr('workflow_prepare'))
+            self.assertIs(win.quick_buttons['file'].menu(), win.m_file)
+            self.assertFalse(win.workflow_next.isEnabled())
         finally:
             win.close()
 
@@ -87,7 +89,7 @@ class RibbonTest(unittest.TestCase):
             win._after_load('manual-detection.png')
             win._on_lane_added(10, 80)
             win._select_ribbon_tool('manual_lanes'); win.show(); self.app.processEvents()
-            self.assertNotIn('run', win.ribbon_strips[2].buttons)
+            self.assertNotIn('run', win.ribbon_strips[1].buttons)
             button = win.btn_detect_bands
             self.assertTrue(button.isVisible())
             panel = button.parentWidget().parentWidget()
@@ -103,8 +105,8 @@ class RibbonTest(unittest.TestCase):
                 analyze.assert_called_once()
             win._select_ribbon_tool('auto_lanes')
             self.assertTrue(button.isVisible())
-            self.assertNotIn('auto_lanes', win.ribbon_strips[2].buttons)
-            self.assertEqual(win.ribbon_strips[2].buttons['manual_lanes'].text(), tr('tool_lane_adjust'))
+            self.assertNotIn('auto_lanes', win.ribbon_strips[1].buttons)
+            self.assertEqual(win.ribbon_strips[1].buttons['manual_lanes'].text(), tr('tool_lane_adjust'))
         finally:
             win._saved_snapshot = win._project_state_snapshot()
             win.close()
@@ -140,28 +142,27 @@ class RibbonTest(unittest.TestCase):
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
 
-    def test_analysis_order_and_notes_belong_to_file_ribbon(self):
+    def test_workflow_groups_analysis_and_keeps_notes_in_file_menu(self):
         win = Analyzer()
         try:
-            self.assertEqual(list(win.ribbon_strips[2].buttons)[-4:], ['marker', 'results', 'quant', 'marker_presets'])
-            self.assertNotIn('run', win.ribbon_strips[2].buttons)
+            self.assertEqual(list(win.ribbon_strips[2].buttons), ['marker', 'marker_presets'])
+            self.assertEqual(list(win.ribbon_strips[3].buttons)[:2], ['results', 'quant'])
             self.assertNotIn(tr('tab_analysis'), [win.ribbon.tabText(i) for i in range(win.ribbon.count())])
-            self.assertEqual(win.ribbon_tools['results'][0], 2)
-            self.assertEqual(win.ribbon_tools['quant'][0], 2)
-            self.assertIn('memo', win.ribbon_strips[0].buttons)
-            self.assertEqual(win.ribbon_tools['memo'][0], 0)
-            self.assertFalse(win.ribbon_strips[0].buttons['memo'].icon().isNull())
-            win.ribbon_strips[0].buttons['memo'].click()
+            self.assertEqual(win.ribbon_tools['results'][0], 3)
+            self.assertEqual(win.ribbon_tools['quant'][0], 3)
+            self.assertIn(win.memo_action, win.m_file.actions())
+            self.assertFalse(win.memo_action.icon().isNull())
+            win.memo_action.trigger()
             self.assertEqual(win.ribbon.currentIndex(), 0)
             self.assertEqual(win._active_tool, 'memo')
             self.assertEqual(win.tabs.currentIndex(), 4)
             self.assertTrue(win.memo_edit.isVisibleTo(win.tabs))
             win.memo_edit.setPlainText('Keep this note')
-            win.ribbon_strips[2].buttons['results'].click()
+            win.ribbon_strips[3].buttons['results'].click()
             self.assertEqual(win._active_tool, 'results')
-            win.ribbon_strips[2].buttons['quant'].click()
+            win.ribbon_strips[3].buttons['quant'].click()
             self.assertEqual(win._active_tool, 'quant')
-            win.ribbon.setCurrentIndex(0)
+            win.memo_action.trigger()
             self.assertEqual(win._active_tool, 'memo')
             self.assertEqual(win.memo_edit.toPlainText(), 'Keep this note')
         finally:
@@ -184,25 +185,25 @@ class RibbonTest(unittest.TestCase):
         finally:
             strip.close()
 
-    def test_lane_and_result_panels_route_within_the_same_ribbon(self):
+    def test_workflow_steps_remember_their_last_tool(self):
         win = Analyzer()
         try:
             win._select_ribbon_tool('lane_list')
             win._select_ribbon_tool('results')
-            self.assertEqual(win.ribbon.currentIndex(), 2)
+            self.assertEqual(win.ribbon.currentIndex(), 3)
             win.tabs.setCurrentIndex(1)
             self.assertEqual(win._active_tool, 'lane_list')
             self.assertEqual(win.tabs.currentIndex(), 1)
             win.tabs.setCurrentIndex(2)
             self.assertEqual(win._active_tool, 'results')
-            win.ribbon_strips[2].buttons['quant'].click()
+            win.ribbon_strips[3].buttons['quant'].click()
             self.assertEqual(win.tabs.currentIndex(), 3)
             win.ribbon.setCurrentIndex(1)
-            win.ribbon.setCurrentIndex(2)
+            win.ribbon.setCurrentIndex(3)
             self.assertEqual(win._active_tool, 'quant')
-            self.assertEqual(win.ribbon.currentIndex(), 2)
-            self.assertIn('make', win.ribbon_strips[3].buttons)
-            self.assertIn('undo', win.ribbon_strips[4].buttons)
+            self.assertEqual(win.ribbon.currentIndex(), 3)
+            self.assertIn(win.m_western.menuAction(), win.m_file.actions())
+            self.assertIn('undo', win.quick_buttons)
         finally:
             win.close()
 
@@ -226,7 +227,7 @@ class RibbonTest(unittest.TestCase):
                 dialog.assert_called_once_with({}, win)
                 save.assert_not_called()
             self.assertEqual(win._active_tool, 'lane_list')
-            self.assertTrue(win.ribbon_strips[2].buttons['lane_list'].isChecked())
+            self.assertTrue(win.ribbon_strips[1].buttons['lane_list'].isChecked())
         finally:
             win.close()
 
@@ -250,12 +251,12 @@ class RibbonTest(unittest.TestCase):
         win = Analyzer()
         try:
             win.show(); self.app.processEvents()
-            self.assertEqual(win.ribbon.count(), 5)
+            self.assertEqual(win.ribbon.count(), 4)
             for index in range(win.ribbon.count()):
                 with self.subTest(category=win.ribbon.tabText(index)):
                     self.assertFalse(win.ribbon.tabIcon(index).isNull())
             win.ribbon.setCurrentIndex(0); self.app.processEvents()
-            for name, button in win.ribbon_strips[0].buttons.items():
+            for name, button in win.quick_buttons.items():
                 with self.subTest(command=name):
                     self.assertFalse(button.icon().isNull())
         finally:
@@ -304,9 +305,10 @@ class RibbonTest(unittest.TestCase):
             win._rebuild_lane_table()
             win._select_ribbon_tool('manual_lanes'); win.show(); self.app.processEvents()
             self.assertNotIn('bands', win.ribbon_tools)
-            self.assertNotIn('bands', win.ribbon_strips[2].buttons)
+            self.assertNotIn('bands', win.ribbon_strips[1].buttons)
             self.assertFalse(win.lane_table.isVisible())
-            self.assertTrue(win.btn_lane.isVisible())
+            self.assertFalse(win.btn_lane.isVisible())
+            self.assertEqual(win.gel.mode, 'lane')
             for widget in (win.sp_prom, win.sp_dist, win.btn_detect_bands):
                 self.assertTrue(widget.isVisible())
             self.assertFalse(win.sl_band_thresh.isVisible())
@@ -349,7 +351,7 @@ class RibbonTest(unittest.TestCase):
             win._select_ribbon_tool('manual_lanes')
             actions[0].click(); self.app.processEvents()
             self.assertEqual(win._active_tool, 'manual_lanes')
-            self.assertEqual(win.ribbon.currentIndex(), 2)
+            self.assertEqual(win.ribbon.currentIndex(), 1)
             self.assertFalse(win.result_table.isVisible())
             self.assertTrue(win.gel.isVisible())
             self.assertEqual(win.result_table.rowCount(), 4)

@@ -91,7 +91,7 @@ class LaneWorkflowTest(unittest.TestCase):
         self.assertFalse(self.win._analysis_stale)
         self.assertEqual(self.win.analysis_notice.text(), tr("analysis_ready", n=6))
         self.assertEqual(self.win.lane_table.rowCount(), 2)
-        self.assertEqual(self.win.ribbon.currentIndex(), 2)
+        self.assertEqual(self.win.ribbon.currentIndex(), 1)
 
     def test_marker_selection_analyzes_manual_lane_and_opens_mw(self):
         self.add_manual_lane()
@@ -105,7 +105,7 @@ class LaneWorkflowTest(unittest.TestCase):
         self.assertEqual(lane.marker_mw, [100, 50, 25])
         self.assertEqual(lane.mw, [100, 50, 25])
         self.assertEqual(self.win.result_table.rowCount(), 3)
-        self.assertEqual(self.win.ribbon.currentIndex(), 2)
+        self.assertEqual(self.win.ribbon.currentIndex(), 3)
 
     def test_marker_selection_reanalyzes_stale_results(self):
         self.add_manual_lane()

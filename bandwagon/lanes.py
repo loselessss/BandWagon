@@ -133,6 +133,11 @@ class LanesMixin:
         self.btn_reference_lanes.setToolTip(tr('reference_lanes_tip'))
         self.btn_reference_lanes.clicked.connect(self._lanes_from_reference)
         h.addWidget(self.btn_reference_lanes)
+        self.selected_lane_summary = QLabel(tr('workflow_select_lane_hint'))
+        self.selected_lane_summary.setWordWrap(True)
+        self.selected_lane_summary.setStyleSheet(f'color:{CYAN};padding:4px 0;')
+        self.selected_lane_summary.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        h.addWidget(self.selected_lane_summary)
         manual = QWidget()
         mh = QVBoxLayout(manual)
         mh.setContentsMargins(0, 0, 0, 0)
@@ -140,6 +145,8 @@ class LanesMixin:
         self.btn_lane.clicked.connect(self._toggle_lane_mode); self.btn_lane.setStyleSheet(self._btn_css())
         mh.addWidget(self.btn_lane)
         self.btn_lane.setToolTip(tr('lane_manual_hint'))
+        # Selecting the workflow tool now activates editing on the preview.
+        self.btn_lane.hide()
         management = QGroupBox(tr('tool_lane_list')); management.setStyleSheet(self._group_css())
         lh = QVBoxLayout(management)
         clear = QPushButton(tr("btn_clear_all_lanes")); clear.clicked.connect(self._on_clear_lanes_clicked); clear.setStyleSheet(self._danger_btn_css())
@@ -147,16 +154,22 @@ class LanesMixin:
         marker_box = QGroupBox(tr('tool_marker')); marker_box.setStyleSheet(self._group_css())
         marker_layout = QVBoxLayout(marker_box)
         marker_hint = QLabel(tr('marker_setup_hint')); marker_hint.setWordWrap(True)
+        marker_hint.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         marker_layout.addWidget(marker_hint)
         marker_layout.addWidget(QLabel(tr('preset_label')))
         self.marker_preset_combo = QComboBox(); self.marker_preset_combo.setStyleSheet(self._combo_css())
+        self.marker_preset_combo.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        self.marker_preset_combo.setMinimumContentsLength(12)
         marker_layout.addWidget(self.marker_preset_combo)
         self._update_marker_presets()
         marker_layout.addWidget(QLabel(tr('marker_lane_label')))
         self.marker_lane_combo = QComboBox(); self.marker_lane_combo.setStyleSheet(self._combo_css())
+        self.marker_lane_combo.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        self.marker_lane_combo.setMinimumContentsLength(12)
         self.marker_lane_combo.currentIndexChanged.connect(self._on_marker_lane_changed)
         marker_layout.addWidget(self.marker_lane_combo)
         self.marker_setup_status = QLabel(); self.marker_setup_status.setWordWrap(True)
+        self.marker_setup_status.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         marker_layout.addWidget(self.marker_setup_status)
         self.btn_marker_setup = QPushButton(tr('marker_setup_action'))
         self.btn_marker_setup.setStyleSheet(self._btn_accent_css())
@@ -397,7 +410,10 @@ class LanesMixin:
         for lane in self.lanes:
             self.marker_lane_combo.addItem(lane.name, (lane.x1, lane.x2))
         selected = next((i for i, lane in enumerate(self.lanes)
-                         if (lane.x1, lane.x2) == previous), None)
+                         if lane is self.gel.selected_lane), None)
+        if selected is None:
+            selected = next((i for i, lane in enumerate(self.lanes)
+                             if (lane.x1, lane.x2) == previous), None)
         if selected is None:
             selected = next((i for i, lane in enumerate(self.lanes)
                              if lane is self.gel.selected_lane or lane.kind == 'marker'), 0)
@@ -960,6 +976,7 @@ class LanesMixin:
     def _on_lane_table_selected(self, row, *_):
         self.gel.selected_lane = self.lanes[row] if 0 <= row < len(self.lanes) else None
         self.gel.update()
+        self._update_workflow_state()
 
     def _on_gel_lane_selected(self, lane):
         if lane in self.lanes:
@@ -985,6 +1002,7 @@ class LanesMixin:
                 self.gel.update()
             if getattr(self, '_active_tool', None) == 'marker':
                 self.marker_lane_combo.setCurrentIndex(row)
+            self._update_workflow_state()
 
     def _mark_analysis_stale(self):
         if self.lanes:
@@ -1010,6 +1028,7 @@ class LanesMixin:
         # Successful detection is reported only in the bottom status bar.
         # Keep actionable empty/stale warnings in the results pane.
         self.analysis_notice.setVisible(key != 'analysis_ready')
+        self._update_workflow_state()
 
     def _set_lane_kind(self, lane, idx, combo):
         old_kind = lane.kind

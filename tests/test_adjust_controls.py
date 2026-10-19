@@ -37,9 +37,9 @@ class AdjustControlsTest(unittest.TestCase):
 
     def click(self, key):
         if key == "btn_invert_colors":
-            self.win.ribbon.setCurrentIndex(1)
-            button = self.win.ribbon_strips[1].buttons['invert']
-            self.win.ribbon_strips[1].scroll.ensureWidgetVisible(button)
+            self.win.ribbon.setCurrentIndex(0)
+            button = self.win.ribbon_strips[0].buttons['invert']
+            self.win.ribbon_strips[0].scroll.ensureWidgetVisible(button)
         else:
             button = next(b for b in self.win.findChildren(QPushButton) if b.text() == tr(key))
             for name, (_, group) in self.win.correct_tools.items():
@@ -84,7 +84,7 @@ class AdjustControlsTest(unittest.TestCase):
 
     def test_crop_ribbon_includes_warp_and_enter_uses_selected_operation(self):
         self.win._select_ribbon_tool('crop')
-        self.assertNotIn('warp', self.win.ribbon_strips[1].buttons)
+        self.assertNotIn('warp', self.win.ribbon_strips[0].buttons)
         crop_group = self.win.correct_tools['crop'][1]
         self.assertTrue(self.win.btn_corner.isVisibleTo(crop_group))
         self.assertTrue(self.win.chk_warp_curve.isVisibleTo(crop_group))
@@ -138,7 +138,7 @@ class AdjustControlsTest(unittest.TestCase):
 
     def test_invert_is_immediate_and_keeps_current_settings(self):
         self.win._select_ribbon_tool('brightness')
-        button = self.win.ribbon_strips[1].buttons['invert']
+        button = self.win.ribbon_strips[0].buttons['invert']
         self.assertFalse(button.isCheckable())
         self.assertEqual(button.toolTip(), tr('invert_hint'))
         self.assertNotIn('invert', self.win.ribbon_tools)
@@ -227,7 +227,8 @@ class AdjustControlsTest(unittest.TestCase):
         editor = self.win._inline_curve
         editor.points[2] = (900, editor.baseline - 30)
         editor.preview()
-        self.win.ribbon_strips[1].buttons['brightness'].click()
+        with patch.object(self.win, '_confirm_tool_change', side_effect=lambda: (editor.apply() or True)):
+            self.win.ribbon_strips[0].buttons['brightness'].click()
         self.assertIsNone(self.win._inline_curve)
         self.assertEqual(self.win._active_tool, 'brightness')
         self.assertEqual(self.win._edit_ops[-1][0], 'reference_bow')
@@ -255,23 +256,24 @@ class AdjustControlsTest(unittest.TestCase):
         self.assertFalse(self.win.btn_crop.isChecked())
         self.win._select_ribbon_tool('crop')
         self.win._select_ribbon_tool('manual_lanes')
-        self.assertEqual(self.win.gel.mode, 'view')
+        self.assertEqual(self.win.gel.mode, 'lane')
         self.assertFalse(self.win.lane_table.isVisible())
         self.assertTrue(self.win.sp_prom.isVisible())
-        self.win.btn_lane.click()
         self.win._select_ribbon_tool('range')
         self.assertFalse(self.win.btn_lane.isChecked())
         self.assertFalse(self.win.lane_table.isVisible())
 
-    def test_file_ribbon_commits_preview_without_losing_selected_tool(self):
+    def test_workflow_switch_confirms_preview_and_remembers_selected_tool(self):
         self.win._select_ribbon_tool('bow')
         self.win.btn_reference_bow.click()
         self.win._inline_curve.points[2] = (900, 300)
-        self.win.ribbon.setCurrentIndex(0)
+        editor = self.win._inline_curve
+        with patch.object(self.win, '_confirm_tool_change', side_effect=lambda: (editor.apply() or True)):
+            self.win.ribbon.setCurrentIndex(1)
         self.assertIsNone(self.win._inline_curve)
         self.assertEqual(self.win._edit_ops[-1][0], 'reference_bow')
-        self.assertEqual(self.win.ribbon.currentIndex(), 0)
-        self.win.ribbon.setCurrentIndex(1)
+        self.assertEqual(self.win.ribbon.currentIndex(), 1)
+        self.win.ribbon.setCurrentIndex(0)
         self.assertEqual(self.win._active_tool, 'bow')
 
     def test_copy_shortcut_path_uses_committed_full_resolution_preview(self):
