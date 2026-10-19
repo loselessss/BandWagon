@@ -14,6 +14,7 @@ from PIL import Image, ImageDraw
 from bandwagon.imaging import lane_boundary_signal
 from bandwagon.lanes import LanesMixin
 from bandwagon.models import Lane
+from bandwagon.lane_geometry import regular_lane_spans
 
 
 def main():
@@ -22,6 +23,9 @@ def main():
     parser.add_argument('--crop', nargs=4, type=int)
     parser.add_argument('--rotate', type=int, default=90)
     parser.add_argument('--count', type=int, default=15)
+    parser.add_argument('--reference', nargs=2, type=int, metavar=('LEFT', 'RIGHT'),
+                        help='Repeat a reference lane interval, including spacing')
+    parser.add_argument('--reference-index', type=int, help='Reference position from left (1-based)')
     parser.add_argument('--output', default='build/gel-detection-qa.png')
     args = parser.parse_args()
     with Image.open(args.image) as source:
@@ -29,8 +33,12 @@ def main():
     if args.crop: image = image.crop(tuple(args.crop))
     image = image.rotate(args.rotate, expand=True)
     gray = np.array(image.convert('L'))
-    spans = LanesMixin._split_lanes_by_count(
-        lane_boundary_signal(gray, args.count), args.count, image.width)
+    if args.reference:
+        slot = None if args.reference_index is None else args.reference_index - 1
+        spans = regular_lane_spans(args.reference, args.count, image.width, slot)
+    else:
+        spans = LanesMixin._split_lanes_by_count(
+            lane_boundary_signal(gray, args.count), args.count, image.width)
     if spans is None: raise SystemExit('No lane signal found')
     draw = ImageDraw.Draw(image)
     counts, heights = [], []

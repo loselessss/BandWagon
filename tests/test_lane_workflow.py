@@ -9,9 +9,50 @@ from PyQt5.QtWidgets import QApplication
 
 from bandwagon.app import Analyzer
 from bandwagon.i18n import tr
+from bandwagon.models import Lane
 
 
 class LaneWorkflowTest(unittest.TestCase):
+    def test_legacy_overlapping_lanes_are_not_analyzed_twice(self):
+        self.win.lanes = [Lane(0, 10, 90), Lane(1, 80, 140)]
+        with patch.object(self.win, '_info') as info, patch.object(Lane, 'analyze') as analyze:
+            self.assertFalse(self.win.run_analysis())
+        info.assert_called_once()
+        analyze.assert_not_called()
+
+    def test_reference_layout_preserves_marker_metadata_and_undo(self):
+        self.win._auto_lanes()
+        reference = self.win.lanes[0]
+        reference.x1, reference.x2 = 5, 74
+        reference.kind = 'marker'; reference.name = 'My ladder'
+        reference.marker_mw = [100, 50, 25]
+        self.win._commit_lanes()
+        self.win.gel.selected_lane = self.win.lanes[0]
+        previous = [lane.to_dict() for lane in self.win.lanes]
+        self.win.btn_reference_lanes.click()
+        self.assertEqual([(lane.x1, lane.x2) for lane in self.win.lanes], [(5, 74), (75, 144)])
+        self.assertEqual(self.win.lanes[0].name, 'My ladder')
+        self.assertEqual(self.win.lanes[0].kind, 'marker')
+        self.assertEqual(self.win.lanes[0].marker_mw, [100, 50, 25])
+        self.assertIs(self.win.gel.selected_lane, self.win.lanes[0])
+        self.assertTrue(all(lane.profile is not None for lane in self.win.lanes))
+        after = [lane.to_dict() for lane in self.win.lanes]
+        self.win._undo()
+        self.assertEqual([lane.to_dict() for lane in self.win.lanes], previous)
+        self.win._redo()
+        self.assertEqual([lane.to_dict() for lane in self.win.lanes], after)
+
+    def test_invalid_reference_layout_keeps_previous_lanes_and_analysis(self):
+        self.win._auto_lanes()
+        self.win.gel.selected_lane = self.win.lanes[0]
+        before = [lane.to_dict() for lane in self.win.lanes]
+        self.win.sp_lane_n.setValue(3)
+        with patch.object(self.win, '_info') as info, patch.object(self.win, 'run_analysis') as analyze:
+            self.win.btn_reference_lanes.click()
+        info.assert_called_once()
+        analyze.assert_not_called()
+        self.assertEqual([lane.to_dict() for lane in self.win.lanes], before)
+
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])

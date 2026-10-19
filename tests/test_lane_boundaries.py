@@ -2,10 +2,34 @@ import unittest
 import numpy as np
 from bandwagon.imaging import lane_boundary_signal
 from bandwagon.lanes import LanesMixin
-from bandwagon.lane_geometry import valid_lane_spans
+from bandwagon.lane_geometry import valid_lane_spans, regular_lane_spans
 
 
 class LaneBoundaryTest(unittest.TestCase):
+    def test_distinct_centres_cannot_bypass_width_limits(self):
+        x = np.arange(600)
+        signal = sum(np.exp(-.5 * ((x - centre) / 12) ** 2)
+                     for centre in (25, 90, 210, 330, 450, 560))
+        spans = LanesMixin._split_lanes_by_count(signal, 6, 600)
+        self.assertTrue(valid_lane_spans(spans, 600, count=6, contiguous=True))
+        self.assertTrue(all(70 <= right - left + 1 <= 130 for left, right in spans))
+
+    def test_reference_layout_keeps_marker_fixed_and_all_widths_equal(self):
+        for reference, slot in (((15, 64), 0), ((215, 264), 4), ((465, 514), 9)):
+            spans = regular_lane_spans(reference, 10, 540, slot)
+            self.assertTrue(valid_lane_spans(spans, 540, count=10))
+            self.assertEqual(spans[slot], reference)
+            self.assertEqual([b - a + 1 for a, b in spans], [50] * 10)
+            self.assertTrue(all(a[1] + 1 == b[0] for a, b in zip(spans, spans[1:])))
+
+    def test_reference_layout_retains_margins_and_rejects_clipping(self):
+        self.assertEqual(regular_lane_spans((215, 264), 10, 540),
+                         [(15 + i * 50, 64 + i * 50) for i in range(10)])
+        for reference, count, width, slot in (((10, 79), 3, 200, None),
+                                               ((0, 49), 3, 200, 1),
+                                               ((-1, 30), 3, 200, None)):
+            self.assertIsNone(regular_lane_spans(reference, count, width, slot))
+
     def test_detection_never_overlaps_or_leaves_image_for_varied_counts(self):
         rng = np.random.default_rng(21)
         for width, count in ((60, 30), (200, 15), (730, 15), (1200, 60), (6000, 15)):
@@ -19,6 +43,8 @@ class LaneBoundaryTest(unittest.TestCase):
                 spans = LanesMixin._split_lanes_by_count(signal, count, width)
                 with self.subTest(width=width, count=count, kind=kind):
                     self.assertTrue(valid_lane_spans(spans, width, count=count, contiguous=True))
+                    self.assertTrue(all(np.ceil(width / count * .7) <= b - a + 1 <=
+                                        np.floor(width / count * 1.3) for a, b in spans))
 
     def test_global_partition_does_not_split_wide_gap_into_narrow_lanes(self):
         x = np.arange(750)

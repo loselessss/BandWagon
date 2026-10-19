@@ -22,7 +22,7 @@ from .imaging import lane_boundary_signal
 from .fluent_icons import icon
 from .theme import *
 from .models import Lane
-from .lane_geometry import valid_lane_spans
+from .lane_geometry import valid_lane_spans, regular_lane_spans
 from .widgets import StdCurveView, FineSlider
 from .checkbox import TickCheckBox
 from .dialogs import MarkerDialog, MarkerPresetManager, _dialog_style, _no_help_button
@@ -128,6 +128,11 @@ class LanesMixin:
         auto = QPushButton(tr("btn_auto_detect_lanes")); auto.clicked.connect(self._auto_lanes)
         auto.setStyleSheet(self._btn_css())
         h.addWidget(auto)
+        self.btn_reference_lanes = QPushButton(tr('btn_reference_lanes'))
+        self.btn_reference_lanes.setStyleSheet(self._btn_css())
+        self.btn_reference_lanes.setToolTip(tr('reference_lanes_tip'))
+        self.btn_reference_lanes.clicked.connect(self._lanes_from_reference)
+        h.addWidget(self.btn_reference_lanes)
         manual = QWidget()
         mh = QVBoxLayout(manual)
         mh.setContentsMargins(0, 0, 0, 0)
@@ -580,6 +585,48 @@ class LanesMixin:
         self.status.showMessage(tr("status_lane_changed_reanalyze"))
         self._commit_lanes()
 
+    def _lanes_from_reference(self):
+        if self._gray_orig is None:
+            self._info(tr('no_image_title'), tr('no_image_msg'))
+            return
+        reference = self.gel.selected_lane
+        if reference not in self.lanes:
+            markers = [lane for lane in self.lanes if lane.kind == 'marker']
+            reference = markers[0] if len(markers) == 1 else self.lanes[0] if len(self.lanes) == 1 else None
+        if reference is None:
+            self._info(tr('reference_lanes_title'), tr('reference_lanes_choose'))
+            return
+        count = self.sp_lane_n.value()
+        ordered = sorted(self.lanes, key=lambda lane: lane.x1)
+        slot = ordered.index(reference) if len(ordered) == count else None
+        spans = regular_lane_spans((reference.x1, reference.x2), count,
+                                   self._gray_orig.shape[1], slot)
+        if spans is None:
+            self._info(tr('reference_lanes_title'), tr('reference_lanes_no_fit'))
+            return
+        reference_data = reference.to_dict()
+        old_data = [lane.to_dict() for lane in ordered] if len(ordered) == count else None
+        self._clear_lanes()
+        for i, (left, right) in enumerate(spans):
+            data = dict(old_data[i]) if old_data is not None else None
+            if (left, right) == (reference.x1, reference.x2):
+                data = dict(reference_data)
+            if data is None:
+                lane = Lane(i, left, right)
+            else:
+                data.update(x1=left, x2=right)
+                lane = Lane.from_dict(data)
+            self.lanes.append(lane)
+        self._renumber_lanes()
+        self.gel.set_lanes(self.lanes)
+        self._commit_lanes()
+        self.run_analysis()
+        self.gel.selected_lane = next(lane for lane in self.lanes
+                                      if (lane.x1, lane.x2) == (reference.x1, reference.x2))
+        self.gel.update()
+        self.status.showMessage(tr('status_reference_lanes', n=count,
+                                    width=reference.x2 - reference.x1 + 1))
+
     def _auto_lanes(self):
         """배경 보정 및 행별 정규화한 신호에서 레인 경계를 자동 검출.
         레인 개수를 폭으로 균등 분할한 뒤 경계를 신호가 약한 지점(골)으로
@@ -619,6 +666,23 @@ class LanesMixin:
 
     @staticmethod
     def _split_lanes_by_count(sm, n_target, W):
+        """Apply the same width and overlap limits to every detection path."""
+        spans = LanesMixin._candidate_lane_spans(sm, n_target, W)
+        if spans is None:
+            return None
+        minimum = max(1, int(np.ceil(W / n_target * .70)))
+        maximum = max(minimum, int(np.floor(W / n_target * 1.30)))
+        if (not valid_lane_spans(spans, W, count=n_target, contiguous=True)
+                or any(not minimum <= b - a + 1 <= maximum for a, b in spans)):
+            spans = LanesMixin._global_lane_partition(sm, n_target, W)
+        if not valid_lane_spans(spans, W, count=n_target, contiguous=True):
+            return None
+        if any(not minimum <= b - a + 1 <= maximum for a, b in spans):
+            return None
+        return spans
+
+    @staticmethod
+    def _candidate_lane_spans(sm, n_target, W):
         """뚜렷한 중심이 N개 있으면 인접 중심 사이의 저신호 구간으로 나눈다.
         중심이 불확실하면 균등 경계 주변 ±25%에서 낮은 신호 구간의 중앙을 찾되
         실제 이동은 ±15%로 제한하고,
@@ -650,7 +714,20 @@ class LanesMixin:
             # all boundaries together instead of inserting guessed centres into
             # the largest gap (which can split a genuine wide lane).
             if max(3, n_target - max(1, n_target // 5)) <= len(peaks) < n_target:
-                return LanesMixin._global_lane_partition(smooth, n_target, W)
+                # Reserve missing slots only in clearly oversized internal
+                # gaps; a merely wider normal gap is not an empty lane.
+                spacing = float(np.median(np.diff(peaks)))
+                gaps = np.diff(peaks)
+                missing = np.where(gaps >= spacing * 1.75,
+                                   np.maximum(0, np.rint(gaps / spacing).astype(int) - 1), 0)
+                centres = None
+                if spacing >= seg_w * .55 and int(missing.sum()) == n_target - len(peaks):
+                    centres = [int(peaks[0])]
+                    for left, right, amount in zip(peaks, peaks[1:], missing):
+                        centres.extend(left + (right - left) * j / (amount + 1)
+                                       for j in range(1, amount + 1))
+                        centres.append(int(right))
+                return LanesMixin._global_lane_partition(smooth, n_target, W, centres)
             if (len(peaks) == n_target
                     and peaks[0] < seg_w and peaks[-1] > W - seg_w
                     and np.all(np.diff(peaks) >= seg_w * .5)
@@ -668,7 +745,11 @@ class LanesMixin:
                                                        - (left + right) / 2))
                     bounds.append(lo + int(round((gap[0] + gap[-1]) / 2)))
                 bounds.append(W)
-                return [(a, b - 1) for a, b in zip(bounds, bounds[1:])]
+                spans = [(a, b - 1) for a, b in zip(bounds, bounds[1:])]
+                if any(not np.ceil(seg_w * .7) <= b - a + 1 <= np.floor(seg_w * 1.3)
+                       for a, b in spans):
+                    return LanesMixin._global_lane_partition(smooth, n_target, W, peaks)
+                return spans
         snap_r = max(1, int(seg_w * 0.25))
         move_r = max(1, int(seg_w * 0.15))
         bounds = [0]
@@ -711,19 +792,22 @@ class LanesMixin:
         return spans
 
     @staticmethod
-    def _global_lane_partition(signal, count, width):
+    def _global_lane_partition(signal, count, width, centres=None):
         """Bounded-resolution DP: weak boundary evidence plus a soft width prior.
 
         Each transition makes one lane. Fixed endpoints and positive widths
         guarantee exactly count contiguous, non-overlapping output intervals.
         Sampling bounds work independently of camera resolution.
         """
+        if count <= 0 or width < 2 * count or len(signal) != width or not np.all(np.isfinite(signal)):
+            return None
         size = min(width, 2048)
         sampled = np.interp(np.linspace(0, width - 1, size), np.arange(width), signal)
         evidence = (sampled - sampled.min()) / max(float(np.ptp(sampled)), 1e-9)
         pitch = size / count
-        min_width = max(1, int(pitch * .65))
-        max_width = max(min_width + 1, int(np.ceil(pitch * 1.4)))
+        min_width = max(1, int(np.ceil(np.ceil(width / count * .70) * size / width)))
+        max_width = max(min_width, int(np.floor(np.floor(width / count * 1.30) * size / width)))
+        anchors = None if centres is None else (np.asarray(centres) + .5) * size / width
         cost = np.full((count + 1, size + 1), np.inf)
         previous = np.zeros((count + 1, size + 1), dtype=np.int32)
         cost[0, 0] = 0
@@ -731,11 +815,19 @@ class LanesMixin:
             low = max(lane * min_width, size - (count - lane) * max_width)
             high = min(lane * max_width, size - (count - lane) * min_width)
             for end in range(low, high + 1):
+                if anchors is not None and end <= anchors[lane - 1]:
+                    continue
                 starts = np.arange(max(0, end - max_width), end - min_width + 1)
+                if anchors is not None:
+                    starts = starts[starts <= anchors[lane - 1]]
+                if not len(starts):
+                    continue
                 values = cost[lane - 1, starts] + .8 * ((end - starts) / pitch - 1) ** 2
                 best = int(np.argmin(values))
                 cost[lane, end] = values[best] + (evidence[min(end, size - 1)] if lane < count else 0)
                 previous[lane, end] = starts[best]
+        if not np.isfinite(cost[count, size]):
+            return None
         bounds = [size]
         for lane in range(count, 0, -1):
             bounds.append(int(previous[lane, bounds[-1]]))
@@ -1009,6 +1101,9 @@ class LanesMixin:
             self._info(tr("no_image_title"), tr("no_image_msg")); return
         if not self.lanes:
             self._info(tr("no_lanes_title"), tr("no_lanes_msg")); return
+        if not valid_lane_spans([(lane.x1, lane.x2) for lane in self.lanes], self._gray_orig.shape[1]):
+            self._info(tr('detect_fail_title'), tr('analysis_invalid_lane_spans'))
+            return False
         # UI의 '민감도'는 값이 클수록 더 약한 밴드까지 잡히도록 직관적으로 보이게
         # 했고, 실제 find_peaks가 쓰는 prominence는 반대(값이 작을수록 더 잘 잡힘)
         # 라서 여기서 뒤집어 변환한다.
