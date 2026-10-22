@@ -89,7 +89,7 @@ class RibbonTest(unittest.TestCase):
             win._after_load('manual-detection.png')
             win._on_lane_added(10, 80)
             win._select_ribbon_tool('manual_lanes'); win.show(); self.app.processEvents()
-            self.assertNotIn('run', win.ribbon_strips[1].buttons)
+            self.assertNotIn('run', win.ribbon_strips[2].buttons)
             button = win.btn_detect_bands
             self.assertTrue(button.isVisible())
             panel = button.parentWidget().parentWidget()
@@ -105,8 +105,8 @@ class RibbonTest(unittest.TestCase):
                 analyze.assert_called_once()
             win._select_ribbon_tool('auto_lanes')
             self.assertTrue(button.isVisible())
-            self.assertNotIn('auto_lanes', win.ribbon_strips[1].buttons)
-            self.assertEqual(win.ribbon_strips[1].buttons['manual_lanes'].text(), tr('tool_lane_adjust'))
+            self.assertNotIn('auto_lanes', win.ribbon_strips[2].buttons)
+            self.assertEqual(win.ribbon_strips[2].buttons['manual_lanes'].text(), tr('tool_lane_adjust'))
         finally:
             win._saved_snapshot = win._project_state_snapshot()
             win.close()
@@ -145,7 +145,7 @@ class RibbonTest(unittest.TestCase):
     def test_workflow_groups_analysis_and_keeps_notes_in_file_menu(self):
         win = Analyzer()
         try:
-            self.assertEqual(list(win.ribbon_strips[2].buttons), ['marker', 'marker_presets'])
+            self.assertEqual(list(win.ribbon_strips[1].buttons), ['marker'])
             self.assertEqual(list(win.ribbon_strips[3].buttons)[:2], ['results', 'quant'])
             self.assertNotIn(tr('tab_analysis'), [win.ribbon.tabText(i) for i in range(win.ribbon.count())])
             self.assertEqual(win.ribbon_tools['results'][0], 3)
@@ -211,23 +211,23 @@ class RibbonTest(unittest.TestCase):
         win = Analyzer()
         try:
             win._select_ribbon_tool('lane_list')
-            button = win.ribbon_strips[2].buttons['marker_presets']
+            button = win.marker_presets_action
             self.assertFalse(button.isCheckable())
             self.assertFalse(button.icon().isNull())
             self.assertEqual(button.toolTip(), tr('marker_preset_btn_tip'))
             self.assertEqual(sum(item.text() == tr('tool_marker_presets')
-                                 for item in win.findChildren(QAbstractButton)), 1)
+                                 for item in win.options_menu.actions()), 1)
             self.assertFalse(any(item.text() == tr('btn_manage_marker_presets')
                                  for item in win.findChildren(QAbstractButton)))
             with patch('bandwagon.lanes.load_marker_presets', return_value={}), \
                     patch('bandwagon.lanes.MarkerPresetManager') as dialog, \
                     patch('bandwagon.lanes.save_marker_presets') as save:
                 dialog.return_value.exec_.return_value = 0
-                button.click()
+                button.trigger()
                 dialog.assert_called_once_with({}, win)
                 save.assert_not_called()
             self.assertEqual(win._active_tool, 'lane_list')
-            self.assertTrue(win.ribbon_strips[1].buttons['lane_list'].isChecked())
+            self.assertTrue(win.ribbon_strips[2].buttons['lane_list'].isChecked())
         finally:
             win.close()
 
@@ -240,7 +240,7 @@ class RibbonTest(unittest.TestCase):
                     patch('bandwagon.lanes.save_marker_presets') as save:
                 dialog.return_value.exec_.return_value = 1
                 dialog.return_value.presets = presets
-                win.ribbon_strips[2].buttons['marker_presets'].click()
+                win.marker_presets_action.trigger()
                 save.assert_called_once_with(presets)
             self.assertIsNone(win._orig)
             self.assertEqual(win.status.currentMessage(), tr('status_presets_saved', n=1))
@@ -291,7 +291,7 @@ class RibbonTest(unittest.TestCase):
                         win._select_ribbon_tool(tool)
                         self.app.processEvents()
                         scroll = win.lane_settings_scroll
-                        self.assertLessEqual(scroll.height(), scroll.sizeHint().height() + 2)
+                        self.assertGreaterEqual(scroll.height(), win.tabs.height() - 35)
                         self.assertFalse(win.lane_table.isVisible())
         finally:
             win.close()
@@ -305,7 +305,7 @@ class RibbonTest(unittest.TestCase):
             win._rebuild_lane_table()
             win._select_ribbon_tool('manual_lanes'); win.show(); self.app.processEvents()
             self.assertNotIn('bands', win.ribbon_tools)
-            self.assertNotIn('bands', win.ribbon_strips[1].buttons)
+            self.assertNotIn('bands', win.ribbon_strips[2].buttons)
             self.assertFalse(win.lane_table.isVisible())
             self.assertFalse(win.btn_lane.isVisible())
             self.assertEqual(win.gel.mode, 'lane')
@@ -322,7 +322,7 @@ class RibbonTest(unittest.TestCase):
                 analyze.assert_not_called()
                 win.btn_detect_bands.click()
                 analyze.assert_called_once()
-            self.assertEqual(win._active_tool, 'manual_lanes')
+            self.assertEqual(win._active_tool, 'results')
             win._select_ribbon_tool('lane_list')
             self.assertTrue(win.lane_table.isVisible())
             self.assertFalse(win.sp_prom.isVisible())
@@ -350,14 +350,14 @@ class RibbonTest(unittest.TestCase):
             self.assertIs(actions[0], win.btn_detect_bands)
             win._select_ribbon_tool('manual_lanes')
             actions[0].click(); self.app.processEvents()
-            self.assertEqual(win._active_tool, 'manual_lanes')
-            self.assertEqual(win.ribbon.currentIndex(), 1)
-            self.assertFalse(win.result_table.isVisible())
+            self.assertEqual(win._active_tool, 'results')
+            self.assertEqual(win.ribbon.currentIndex(), 3)
+            self.assertTrue(win.result_table.isVisible())
             self.assertTrue(win.gel.isVisible())
             self.assertEqual(win.result_table.rowCount(), 4)
             self.assertEqual(win.analysis_notice.text(), tr('analysis_ready', n=4))
             self.assertTrue(win.analysis_notice.isHidden())
-            self.assertIsNone(win.ribbon.cornerWidget())
+            self.assertIs(win.ribbon.cornerWidget(), win.options_button)
             self.assertFalse(hasattr(win, '_band_detection_runs'))
             self.assertEqual(win.status.currentMessage(), tr('status_analysis_done', n=4))
             self.assertEqual(actions[0].toolTip(), tr('ribbon_detect_tip'))
@@ -405,10 +405,10 @@ class RibbonTest(unittest.TestCase):
             win.lanes = [Lane(0, 10, 50)]; win._rebuild_lane_table()
             win._select_ribbon_tool('memo')
             win.btn_detect_bands.click()
-            self.assertEqual(win._active_tool, 'manual_lanes')
+            self.assertEqual(win._active_tool, 'results')
             self.assertEqual(win.result_table.rowCount(), 0)
             self.assertEqual(win.analysis_notice.text(), tr('analysis_no_bands'))
-            self.assertIsNone(win.ribbon.cornerWidget())
+            self.assertIs(win.ribbon.cornerWidget(), win.options_button)
             self.assertEqual(win.status.currentMessage(), tr('status_analysis_done', n=0))
             win.sp_prom.setValue(80)
             self.assertEqual(win.analysis_notice.text(), tr('analysis_stale'))

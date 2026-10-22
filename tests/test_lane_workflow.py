@@ -91,7 +91,7 @@ class LaneWorkflowTest(unittest.TestCase):
         self.assertFalse(self.win._analysis_stale)
         self.assertEqual(self.win.analysis_notice.text(), tr("analysis_ready", n=6))
         self.assertEqual(self.win.lane_table.rowCount(), 2)
-        self.assertEqual(self.win.ribbon.currentIndex(), 1)
+        self.assertEqual(self.win.ribbon.currentIndex(), 2)
 
     def test_marker_selection_analyzes_manual_lane_and_opens_mw(self):
         self.add_manual_lane()
@@ -153,8 +153,8 @@ class LaneWorkflowTest(unittest.TestCase):
         self.win._auto_lanes()
         self.win._select_ribbon_tool('manual_lanes')
         self.win.btn_detect_bands.click()
-        self.assertEqual(self.win._active_tool, 'manual_lanes')
-        self.win.ribbon_strips[2].buttons['marker'].click()
+        self.assertEqual(self.win._active_tool, 'results')
+        self.win.ribbon_strips[1].buttons['marker'].click()
         self.assertEqual(self.win._active_tool, 'marker')
         self.win.marker_lane_combo.setCurrentIndex(1)
         self.assertIs(self.win.gel.selected_lane, self.win.lanes[1])
@@ -185,6 +185,7 @@ class LaneWorkflowTest(unittest.TestCase):
             self.win._select_ribbon_tool('marker')
             self.assertFalse(self.win.btn_marker_setup.isEnabled())
             self.win.marker_preset_combo.setCurrentIndex(1)
+            self.win.sp_marker_lane.setValue(2)
             self.win._auto_lanes()
             self.assertEqual(self.win.marker_preset_combo.currentText(), 'Test ladder')
             self.win.marker_lane_combo.setCurrentIndex(1)

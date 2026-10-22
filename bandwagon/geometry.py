@@ -123,7 +123,7 @@ class GeometryMixin:
         self.btn_crop.toggled.connect(self._toggle_crop_mode)
         crv.addWidget(self.btn_crop)
         crop_apply = QPushButton(tr("crop_apply")); crop_apply.setStyleSheet(self._btn_accent_css())
-        crop_apply.clicked.connect(self._apply_crop); crv.addWidget(crop_apply)
+        crop_apply.clicked.connect(self._apply_crop_or_perspective); crv.addWidget(crop_apply)
         crop_clear = QPushButton(tr('crop_reset')); crop_clear.clicked.connect(self._reset_crop)
         crop_clear.setStyleSheet(self._btn_css())
         crop_cancel = QPushButton(tr('btn_cancel')); crop_cancel.clicked.connect(self._cancel_crop)
@@ -158,11 +158,9 @@ class GeometryMixin:
         self.corner_label.setStyleSheet(f"color:{CYAN};font-size:11px;font-family:'DejaVu Sans Mono';")
         self.corner_label.setAlignment(Qt.AlignCenter)
         rgl.addWidget(self.corner_label)
-        wrow = QHBoxLayout(); wrow.setSpacing(6)
         wr = QPushButton(tr("btn_apply_warp")); wr.clicked.connect(self._manual_warp); wr.setStyleSheet(self._btn_css())
         wc = QPushButton(tr("btn_reset_corners")); wc.clicked.connect(self._clear_corners); wc.setStyleSheet(self._btn_css())
-        wrow.addWidget(wr); wrow.addWidget(wc)
-        rgl.addLayout(wrow)
+        rgl.addWidget(wr); rgl.addWidget(wc)
         crv.addWidget(region)
         v.addWidget(crop)
 
@@ -318,10 +316,16 @@ class GeometryMixin:
 
     def _show_correct_tool(self, name):
         index, group = self.correct_tools[name]
-        for _, widget in self.correct_tools.values():
-            widget.setVisible(widget is group)
+        visible = {'rotate', 'flip'} if name in ('rotate', 'flip') else (
+            {'bow', 'shear'} if name in ('bow', 'shear') else {name})
+        for key, (_, widget) in self.correct_tools.items():
+            widget.setVisible(key in visible)
         self.correction_tabs.setCurrentIndex(index)
         self.chk_guides.setVisible(index == 0)
+
+    def _apply_crop_or_perspective(self):
+        if self.gel.mode == 'corner': self._manual_warp()
+        else: self._apply_crop()
 
     @memory_safe_edit
     def _apply_crop(self):

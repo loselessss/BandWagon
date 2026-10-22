@@ -59,7 +59,7 @@ class CropWorkflowTest(unittest.TestCase):
         self.assertEqual(self.win.ribbon.currentIndex(), 0)
         self.assertEqual(self.win._active_tool, 'rotate')
         self.assertTrue(self.win.ribbon_strips[0].buttons['rotate'].isChecked())
-        self.assertEqual(self.win.settings_title.text(), tr('tool_rotate'))
+        self.assertEqual(self.win.settings_title.text(), tr('tool_orientation'))
         self.assertTrue(self.win.rot_spin.isVisible())
 
     def test_automatic_area_detection_is_first_crop_action(self):

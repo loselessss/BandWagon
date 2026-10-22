@@ -12,7 +12,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from PIL import Image, ImageDraw
-from PyQt5.QtCore import QSettings, Qt
+from PyQt5.QtCore import QSettings, Qt, QPoint
 from PyQt5.QtGui import QFontDatabase, QFont
 from PyQt5.QtWidgets import QApplication
 from bandwagon.app import Analyzer
@@ -93,6 +93,9 @@ def main():
         win.grab().save(str(output / f'calm-expanded-{scale}.png'))
         win.resize(900, 620); app.processEvents()
         win.grab().save(str(output / f'calm-expanded-narrow-{scale}.png'))
+        win.options_menu.popup(win.options_button.mapToGlobal(QPoint(0, win.options_button.height())))
+        app.processEvents(); win.options_menu.grab().save(str(output / f'options-{scale}.png'))
+        win.options_menu.hide()
         dialog = ExportDialog(source, win.lanes, win._layout_settings, win)
         dialog.checks["photo"].setChecked(False)
         dialog.refresh_preview(); dialog.show(); app.processEvents()

@@ -2,7 +2,7 @@
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QToolButton,
                             QScrollArea, QTabWidget, QButtonGroup, QLabel,
-                            QPushButton, QAction, QMessageBox)
+                            QPushButton, QAction, QMessageBox, QMenu)
 from .fluent_icons import icon
 from .i18n import tr
 from .theme import *
@@ -54,7 +54,7 @@ class RibbonMixin:
         self.ribbon = QTabWidget(); self.ribbon.setFixedHeight(84)
         self.ribbon.setStyleSheet(self._tabs_css() + 'QTabBar::tab{padding:8px 12px;}')
         self.ribbon_strips = []; self.ribbon_tools = {}
-        self._ribbon_last = {0: 'rotate', 1: 'manual_lanes', 2: 'marker', 3: 'results'}
+        self._ribbon_last = {0: 'rotate', 1: 'marker', 2: 'manual_lanes', 3: 'results'}
         self._lane_last_tool = 'manual_lanes'
         self._active_tool = 'rotate'; self._switching_tool = False
         def action(key, label, symbol, fn): return (key, label, symbol, fn, False)
@@ -63,19 +63,19 @@ class RibbonMixin:
         pages = [
             ('workflow_prepare', [action('open','dlg_open_title','open',self.open_anything),
                 action('paste','toolbar_paste','paste',self.paste_image)]
-                + [setting(k,'tool_'+k, sym) for k,sym in (
-                ('rotate','rotate'),('flip','flip'),('bow','curve'),('crop','crop'),
-                ('shear','shear'),('brightness','adjust'),('curve','curve'))]
+                + [setting(k, label, sym) for k,label,sym in (
+                ('rotate','tool_orientation','rotate'),('crop','tool_crop','crop'),
+                ('bow','tool_shape','curve'),('brightness','tool_brightness','adjust'),('curve','tool_curve','curve'))]
                 + [action('invert','tool_invert','color',self._invert_ribbon_colors)]),
+            ('workflow_marker', [setting('marker','tool_marker','marker')]),
             ('workflow_lanes', [setting(k, 'tool_lane_adjust' if k == 'manual_lanes' else 'tool_'+k, sym) for k,sym in (
                 ('manual_lanes','lanes'),('lane_list','memo'),('range','crop'))]),
-            ('workflow_marker', [setting('marker','tool_marker','marker'),
-                action('marker_presets','tool_marker_presets','marker',self._open_marker_presets)]),
             ('workflow_results', [setting('results','tool_results','analysis'),
                 setting('quant','tab_std','quant'),
+                action('copy','toolbar_copy_result','copy',self.copy_image),
                 action('image','toolbar_save_result','save',self.save_image),
                 action('csv','toolbar_export_csv','download',self.export_csv)])]
-        category_icons = ('adjust', 'lanes', 'marker', 'analysis')
+        category_icons = ('adjust', 'marker', 'lanes', 'analysis')
         existing_tips = {
             'save': 'toolbar_project_save_tip', 'save_as': 'toolbar_project_save_as_tip',
             'copy': 'toolbar_copy_result_tip', 'image': 'toolbar_save_result_tip',
@@ -110,8 +110,22 @@ class RibbonMixin:
         self.memo_action.setCheckable(True); self.memo_action.setToolTip(tr('ribbon_tip_memo'))
         self.memo_action.triggered.connect(lambda: self._select_ribbon_tool('memo'))
         self.m_file.addSeparator(); self.m_file.addAction(self.memo_action)
-        for menu in (self.m_western, self.m_edit, self.m_info): self.m_file.addMenu(menu)
+        for menu in (self.m_western, self.m_edit): self.m_file.addMenu(menu)
         self.ribbon.setCornerWidget(quick, Qt.TopLeftCorner)
+        self.options_menu = QMenu(tr('workflow_options'), self)
+        self.marker_presets_action = self.options_menu.addAction(icon('marker'), tr('tool_marker_presets'))
+        self.marker_presets_action.setToolTip(tr('marker_preset_btn_tip'))
+        self.marker_presets_action.triggered.connect(self._open_marker_presets)
+        self.options_menu.addSeparator()
+        self.options_menu.addMenu(self.m_language)
+        for item in self.m_info.actions():
+            if not item.isSeparator() and item.menu() is not self.m_language:
+                self.options_menu.addAction(item)
+        options = QToolButton(); options.setText(tr('workflow_options')); options.setIcon(icon('adjust'))
+        options.setToolButtonStyle(Qt.ToolButtonTextBesideIcon); options.setMenu(self.options_menu)
+        options.setPopupMode(QToolButton.InstantPopup); options.setToolTip(tr('workflow_options_tip'))
+        options.setMinimumHeight(32); self.options_button = options
+        self.ribbon.setCornerWidget(options, Qt.TopRightCorner)
         self.ribbon.currentChanged.connect(self._on_ribbon_category)
         self.ribbon.tabBarClicked.connect(self._on_workflow_tab_clicked)
         self._select_ribbon_tool('rotate')
@@ -145,19 +159,18 @@ class RibbonMixin:
         fresh = detected and not getattr(self, '_analysis_stale', False)
         calibrated = fresh and any(lane.kind == 'marker' and
             sum(value is not None and value > 0 for value in lane.mw) >= 2 for lane in self.lanes)
-        hints = ('workflow_prepare_hint', 'workflow_lanes_hint', 'workflow_marker_hint', 'workflow_results_hint')
+        hints = ('workflow_prepare_hint', 'workflow_marker_hint', 'workflow_lanes_hint', 'workflow_results_hint')
         hint = hints[stage]
         if not image: hint = 'workflow_empty_hint'
         elif stage in (1, 2, 3) and getattr(self, '_analysis_stale', False): hint = 'workflow_stale_hint'
-        elif stage == 1 and not detected: hint = 'workflow_detect_hint'
         elif stage == 2 and not fresh: hint = 'workflow_detect_hint'
         self.workflow_hint.setText(tr(hint))
         self.workflow_back.setVisible(stage > 0)
         self.workflow_back.setToolTip(tr('workflow_back_tip'))
-        self.workflow_next.setText(tr(('workflow_to_lanes', 'workflow_to_marker', 'workflow_to_results', 'toolbar_copy_result')[stage]))
-        self.workflow_next.setEnabled((image, fresh, calibrated, image)[stage])
+        self.workflow_next.setText(tr(('workflow_to_marker', 'workflow_to_lanes', 'workflow_to_results', 'toolbar_copy_result')[stage]))
+        self.workflow_next.setEnabled((image, image, fresh, image)[stage])
         self.workflow_next.setToolTip(tr(hint if not self.workflow_next.isEnabled() else
-                                      ('workflow_lanes_hint', 'workflow_marker_hint', 'workflow_results_hint', 'toolbar_copy_result_tip')[stage]))
+                                      ('workflow_marker_hint', 'workflow_lanes_hint', 'workflow_results_hint', 'toolbar_copy_result_tip')[stage]))
         selected = self.gel.selected_lane
         if selected in self.lanes:
             self.selected_lane_summary.setText(tr('workflow_selected_lane', name=selected.name,
@@ -165,10 +178,11 @@ class RibbonMixin:
         else: self.selected_lane_summary.setText(tr('workflow_select_lane_hint'))
         # Detection/assignment is primary until complete; afterwards the next
         # step is primary. Never present two competing blue execution buttons.
-        cta_state = (fresh, calibrated)
+        cta_state = (fresh, calibrated, bool(self.lanes), stage)
         if getattr(self, '_workflow_cta_state', None) != cta_state:
             self.btn_detect_bands.setStyleSheet(self._btn_css() if fresh else self._btn_accent_css())
-            self.btn_marker_setup.setStyleSheet(self._btn_css() if calibrated else self._btn_accent_css())
+            self.btn_marker_setup.setStyleSheet(self._btn_css() if calibrated or not self.lanes else self._btn_accent_css())
+            self.workflow_next.setStyleSheet(self._btn_css() if stage == 1 and self.lanes and not calibrated else self._btn_accent_css())
             self._workflow_cta_state = cta_state
 
     def _workflow_advance(self):
@@ -181,9 +195,12 @@ class RibbonMixin:
     def _run_band_detection(self):
         self._finish_tool_preview()
         if self.run_analysis():
-            self._select_ribbon_tool('manual_lanes')
-            button = self.btn_detect_bands
-            self.lane_settings_scroll.ensureWidgetVisible(button, 8, 0)
+            if (not self._compute_mw() and self._prepared_marker_pending
+                    and self.marker_preset_combo.currentData() is not None):
+                self._select_ribbon_tool('marker')
+                self._configure_marker_lane()
+            else:
+                self._select_ribbon_tool('results')
 
     def _invert_ribbon_colors(self):
         if self._orig is None: return
@@ -230,6 +247,7 @@ class RibbonMixin:
         if pending: self._refresh_after_pixels_changed()
 
     def _select_ribbon_tool(self, name):
+        name = {'flip': 'rotate', 'shear': 'bow'}.get(name, name)
         if name == 'auto_lanes':
             name = 'manual_lanes'
         if self._switching_tool: return

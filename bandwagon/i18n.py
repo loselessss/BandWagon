@@ -43,6 +43,13 @@ CURRENT_LANG = load_lang_setting()  # "ko" 또는 "en" — tr()이 참조하는 
 
 STRINGS = {
     "ko": {
+        "tool_orientation": "회전·뒤집기",
+        "tool_shape": "곡률·기울기",
+        "workflow_options": "옵션",
+        "workflow_options_tip": "마커 프리셋 관리, 언어, 사용법, 만든이와 업데이트를 엽니다.",
+        "marker_number_label": "마커 레인 번호 (왼쪽부터)",
+        "marker_number_invalid": "마커로 지정한 {n}번 레인이 없습니다. 검출된 {count}개 레인 중에서 다시 선택하세요.",
+        "marker_prepare_hint": "검출 전에 프리셋과 마커 레인 번호를 정할 수 있습니다. 밴드 개수가 맞으면 검출 직후 kDa를 계산하고, 다르면 대응을 확인합니다.",
         "workflow_prepare": "이미지 준비",
         "workflow_select_lane_hint": "이미지에서 레인을 선택하면 이름과 폭을 확인할 수 있습니다.",
         "workflow_selected_lane": "선택: {name}\n왼쪽 {left}px · 오른쪽 {right}px · 폭 {width}px",
@@ -56,9 +63,9 @@ STRINGS = {
         "workflow_to_marker": "다음: 마커 지정 →",
         "workflow_to_results": "다음: 결과 확인 →",
         "workflow_empty_hint": "이미지를 열거나 붙여넣어 시작하세요. 프로젝트 파일도 열 수 있습니다.",
-        "workflow_prepare_hint": "방향과 곡률을 먼저 맞추고 젤을 자르세요. 조정값은 즉시 반영되며 Ctrl+Z로 되돌릴 수 있습니다.",
-        "workflow_lanes_hint": "이미지에서 레인 경계를 직접 조정하세요. 확인이 끝나면 마커를 지정합니다.",
-        "workflow_marker_hint": "프리셋과 마커 레인을 고르고 마커 지정을 누르세요. 이미지에서 레인을 골라도 됩니다.",
+        "workflow_prepare_hint": "방향을 맞추고 젤을 자른 뒤 곡률·기울기를 보정하세요. 조정값은 즉시 반영되며 Ctrl+Z로 되돌릴 수 있습니다.",
+        "workflow_lanes_hint": "이미지에서 레인 경계를 조정하고 밴드 검출을 실행하세요. 준비한 마커가 맞으면 kDa가 바로 계산됩니다.",
+        "workflow_marker_hint": "검출 전에 프리셋과 마커 레인 번호를 준비하세요. 검출 후에는 이미지에서 레인을 골라 지정할 수 있습니다.",
         "workflow_results_hint": "이미지에서 레인·밴드를 고르면 해당 결과로 이동합니다. 복사 옵션에서 내보낼 항목을 선택하세요.",
         "workflow_detect_hint": "레인을 지정하고 밴드 검출을 실행하세요. 상단 단계는 언제든 자유롭게 이동할 수 있습니다.",
         "workflow_stale_hint": "이미지·레인·검출 설정이 바뀌었습니다. 레인·밴드 확인으로 돌아가 밴드를 다시 검출하세요.",
@@ -256,7 +263,7 @@ STRINGS = {
         "tool_export": "내보내기",
         "crop_hint": "드래그로 범위를 그리고, 변·모서리 손잡이로 크기를 조절하세요. 영역 안쪽을 끌면 이동합니다. Enter/더블클릭: 적용 · Esc: 취소.",
         "crop_reset": "전체 영역으로",
-        "manual_perspective": "수동 원근 보정",
+        "manual_perspective": "수동 원근 보조 자르기",
         "status_lane_overlap": "다른 레인과 겹치는 영역에는 레인을 추가할 수 없습니다. 빈 영역을 선택하거나 기존 경계를 조절하세요.",
         "crop_select": "영역 지정",
         "crop_apply": "자르기 적용",
@@ -315,11 +322,11 @@ STRINGS = {
         "ribbon_tip_location": "현재 프로젝트가 저장된 폴더를 엽니다.",
         "ribbon_tip_csv": "샘플·밴드·MW·강도·Volume 결과를 CSV 파일로 내보냅니다.",
         "ribbon_tip_memo": "프로젝트와 함께 저장할 실험 메모를 편집합니다.",
-        "ribbon_tip_rotate": "90도 회전과 정밀 회전을 설정합니다. 자르기 전에 방향을 맞추세요.",
+        "ribbon_tip_rotate": "90도·정밀 회전과 좌우·상하 뒤집기를 설정합니다. 자르기 전에 방향을 맞추세요.",
         "ribbon_tip_flip": "이미지를 좌우 또는 상하로 뒤집습니다.",
         "ribbon_tip_crop": "젤 영역을 잘라내거나, 자동 인식·네 모서리 지정으로 원근을 펴서 자릅니다.",
         "ribbon_tip_warp": "젤의 모서리를 지정하거나 자동 인식하여 원근을 펴는 설정을 엽니다.",
-        "ribbon_tip_bow": "미리보기의 기준선 손잡이로 휘어진 밴드를 수평으로 펴는 설정을 엽니다.",
+        "ribbon_tip_bow": "기준선·곡률로 휘어진 밴드를 펴고 전단 기울기를 조정합니다.",
         "ribbon_tip_shear": "기울어진 레인의 전단 기울기를 조절합니다.",
         "ribbon_tip_brightness": "미리보기의 밝기와 대비를 조절합니다. 정량값은 바뀌지 않습니다.",
         "ribbon_tip_curve": "톤 커브로 화면의 명암을 조절합니다. 정량값은 바뀌지 않습니다.",
@@ -358,7 +365,7 @@ STRINGS = {
         "corner_click_order": "이미지 위에서 드래그해 사각형을 만든 뒤, 네 모서리를 끌어 맞추고 Enter를 누르거나 '변환 실행'을 클릭하세요.\n(똑바른 젤이면 그대로 자르기, 기울었으면 펴집니다)",
         "corner_count": "코너 {n}/4",
         "corner_count_auto": "코너 4/4 (자동)",
-        "btn_apply_warp": "변환 실행",
+        "btn_apply_warp": "선택 영역 펴서 자르기",
         "btn_reset_corners": "코너 초기화",
         "group_region": "자르기 / 펴기",
         "group_bow_correction": "부채꼴(곡률) 보정",
@@ -470,7 +477,7 @@ STRINGS = {
         "mode_lane_hint": "레인 조정 · 드래그로 추가 / 테두리로 폭 조절 / Esc로 종료",
         "mode_corner_hint": "젤 영역 지정 · 네 꼭짓점을 맞춘 뒤 Enter로 적용 / Esc로 종료",
         "mode_vrange_hint": "분석 범위 · 위아래로 드래그 / Esc로 종료",
-        "analysis_empty": "레인·밴드 확인에서 밴드를 검출한 뒤 마커 지정 단계로 진행하세요.",
+        "analysis_empty": "마커를 준비하고 레인·밴드 확인에서 밴드를 검출하세요.",
         "analysis_no_bands": "분석 완료 · 검출된 밴드가 없습니다. 레인 범위와 민감도를 확인하세요.",
         "analysis_stale": "분석 조건이 바뀌었습니다. 다시 분석하세요.",
         "analysis_ready": "밴드 {n}개 · 표와 이미지에서 선택할 수 있습니다.",
@@ -568,13 +575,13 @@ STRINGS = {
         "corner_name_bl": "4 좌하",
         "help_html":
             "<h3>기본 흐름</h3>"
-            "<p><b>이미지 준비 → 레인·밴드 확인 → 마커 지정 → 결과·내보내기</b> 순서로 진행합니다. "
+            "<p><b>이미지 준비 → 마커 지정 → 레인·밴드 확인 → 결과·내보내기</b> 순서로 진행합니다. "
             "각 단계는 자유롭게 오갈 수 있고, 오른쪽 아래 다음 버튼으로도 이어갈 수 있습니다.</p>"
 
             "<h3>리본 구성</h3>"
             "<p><b>파일</b>(새 창·열기·최근 파일·붙여넣기·프로젝트 저장/새로 저장/현재 위치 열기·"
             "결과 이미지 내보내기·메모) 안에 <b>웨스턴블롯</b>(합성 만들기·기존 합성 파일 불러오기), "
-            "<b>편집</b>(초기화·되돌리기), <b>정보</b>(사용법·개발자 정보·업데이트·언어)가 있습니다. "
+            "<b>편집</b>(초기화·되돌리기)이 있습니다. <b>옵션</b>에서 프리셋·언어·사용법·개발자 정보·업데이트를 엽니다. "
             "저장·되돌리기·다시하기는 왼쪽 위에서 항상 사용할 수 있습니다.</p>"
             "<p>상단 아이콘을 누르면 오른쪽에 그 도구의 설정만 표시됩니다. "
             "슬라이더 조정은 즉시 반영됩니다. 자르기·기준선을 편집하다 이동하면 적용/편집 취소/이동 취소를 묻습니다.</p>"
@@ -677,7 +684,7 @@ STRINGS = {
 
             "<h3>결과·내보내기 / 정량</h3>"
             "<p>검출된 밴드의 MW·강도·Volume 표를 보여줍니다. "
-            "MW는 마커 레인에 입력한 값을 기준으로 곡선 보간하여 계산되며, "
+            "MW 보간과 참고 R² 회귀는 마커와 샘플의 밴드 위쪽 경계를 기준으로 계산되며, "
             "정량 계산은 항상 보정 전 원본 데이터를 사용합니다.</p>"
 
             "<h3>메모</h3>"
@@ -701,6 +708,13 @@ STRINGS = {
             "</p>",
     },
     "en": {
+        "tool_orientation": "Rotate & flip",
+        "tool_shape": "Curvature & shear",
+        "workflow_options": "Options",
+        "workflow_options_tip": "Manage marker presets, language, help, author information and updates.",
+        "marker_number_label": "Marker lane number (from left)",
+        "marker_number_invalid": "Marker lane {n} does not exist. Choose one of the {count} detected lanes.",
+        "marker_prepare_hint": "Choose a preset and marker lane number before detection. Matching band counts calculate kDa immediately; mismatches require confirmation.",
         "workflow_prepare": "Prepare image",
         "workflow_select_lane_hint": "Select a lane on the image to inspect its name and width.",
         "workflow_selected_lane": "Selected: {name}\nLeft {left}px · Right {right}px · Width {width}px",
@@ -714,9 +728,9 @@ STRINGS = {
         "workflow_to_marker": "Next: assign marker →",
         "workflow_to_results": "Next: view results →",
         "workflow_empty_hint": "Open or paste an image to start. Saved projects can be opened too.",
-        "workflow_prepare_hint": "Set orientation and curvature before cropping. Adjustments appear immediately and can be undone with Ctrl+Z.",
-        "workflow_lanes_hint": "Adjust lane edges directly on the image, then continue to marker assignment.",
-        "workflow_marker_hint": "Choose a preset and marker lane, then assign it. You can also select the lane on the image.",
+        "workflow_prepare_hint": "Set orientation, crop the gel, then correct curvature and shear. Adjustments appear immediately and can be undone with Ctrl+Z.",
+        "workflow_lanes_hint": "Adjust lane boundaries on the image, then detect bands. A matching prepared marker calculates kDa immediately.",
+        "workflow_marker_hint": "Prepare a preset and marker lane number before detection, or select a detected lane on the image to assign it.",
         "workflow_results_hint": "Select a lane or band on the image to find its result. Choose exported layers in the copy options.",
         "workflow_detect_hint": "Define lanes and detect bands. You can freely visit any step using the top navigation.",
         "workflow_stale_hint": "The image, lanes, or detection settings changed. Return to lanes & bands and run detection again.",
@@ -914,7 +928,7 @@ STRINGS = {
         "tool_export": "Export",
         "crop_hint": "Drag to select a crop; resize with edge or corner handles, or drag inside to move. Enter/double-click: apply; Esc: cancel.",
         "crop_reset": "Reset to full image",
-        "manual_perspective": "Manual perspective correction",
+        "manual_perspective": "Manual perspective-assisted crop",
         "status_lane_overlap": "Cannot add a lane overlapping another lane. Select an empty region or adjust existing boundaries.",
         "crop_select": "Select area",
         "crop_apply": "Apply crop",
@@ -973,11 +987,11 @@ STRINGS = {
         "ribbon_tip_location": "Open the folder containing the current project.",
         "ribbon_tip_csv": "Export sample, band, MW, intensity, and Volume results to CSV.",
         "ribbon_tip_memo": "Edit experiment notes saved with the project.",
-        "ribbon_tip_rotate": "Set quarter-turn or fine rotation. Orient the image before cropping.",
+        "ribbon_tip_rotate": "Set quarter-turn/fine rotation and horizontal/vertical flips. Orient the image before cropping.",
         "ribbon_tip_flip": "Flip the image horizontally or vertically.",
         "ribbon_tip_crop": "Crop the gel region or straighten and crop its perspective using automatic detection or four corners.",
         "ribbon_tip_warp": "Open perspective correction using manually selected or detected gel corners.",
-        "ribbon_tip_bow": "Open curvature correction and use the preview reference handles to flatten curved bands.",
+        "ribbon_tip_bow": "Flatten curved bands using reference handles or curvature, and adjust shear.",
         "ribbon_tip_shear": "Adjust shear to straighten slanted lanes.",
         "ribbon_tip_brightness": "Adjust preview brightness and contrast without changing quantitative values.",
         "ribbon_tip_curve": "Adjust display tones with a curve without changing quantitative values.",
@@ -1016,7 +1030,7 @@ STRINGS = {
         "corner_click_order": "Drag a rectangle on the image, then drag the 4 corners to fit and press Enter or click 'Apply Warp'.\n(A straight gel is simply cropped; a tilted one is straightened.)",
         "corner_count": "Corners {n}/4",
         "corner_count_auto": "Corners 4/4 (auto)",
-        "btn_apply_warp": "Apply Warp",
+        "btn_apply_warp": "Straighten and crop selection",
         "btn_reset_corners": "Reset Corners",
         "group_region": "Crop / Warp",
         "group_bow_correction": "Bow (Curvature) Correction",
@@ -1128,7 +1142,7 @@ STRINGS = {
         "mode_lane_hint": "Lanes · Drag to add / Drag borders to resize / Esc to finish",
         "mode_corner_hint": "Gel region · Adjust four corners, then Enter to apply / Esc to finish",
         "mode_vrange_hint": "Analysis range · Drag vertically / Esc to finish",
-        "analysis_empty": "Detect bands in Check lanes & bands, then continue to Assign marker.",
+        "analysis_empty": "Prepare a marker and detect bands in Check lanes & bands.",
         "analysis_no_bands": "Analysis complete · No bands detected. Check lane ranges and sensitivity.",
         "analysis_stale": "Analysis settings changed. Run analysis again.",
         "analysis_ready": "{n} bands · Select in the table or image.",
@@ -1226,13 +1240,13 @@ STRINGS = {
         "corner_name_bl": "4 BL",
         "help_html":
             "<h3>Basic Workflow</h3>"
-            "<p><b>Prepare image → Check lanes &amp; bands → Assign marker → Results &amp; export.</b> "
+            "<p><b>Prepare image → Assign marker → Check lanes &amp; bands → Results &amp; export.</b> "
             "Visit steps freely, or use the next-step button below the settings.</p>"
 
             "<h3>Ribbon Layout</h3>"
             "<p><b>File</b> (New Window, Open, Recent Files, Paste, Save/Save As/Open Project Location, "
             "Export Result Image, Notes) also contains <b>Western Blot</b> (Create/load composite), "
-            "<b>Edit</b> (Reset All, Undo, Redo), and <b>Info</b> (Help, About, Updates, Language). "
+            "<b>Edit</b> (Reset All, Undo, Redo). <b>Options</b> contains presets, language, help, author details and updates. "
             "Save, Undo and Redo stay visible at the top left.</p>"
             "<p>Select an icon to show only that tool's settings beside the main preview. "
             "Slider adjustments appear immediately. Leaving a crop/reference-line edit asks whether to apply, discard, or keep editing.</p>"
@@ -1336,7 +1350,7 @@ STRINGS = {
 
             "<h3>Results &amp; Export / Standard Curve</h3>"
             "<p>Shows a table of MW/intensity/volume for detected bands. "
-            "MW is computed by curve interpolation from the values you entered on marker lanes, and "
+            "MW interpolation and reference R² use upper band boundaries for markers and samples, and "
             "quantification always uses the raw image data, before any adjustments.</p>"
 
             "<h3>Notes</h3>"

@@ -168,6 +168,12 @@ class LanesMixin:
         self.marker_lane_combo.setMinimumContentsLength(12)
         self.marker_lane_combo.currentIndexChanged.connect(self._on_marker_lane_changed)
         marker_layout.addWidget(self.marker_lane_combo)
+        self.marker_number_label = QLabel(tr('marker_number_label'))
+        marker_layout.addWidget(self.marker_number_label)
+        self.sp_marker_lane = QSpinBox(); self.sp_marker_lane.setRange(1, 60)
+        self.sp_marker_lane.setStyleSheet(self._spin_css())
+        self.sp_marker_lane.setToolTip(tr('marker_prepare_hint'))
+        marker_layout.addWidget(self.sp_marker_lane)
         self.marker_setup_status = QLabel(); self.marker_setup_status.setWordWrap(True)
         self.marker_setup_status.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         marker_layout.addWidget(self.marker_setup_status)
@@ -175,6 +181,9 @@ class LanesMixin:
         self.btn_marker_setup.setStyleSheet(self._btn_accent_css())
         self.btn_marker_setup.clicked.connect(lambda _checked=False: self._configure_marker_lane())
         marker_layout.addWidget(self.btn_marker_setup)
+        self._prepared_marker_pending = False
+        self.marker_preset_combo.currentIndexChanged.connect(self._on_prepared_marker_changed)
+        self.sp_marker_lane.valueChanged.connect(self._on_prepared_marker_changed)
         h.addWidget(manual)
         v.addWidget(box)
         v.addWidget(management); v.addWidget(marker_box)
@@ -378,9 +387,10 @@ class LanesMixin:
         self.band_detect_wrap.setVisible(show_detection)
         has_table = name == 'lane_list'
         self.lane_table.setVisible(has_table)
-        self.lane_settings_scroll.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
-        self.lane_panel_layout.setStretch(0, 0)
-        self.lane_panel_layout.setStretch(self.lane_panel_bottom_index, 0 if has_table else 1)
+        self.lane_settings_scroll.setSizePolicy(QSizePolicy.Preferred,
+            QSizePolicy.Maximum if has_table else QSizePolicy.Expanding)
+        self.lane_panel_layout.setStretch(0, 0 if has_table else 1)
+        self.lane_panel_layout.setStretch(self.lane_panel_bottom_index, 0)
         self.lane_settings_scroll.widget().layout().invalidate()
         self.lane_settings_scroll.updateGeometry()
         if name == 'marker':
@@ -395,12 +405,30 @@ class LanesMixin:
 
     def _update_marker_presets(self):
         previous = self.marker_preset_combo.currentData()
+        self.marker_preset_combo.blockSignals(True)
         self.marker_preset_combo.clear()
         self.marker_preset_combo.addItem(tr('preset_manual_entry'), None)
         for preset in load_marker_presets():
             self.marker_preset_combo.addItem(preset['name'], preset)
             if previous and preset['name'] == previous['name']:
                 self.marker_preset_combo.setCurrentIndex(self.marker_preset_combo.count() - 1)
+        self.marker_preset_combo.blockSignals(False)
+
+    def _on_prepared_marker_changed(self, *_):
+        self._prepared_marker_pending = True
+        self._update_marker_controls()
+
+    def _apply_prepared_marker(self):
+        """Only exact, top-to-bottom matches may be applied unattended."""
+        preset = self.marker_preset_combo.currentData()
+        if preset is None or not self._prepared_marker_pending: return False
+        row = self.sp_marker_lane.value() - 1
+        if not 0 <= row < len(self.lanes): return False
+        lane = self.lanes[row]
+        if lane.peaks is None or len(lane.peaks) != len(preset['mw']): return False
+        lane.kind = 'marker'; lane.marker_mw = list(preset['mw'])
+        self._prepared_marker_pending = False
+        return True
 
     def _update_marker_controls(self):
         if not hasattr(self, 'marker_lane_combo'): return
@@ -417,18 +445,28 @@ class LanesMixin:
         if selected is None:
             selected = next((i for i, lane in enumerate(self.lanes)
                              if lane is self.gel.selected_lane or lane.kind == 'marker'), 0)
+        if self._prepared_marker_pending:
+            requested = self.sp_marker_lane.value() - 1
+            selected = requested if requested < len(self.lanes) else -1
         self.marker_lane_combo.setCurrentIndex(selected if self.lanes else -1)
         self.marker_lane_combo.blockSignals(False)
-        self.btn_marker_setup.setEnabled(bool(self.lanes))
-        self._on_marker_lane_changed(self.marker_lane_combo.currentIndex())
+        prepared = self.marker_preset_combo.currentData() is not None
+        self.btn_marker_setup.setEnabled(bool(self.lanes) or (self._orig is not None and prepared))
+        self.marker_lane_combo.setVisible(bool(self.lanes))
+        self.sp_marker_lane.setVisible(not self.lanes or selected == -1)
+        self.marker_number_label.setVisible(not self.lanes or selected == -1)
+        self._on_marker_lane_changed(self.marker_lane_combo.currentIndex(), refreshing=True)
 
-    def _on_marker_lane_changed(self, index):
+    def _on_marker_lane_changed(self, index, refreshing=False):
         lane = self.lanes[index] if 0 <= index < len(self.lanes) else None
+        if lane is not None and not refreshing:
+            self.sp_marker_lane.blockSignals(True); self.sp_marker_lane.setValue(index + 1)
+            self.sp_marker_lane.blockSignals(False)
         if getattr(self, '_active_tool', None) == 'marker':
             self.gel.selected_lane = lane
             self.gel.update()
         if lane is None:
-            text = tr('marker_setup_no_lanes')
+            text = tr('marker_number_invalid', n=self.sp_marker_lane.value(), count=len(self.lanes)) if self.lanes else tr('marker_prepare_hint')
         elif lane.peaks is None or getattr(self, '_analysis_stale', False):
             text = tr('marker_setup_needs_detection')
         else:
@@ -437,10 +475,16 @@ class LanesMixin:
 
     def _configure_marker_lane(self):
         row = self.marker_lane_combo.currentIndex()
-        if not 0 <= row < len(self.lanes): return
+        if not 0 <= row < len(self.lanes):
+            if self.lanes: return  # never substitute the last lane for an invalid prepared number
+            if self.marker_preset_combo.currentData() is not None and self._orig is not None:
+                self._prepared_marker_pending = True
+                self._select_ribbon_tool('manual_lanes')
+            return
         combo = self.lane_table.cellWidget(row, 1)
         combo.setCurrentIndex(1)
         self._set_lane_kind(self.lanes[row], 1, combo)
+        if self.lanes[row].kind == 'marker': self._prepared_marker_pending = False
 
     def _build_tab_analysis(self):
         page = self._new_page(); v = QVBoxLayout(page); v.setContentsMargins(10, 10, 10, 10); v.setSpacing(8)
@@ -858,6 +902,8 @@ class LanesMixin:
         재현한다). 사용자가 직접 누르는 '레인 전체 삭제' 버튼은
         _on_clear_lanes_clicked가 처리한다."""
         self.lanes = []
+        if hasattr(self, 'marker_preset_combo') and self.marker_preset_combo.currentData() is not None:
+            self._prepared_marker_pending = True
         self.gel.selected_band = None
         self.gel.set_lanes([])
         self.profile.set_lanes([])
@@ -1008,7 +1054,7 @@ class LanesMixin:
         if self.lanes:
             self._analysis_stale = True
             self._update_analysis_notice()
-            self._on_marker_lane_changed(self.marker_lane_combo.currentIndex())
+            self._on_marker_lane_changed(self.marker_lane_combo.currentIndex(), refreshing=True)
 
     def _update_analysis_notice(self):
         if not hasattr(self, "analysis_notice"):
@@ -1134,6 +1180,7 @@ class LanesMixin:
         for lane in self.lanes:
             lane.analyze(self._gray_orig, prom, dist, threshold_pct=thresh,
                          y_top=y_top, y_bot=y_bot, smear_max_px=smear_max_px)
+        marker_changed = self._apply_prepared_marker()
         self.gel.selected_band = None  # 재분석하면 밴드 구성이 바뀔 수 있어 이전 강조는 무효화
         self.gel.set_lanes(self.lanes)
         self.profile.set_lanes(self.lanes)
@@ -1141,7 +1188,7 @@ class LanesMixin:
         self._analysis_stale = False
         self._refresh_results()
         self._compute_std()
-        self._on_marker_lane_changed(self.marker_lane_combo.currentIndex())
+        self._on_marker_lane_changed(self.marker_lane_combo.currentIndex(), refreshing=True)
         total = sum(len(l.peaks) for l in self.lanes if l.peaks is not None)
         n_smear = sum(getattr(l, "n_smear", 0) for l in self.lanes)
         if n_smear > 0:
@@ -1149,6 +1196,7 @@ class LanesMixin:
         else:
             self.status.showMessage(tr("status_analysis_done", n=total))
         self.gel.animate_detection_refresh()
+        if marker_changed: self._commit_lanes()
         return True
 
     def _compute_mw(self):
@@ -1166,7 +1214,7 @@ class LanesMixin:
             n = min(len(lane.peaks), len(lane.marker_mw))
             for i in range(n):
                 if lane.marker_mw[i] > 0:
-                    rf.append(lane.peaks[i] / H); logmw.append(np.log10(lane.marker_mw[i]))
+                    rf.append(lane.mw_reference_y(i) / H); logmw.append(np.log10(lane.marker_mw[i]))
         if len(rf) < 2:
             return False
 
@@ -1207,8 +1255,8 @@ class LanesMixin:
                 lane.mw += [None] * (len(lane.peaks) - n)
             else:
                 mw_list = []
-                for py in lane.peaks:
-                    x = py / H
+                for index in range(len(lane.peaks)):
+                    x = lane.mw_reference_y(index) / H
                     # 마커 범위 밖(가장 큰/작은 마커보다 더 위/아래)은 외삽이라
                     # 신뢰도가 떨어지므로 범위 끝값으로 고정(clamp)해 비현실적인
                     # 값이 나오지 않게 한다.

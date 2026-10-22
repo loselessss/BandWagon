@@ -276,7 +276,7 @@ class GelInteractionsTest(unittest.TestCase):
             self.assertEqual(win.analysis_notice.text(), tr("analysis_no_bands"))
             win._select_ribbon_tool('bow')
             self.assertTrue(win.bow_spin.isVisibleTo(win.correction_tabs))
-            self.assertFalse(win.shear_spin.isVisibleTo(win.correction_tabs))
+            self.assertTrue(win.shear_spin.isVisibleTo(win.correction_tabs))
             win._select_ribbon_tool('shear')
             self.assertTrue(win.shear_spin.isVisibleTo(win.correction_tabs))
             self.assertFalse(win.band_settings_toggle.isChecked())

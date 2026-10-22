@@ -79,8 +79,10 @@ class AdjustControlsTest(unittest.TestCase):
                                   tr("group_bow_correction"), tr("group_shear_correction")])
         for name in self.win.correct_tools:
             self.win._select_ribbon_tool(name)
+            expected = ['rotate', 'flip'] if name in ('rotate', 'flip') else (
+                ['bow', 'shear'] if name in ('bow', 'shear') else [name])
             self.assertEqual([key for key, (_, group) in self.win.correct_tools.items()
-                              if group.isVisibleTo(self.win.tabs)], [name])
+                              if group.isVisibleTo(self.win.tabs)], expected)
 
     def test_crop_ribbon_includes_warp_and_enter_uses_selected_operation(self):
         self.win._select_ribbon_tool('crop')

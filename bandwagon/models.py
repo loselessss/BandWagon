@@ -111,6 +111,19 @@ class Lane:
     def color(self):
         return LANE_PALETTE[self.idx % len(LANE_PALETTE)]
 
+    def mw_reference_y(self, index):
+        """Use the band's upper boundary for both calibration and unknowns.
+
+        Legacy/imported results without boundaries retain their peak coordinate.
+        Display style (area/line) must never change the numerical reference.
+        """
+        peak = float(self.peaks[index])
+        if self.peak_bounds is not None and index < len(self.peak_bounds):
+            top, bottom = self.peak_bounds[index]
+            if np.isfinite(top) and np.isfinite(bottom) and 0 <= top <= peak <= bottom:
+                return float(top)
+        return peak
+
     def to_dict(self):
         """프로젝트 저장용 — 분석 '입력'만 저장한다(검출 결과는 저장 안 함).
         불러온 뒤 run_analysis()를 다시 돌리면 같은 입력에서 100% 동일한
