@@ -93,6 +93,16 @@ def main():
         win.grab().save(str(output / f'calm-expanded-{scale}.png'))
         win.resize(900, 620); app.processEvents()
         win.grab().save(str(output / f'calm-expanded-narrow-{scale}.png'))
+        win._select_ribbon_tool('quant'); app.processEvents()
+        win.grab().save(str(output / f'quant-setup-narrow-{scale}.png'))
+        scroll = win.tabs.currentWidget()
+        assert scroll.horizontalScrollBar().maximum() == 0, 'Quant controls overflow horizontally'
+        assert win.workflow_next.isVisible(), 'Quant return action is inaccessible'
+        win._select_ribbon_tool('rotate'); app.processEvents()
+        western = win.ribbon_strips[0].buttons['western']
+        western.menu().popup(western.mapToGlobal(QPoint(0, western.height())))
+        app.processEvents(); western.menu().grab().save(str(output / f'western-entry-{scale}.png'))
+        western.menu().hide()
         win.options_menu.popup(win.options_button.mapToGlobal(QPoint(0, win.options_button.height())))
         app.processEvents(); win.options_menu.grab().save(str(output / f'options-{scale}.png'))
         win.options_menu.hide()

@@ -52,6 +52,7 @@ class ToolStrip(QWidget):
 class RibbonMixin:
     def _build_ribbon(self):
         self.ribbon = QTabWidget(); self.ribbon.setFixedHeight(84)
+        self.ribbon.setUsesScrollButtons(False); self.ribbon.setElideMode(Qt.ElideRight)
         self.ribbon.setStyleSheet(self._tabs_css() + 'QTabBar::tab{padding:8px 12px;}')
         self.ribbon_strips = []; self.ribbon_tools = {}
         self._ribbon_last = {0: 'rotate', 1: 'marker', 2: 'manual_lanes', 3: 'results'}
@@ -62,7 +63,8 @@ class RibbonMixin:
             return (key, label, symbol, lambda: self._select_ribbon_tool(key), True)
         pages = [
             ('workflow_prepare', [action('open','dlg_open_title','open',self.open_anything),
-                action('paste','toolbar_paste','paste',self.paste_image)]
+                action('paste','toolbar_paste','paste',self.paste_image),
+                action('western','menu_western','open',lambda: None)]
                 + [setting(k, label, sym) for k,label,sym in (
                 ('rotate','tool_orientation','rotate'),('crop','tool_crop','crop'),
                 ('bow','tool_shape','curve'),('brightness','tool_brightness','adjust'),('curve','tool_curve','curve'))]
@@ -86,9 +88,13 @@ class RibbonMixin:
         for index, (title, commands) in enumerate(pages):
             strip = ToolStrip(commands); self.ribbon.addTab(strip, f'{index + 1}  {tr(title)}'); self.ribbon_strips.append(strip)
             self.ribbon.setTabIcon(index, icon(category_icons[index]))
+            self.ribbon.setTabToolTip(index, tr(('workflow_prepare_hint', 'workflow_marker_hint',
+                                               'workflow_lanes_hint', 'workflow_results_hint')[index]))
             for key, _, _, _, selectable in commands:
                 if selectable: self.ribbon_tools[key] = (index, strip.buttons[key])
                 strip.buttons[key].setToolTip(tr(existing_tips.get(key, 'ribbon_tip_' + key)))
+        western = self.ribbon_strips[0].buttons['western']
+        western.setMenu(self.m_western); western.setPopupMode(QToolButton.InstantPopup)
         # File and infrequent utilities remain reachable without pretending to
         # be steps in the analysis workflow. History stays visible at all times.
         quick = QWidget(); row = QHBoxLayout(quick); row.setContentsMargins(0, 0, 8, 0); row.setSpacing(2)
@@ -171,11 +177,19 @@ class RibbonMixin:
         self.workflow_next.setEnabled((image, image, fresh, image)[stage])
         self.workflow_next.setToolTip(tr(hint if not self.workflow_next.isEnabled() else
                                       ('workflow_marker_hint', 'workflow_lanes_hint', 'workflow_results_hint', 'toolbar_copy_result_tip')[stage]))
+        if stage == 3 and getattr(self, '_active_tool', '') == 'quant':
+            quant_hint = ('workflow_empty_hint' if not image else
+                          'workflow_stale_hint' if getattr(self, '_analysis_stale', False) else 'quant_workflow_hint')
+            self.workflow_hint.setText(tr(quant_hint))
+            self.workflow_next.setText(tr('quant_to_results'))
+            self.workflow_next.setEnabled(image)
+            self.workflow_next.setToolTip(tr('quant_to_results_tip'))
         selected = self.gel.selected_lane
         if selected in self.lanes:
             self.selected_lane_summary.setText(tr('workflow_selected_lane', name=selected.name,
                 left=selected.x1, right=selected.x2, width=selected.x2 - selected.x1 + 1))
         else: self.selected_lane_summary.setText(tr('workflow_select_lane_hint'))
+        self._sync_quant_controls()
         # Detection/assignment is primary until complete; afterwards the next
         # step is primary. Never present two competing blue execution buttons.
         cta_state = (fresh, calibrated, bool(self.lanes), stage)
@@ -189,7 +203,8 @@ class RibbonMixin:
         self._update_workflow_state()
         if not self.workflow_next.isEnabled(): return
         stage = self.ribbon.currentIndex()
-        if stage == 3: self.copy_image()
+        if stage == 3 and self._active_tool == 'quant': self._select_ribbon_tool('results')
+        elif stage == 3: self.copy_image()
         else: self.ribbon.setCurrentIndex(stage + 1)
 
     def _run_band_detection(self):
@@ -215,12 +230,15 @@ class RibbonMixin:
         if self._active_tool == 'memo' and index == self.ribbon.currentIndex():
             self._select_ribbon_tool(self._ribbon_last[index])
 
-    def _confirm_tool_change(self):
+    def _confirm_tool_change(self, for_output=False):
         editor = getattr(self, '_inline_curve', None)
         curve = editor is not None and any(abs(y - editor.baseline) > 1e-6 for _, y in editor.points)
         crop = (self.gel.mode == 'crop' and self.gel.crop_rect is not None
                 and not self.gel._crop_fresh)
-        if not curve and not crop: return True
+        # Corner coordinates may stay parked while visiting other stages.
+        # Resolve them only on explicit output, not on every navigation click.
+        corners = for_output and self.gel.mode == 'corner' and bool(self.gel.corners)
+        if not curve and not crop and not corners: return True
         box = self._box(QMessageBox.Question, tr('workflow_pending_title'), tr('workflow_pending_text'))
         apply = box.addButton(tr('workflow_apply_continue'), QMessageBox.AcceptRole)
         discard = box.addButton(tr('workflow_discard_continue'), QMessageBox.DestructiveRole)
@@ -230,10 +248,17 @@ class RibbonMixin:
         if clicked is apply:
             if editor is not None: editor.apply()
             elif crop: self._apply_crop()
+            elif corners:
+                if len(self.gel.corners) != 4:
+                    self.status.showMessage(tr('workflow_corners_incomplete'), 7000)
+                    return False
+                self._manual_warp()
+                return not bool(self.gel.corners)
             return True
         if clicked is discard:
             if editor is not None: editor.cancel()
             if crop: self._cancel_crop()
+            if corners: self._clear_corners()
             return True
         return False
 

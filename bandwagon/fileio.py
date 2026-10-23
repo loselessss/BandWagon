@@ -144,10 +144,8 @@ class FileIOMixin:
         """확장자를 보고 그림/프로젝트/합성 파일을 알아서 연다.
         open_anything()의 새 창뿐 아니라, 탐색기에서 파일을 더블클릭해
         실행됐을 때(커맨드라인 인자로 경로가 넘어옴, __main__.py 참고)도
-        쓴다. .bwcomposite는 메인 창에서 바로 분석을 시작하면서, 빈 합성
-        스튜디오도 비모달로 같이 띄운다(원본 가시광/UV 사진은 파일 안에
-        없어 이 파일 자체를 스튜디오로 다시 불러올 순 없지만, 새로 합성을
-        만들거나 다른 합성 파일을 불러올 때 바로 쓸 수 있게).
+        쓴다. .bwcomposite는 분석 화면으로 바로 불러온다. 합성 편집은
+        이미지 준비의 웨스턴블롯 메뉴에서 명시적으로 연다.
 
         어떤 경로로 열렸든(메뉴/파일 연결/"최근 파일") 여기 한 곳만 거치므로
         "최근 파일" 기록도 여기서 공통으로 한다."""
@@ -157,7 +155,6 @@ class FileIOMixin:
             self.open_project(path)
         elif lower.endswith(".bwcomposite"):
             self.import_composite(path)
-            self._show_composite_studio_window()
         else:
             self.load_image(path)
 
@@ -178,7 +175,7 @@ class FileIOMixin:
                 self._last_dir = dlg._last_dir
             if result == QDialog.Accepted and dlg.last_export_path:
                 if self._ask(tr("composite_open_now_title"), tr("composite_open_now_msg")):
-                    self.import_composite(dlg.last_export_path)
+                    self._open_path_here_or_new_window(dlg.last_export_path)
 
         dlg.finished.connect(_on_finished)
         dlg.setModal(False)
@@ -224,6 +221,7 @@ class FileIOMixin:
         여기서 비운다 — 새 pristine은 다음 _record_op 때 현재 _orig 기준으로
         자동 재설정된다."""
         self._detach_recovery()
+        self._project_marker_preset = None
         previous_history_suspended = self._history_suspended
         self._history_suspended = True
         self._edit_pristine = None
@@ -319,6 +317,13 @@ class FileIOMixin:
                 "vrange": list(self.gel.vrange) if self.gel.vrange else None,
             },
         }
+        # Navigation/selection alone is not an unsaved edit. A prepared marker
+        # is analysis input, however, and must trigger save/recovery prompts.
+        if self._prepared_marker_pending and self.marker_preset_combo.currentData() is not None:
+            meta['marker_preparation'] = {
+                'preset': self.marker_preset_combo.currentData(),
+                'number': self.sp_marker_lane.value(),
+            }
         h.update(json.dumps(meta, sort_keys=True).encode())
         return h.hexdigest()
 
@@ -381,7 +386,7 @@ class FileIOMixin:
             dialog.deleteLater()
 
     def copy_image(self):
-        self._finish_tool_preview()
+        if not self._prepare_output(): return
         src = self._display or self._orig
         if src is None:
             self.status.showMessage(tr("nothing_to_copy_msg")); return
@@ -393,7 +398,7 @@ class FileIOMixin:
         self.status.showMessage(tr("status_copied_to_clipboard"))
 
     def save_image(self):
-        self._finish_tool_preview()
+        if not self._prepare_output(): return
         src = self._display or self._orig
         if src is None:
             self.status.showMessage(tr("nothing_to_save_msg")); return
@@ -414,6 +419,7 @@ class FileIOMixin:
         파일이 있으면(_current_project_path) 대화상자 없이 그 경로에 바로
         덮어쓴다. 아직 한 번도 저장한 적 없으면(경로를 모름) 어차피 경로를
         물어야 하므로 save_project_as()와 동일하게 동작한다."""
+        if not self._confirm_tool_change(for_output=True): return
         self._finish_tool_preview()
         if self._orig is None:
             self.status.showMessage(tr("nothing_to_save_msg")); return
@@ -425,6 +431,7 @@ class FileIOMixin:
     def save_project_as(self):
         """"프로젝트 새로 저장" — 이미 저장한 경로가 있어도 항상 새 파일
         이름/위치를 물어본다(사본 만들기 용도)."""
+        if not self._confirm_tool_change(for_output=True): return
         self._finish_tool_preview()
         if self._orig is None:
             self.status.showMessage(tr("nothing_to_save_msg")); return
@@ -456,11 +463,73 @@ class FileIOMixin:
                 "vrange": list(self.gel.vrange) if self.gel.vrange else None,
             },
             "has_results": any(l.peaks is not None for l in self.lanes),
+            "analysis_stale": getattr(self, '_analysis_stale', False),
             "has_wb_override": self._wb_gray_override is not None,
+            "workflow": self._capture_workflow(),
         }
         if recovery:
             project["recovery_source"] = self._base_title
         return project
+
+    def _capture_workflow(self):
+        selected = self.gel.selected_lane
+        return {
+            'tool': self._active_tool,
+            'stage': self.ribbon.currentIndex(),
+            'selected_lane': self.lanes.index(selected) if selected in self.lanes else None,
+            'marker_number': self.sp_marker_lane.value(),
+            'marker_preset': self.marker_preset_combo.currentData(),
+            'marker_pending': self._prepared_marker_pending,
+        }
+
+    def _restore_workflow(self, saved):
+        saved = saved if isinstance(saved, dict) else {}
+        preset = saved.get('marker_preset')
+        self.marker_preset_combo.blockSignals(True)
+        self.marker_preset_combo.setCurrentIndex(0)
+        if isinstance(preset, dict):
+            for index in range(1, self.marker_preset_combo.count()):
+                if self.marker_preset_combo.itemData(index) == preset:
+                    self.marker_preset_combo.setCurrentIndex(index); break
+            else:
+                # Keep the project's preset usable on another computer without
+                # altering that computer's global preset library.
+                values = preset.get('mw')
+                if (isinstance(preset.get('name'), str) and isinstance(values, list) and values
+                        and all(isinstance(value, (int, float)) and not isinstance(value, bool)
+                                and np.isfinite(value) and value >= 0 for value in values)):
+                    self._project_marker_preset = preset
+                    self.marker_preset_combo.addItem(preset['name'], preset)
+                    self.marker_preset_combo.setCurrentIndex(self.marker_preset_combo.count() - 1)
+        self.marker_preset_combo.blockSignals(False)
+        number = saved.get('marker_number')
+        if isinstance(number, int) and not isinstance(number, bool) and 1 <= number <= 60:
+            self.sp_marker_lane.setValue(number)
+        self._prepared_marker_pending = bool(saved.get('marker_pending', False))
+        self._update_marker_controls()
+        selected = saved.get('selected_lane')
+        if isinstance(selected, int) and not isinstance(selected, bool) and 0 <= selected < len(self.lanes):
+            self._on_gel_lane_selected(self.lanes[selected])
+        fallback = 'manual_lanes' if self.lanes else 'rotate'
+        if self.lanes and not self._analysis_stale and any(lane.peaks is not None for lane in self.lanes):
+            fallback = 'results'
+        tool = saved.get('tool', fallback)
+        if not isinstance(tool, str) or tool not in self.ribbon_tools and tool != 'memo': tool = fallback
+        if self._analysis_stale and tool in ('results', 'quant'): tool = 'manual_lanes'
+        if tool == 'memo':
+            stage = saved.get('stage', 0)
+            if isinstance(stage, int) and 0 <= stage < 4: self.ribbon.setCurrentIndex(stage)
+        self._select_ribbon_tool(tool)
+
+    def _prepare_output(self):
+        """Resolve pending edits and never export known out-of-date overlays."""
+        if not self._confirm_tool_change(for_output=True): return False
+        self._finish_tool_preview()
+        if self.lanes and getattr(self, '_analysis_stale', False):
+            self._select_ribbon_tool('manual_lanes')
+            self.status.showMessage(tr('workflow_export_stale'), 10000)
+            return False
+        return True
 
     def _write_project_file(self, path, recovery=False):
         temporary = None
@@ -596,8 +665,15 @@ class FileIOMixin:
             self._snapshot_document_baseline()
 
             self._refresh_display()
-            if self.lanes and project.get("has_results"):
+            # A preset prepared in the previous session must not overwrite a
+            # project's manual marker calibration during reconstruction.
+            self._prepared_marker_pending = False
+            stale = bool(project.get('analysis_stale', False))
+            if self.lanes and project.get("has_results") and not stale:
                 self.run_analysis()   # 저장 당시 분석 결과가 있었으면 동일 입력으로 재계산
+            self._analysis_stale = bool(self.lanes) and stale
+            self._refresh_results()
+            self._restore_workflow(project.get('workflow'))
             self._last_dir = str(Path(path).parent)
             self._current_project_path = path
             # _reset_session_state가 이미 한 번 스냅샷을 찍었지만, 그건 복원
@@ -623,7 +699,7 @@ class FileIOMixin:
             self._last_dir = dlg._last_dir
         if result == QDialog.Accepted and dlg.last_export_path:
             if self._ask(tr("composite_open_now_title"), tr("composite_open_now_msg")):
-                self.import_composite(dlg.last_export_path)
+                self._open_path_here_or_new_window(dlg.last_export_path)
 
     def import_composite(self, path=None):
         """.bwcomposite(합성 스튜디오 산출물)를 불러와 새 분석 세션을 시작한다.
@@ -640,6 +716,8 @@ class FileIOMixin:
                 tr("composite_file_filter"))
             if not path:
                 return
+            self._open_path_here_or_new_window(path)
+            return
         try:
             blend, gray = load_composite(path)
         except Exception as ex:
@@ -657,6 +735,7 @@ class FileIOMixin:
         self.status.showMessage(tr("status_composite_imported", path=Path(path).name))
 
     def export_csv(self):
+        if not self._prepare_output(): return
         if not any(l.peaks is not None for l in self.lanes):
             self.status.showMessage(tr("run_analysis_first_msg")); return
         default_path = str(Path(self._last_dir) / "gel_analysis.csv")

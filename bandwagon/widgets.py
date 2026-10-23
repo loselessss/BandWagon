@@ -1193,7 +1193,8 @@ class StdCurveView(QWidget):
         qp.drawRoundedRect(QRectF(0, 0, self.width(), self.height()), 8, 8)
         if self._xy is None:
             qp.setPen(QColor(MUTE)); qp.setFont(QFont("DejaVu Sans", 10))
-            qp.drawText(self.rect(), Qt.AlignCenter, tr("std_curve_empty_hint"))
+            qp.drawText(self.rect().adjusted(12, 8, -12, -8), Qt.AlignCenter | Qt.TextWordWrap,
+                        tr("std_curve_empty_hint"))
             return
         pad = 34
         w = self.width() - 2 * pad; h = self.height() - 2 * pad

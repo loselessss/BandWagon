@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import (
     QComboBox, QFormLayout, QGroupBox, QHBoxLayout, QHeaderView,
     QInputDialog, QLabel, QPushButton, QSpinBox, QTableWidget,
     QTableWidgetItem, QTextEdit, QVBoxLayout, QWidget, QScrollArea, QToolButton,
-    QStyledItemDelegate, QLineEdit, QSizePolicy, QListView,
+    QStyledItemDelegate, QLineEdit, QSizePolicy, QListView, QDoubleSpinBox,
 )
 from PyQt5.QtCore import Qt, QTimer, QEvent, QSize, pyqtSignal
 
@@ -408,7 +408,11 @@ class LanesMixin:
         self.marker_preset_combo.blockSignals(True)
         self.marker_preset_combo.clear()
         self.marker_preset_combo.addItem(tr('preset_manual_entry'), None)
-        for preset in load_marker_presets():
+        presets = load_marker_presets()
+        project_preset = getattr(self, '_project_marker_preset', None)
+        if project_preset is not None and project_preset not in presets:
+            presets = [*presets, project_preset]
+        for preset in presets:
             self.marker_preset_combo.addItem(preset['name'], preset)
             if previous and preset['name'] == previous['name']:
                 self.marker_preset_combo.setCurrentIndex(self.marker_preset_combo.count() - 1)
@@ -523,12 +527,74 @@ class LanesMixin:
 
     def _build_tab_std(self):
         page = self._new_page(); v = QVBoxLayout(page); v.setContentsMargins(10, 10, 10, 10); v.setSpacing(8)
+        self.quant_lane_combo = QComboBox(); self.quant_lane_combo.setStyleSheet(self._combo_css())
+        self.quant_lane_combo.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        self.quant_lane_combo.setMinimumContentsLength(8)
+        self.quant_lane_combo.setToolTip(tr('quant_lane_tip'))
+        self.quant_lane_combo.currentIndexChanged.connect(self._on_quant_lane_changed)
+        v.addWidget(self.quant_lane_combo)
+        row = QHBoxLayout()
+        self.quant_amount = QDoubleSpinBox(); self.quant_amount.setRange(0, 100000)
+        self.quant_amount.setDecimals(2); self.quant_amount.setValue(1)
+        self.quant_amount.setSuffix(' μg'); self.quant_amount.setStyleSheet(self._spin_css())
+        self.quant_amount.setToolTip(tr('quant_amount_tip')); row.addWidget(self.quant_amount, 1)
+        self.quant_apply = QPushButton(tr('quant_assign')); self.quant_apply.setStyleSheet(self._btn_css())
+        self.quant_apply.setToolTip(tr('quant_assign_tip'))
+        self.quant_apply.clicked.connect(lambda: self._set_quant_standard(True)); row.addWidget(self.quant_apply)
+        v.addLayout(row)
+        self.quant_remove = QPushButton(tr('quant_remove')); self.quant_remove.setStyleSheet(self._btn_css())
+        self.quant_remove.setToolTip(tr('quant_remove_tip'))
+        self.quant_remove.clicked.connect(lambda: self._set_quant_standard(False)); v.addWidget(self.quant_remove)
         self.std_view = StdCurveView(); v.addWidget(self.std_view, 1)
         self.std_label = QLabel(tr("std_label_placeholder"))
         self.std_label.setStyleSheet(f"color:{MUTE};font-size:11px;"); self.std_label.setWordWrap(True)
         self.std_label.setAlignment(Qt.AlignCenter)
         v.addWidget(self.std_label)
         self._add_tab(page, tr("tab_std"))
+
+    def _sync_quant_controls(self):
+        if not hasattr(self, 'quant_lane_combo'): return
+        selected = self.gel.selected_lane
+        index = self.lanes.index(selected) if selected in self.lanes else self.quant_lane_combo.currentIndex()
+        signature = [(lane.name, lane.kind, lane.bsa_amount) for lane in self.lanes]
+        changed = signature != getattr(self, '_quant_lane_signature', None)
+        if changed:
+            self.quant_lane_combo.blockSignals(True)
+            self.quant_lane_combo.clear()
+            for lane in self.lanes:
+                kind = tr('lane_kind_' + lane.kind)
+                self.quant_lane_combo.addItem(f'{lane.name} · {kind}')
+            self._quant_lane_signature = signature
+            self.quant_lane_combo.blockSignals(False)
+        index = min(max(index, 0), len(self.lanes) - 1)
+        selection_changed = self.quant_lane_combo.currentIndex() != index
+        self.quant_lane_combo.blockSignals(True)
+        self.quant_lane_combo.setCurrentIndex(index)
+        self.quant_lane_combo.blockSignals(False)
+        lane = self.lanes[index] if index >= 0 else None
+        if lane is not None and (changed or selection_changed):
+            self.quant_amount.setValue(lane.bsa_amount if lane.kind == 'bsa' else 1)
+        self.quant_lane_combo.setEnabled(bool(self.lanes))
+        self.quant_amount.setEnabled(lane is not None and lane.kind != 'marker')
+        self.quant_apply.setEnabled(lane is not None and lane.kind != 'marker')
+        self.quant_remove.setEnabled(lane is not None and lane.kind == 'bsa')
+
+    def _on_quant_lane_changed(self, index):
+        if 0 <= index < len(self.lanes):
+            self._on_gel_lane_selected(self.lanes[index])
+            amount = self.lanes[index].bsa_amount
+            self.quant_amount.setValue(amount if self.lanes[index].kind == 'bsa' else 1)
+            self.gel.update()
+
+    def _set_quant_standard(self, enabled):
+        index = self.quant_lane_combo.currentIndex()
+        if not 0 <= index < len(self.lanes): return
+        lane = self.lanes[index]
+        if lane.kind == 'marker': return  # Never silently discard MW calibration.
+        lane.kind = 'bsa' if enabled else 'sample'
+        if enabled: lane.bsa_amount = self.quant_amount.value()
+        self._commit_lanes()
+        self._on_gel_lane_selected(self.lanes[index])
 
     def _build_tab_memo(self):
         """정량 탭 바로 옆의 독립 탭 — 프로젝트 저장 시 함께 저장되는
@@ -1053,6 +1119,7 @@ class LanesMixin:
     def _mark_analysis_stale(self):
         if self.lanes:
             self._analysis_stale = True
+            self._compute_std()
             self._update_analysis_notice()
             self._on_marker_lane_changed(self.marker_lane_combo.currentIndex(), refreshing=True)
 
@@ -1269,6 +1336,9 @@ class LanesMixin:
         return True
 
     def _compute_std(self):
+        if getattr(self, '_analysis_stale', False):
+            self.std_view.clear(); self.std_label.setText(tr('workflow_stale_hint'))
+            return
         bsa = [l for l in self.lanes if l.kind == "bsa" and l.peak_volume is not None and len(l.peak_volume) > 0]
         if len(bsa) < 2:
             self.std_view.clear()
@@ -1276,6 +1346,10 @@ class LanesMixin:
             return
         amounts = [l.bsa_amount for l in bsa]
         vols = [float(l.peak_volume.sum()) for l in bsa]   # 부피 기준 정량
+        if (not np.all(np.isfinite(vols)) or not np.all(np.isfinite(amounts))
+                or min(amounts) < 0 or np.ptp(vols) <= 0 or np.ptp(amounts) <= 0):
+            self.std_view.clear(); self.std_label.setText(tr('quant_invalid_standards'))
+            return
         from scipy.stats import linregress
         slope, icept, r, _, _ = linregress(vols, amounts)
         r2 = r ** 2
@@ -1309,6 +1383,7 @@ class LanesMixin:
                         description = tr('result_mw_missing_tip')
                     it.setToolTip(val + '\n' + description + '\n' + tr('result_cell_tip'))
                     self.result_table.setItem(r, c, it)
+        self._compute_std()
         self._update_analysis_notice()
 
     def _on_result_cell_clicked(self, row, _col):

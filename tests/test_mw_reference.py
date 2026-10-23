@@ -62,7 +62,8 @@ class MwReferenceTest(unittest.TestCase):
                 if not item.isSeparator() and item.menu() is not win.m_language:
                     self.assertIn(item, win.options_menu.actions())
             self.assertIn('copy', win.ribbon_strips[3].buttons)
-            self.assertEqual(list(win.ribbon_strips[0].buttons)[2:5], ['rotate', 'crop', 'bow'])
+            settings = [key for key in win.ribbon_strips[0].buttons if key in win.ribbon_tools]
+            self.assertEqual(settings[:3], ['rotate', 'crop', 'bow'])
             self.assertNotIn('flip', win.ribbon_tools); self.assertNotIn('shear', win.ribbon_tools)
         finally: win.close()
 
