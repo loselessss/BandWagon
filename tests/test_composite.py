@@ -21,6 +21,7 @@ class CompositeQA(unittest.TestCase):
         cls.app = QApplication.instance() or QApplication([])
 
     def setUp(self):
+        self.enterContext(patch('bandwagon.fileio._save_recent_files'))
         self.visible, self.uv, self.truth = fixture()
 
     def test_bright_uv_detects_known_bands(self):

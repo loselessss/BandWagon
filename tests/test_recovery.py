@@ -28,6 +28,7 @@ class RecoveryTest(unittest.TestCase):
         cls.app = QApplication.instance() or QApplication([])
 
     def setUp(self):
+        self.enterContext(patch('bandwagon.fileio._save_recent_files'))
         self.temp = tempfile.TemporaryDirectory()
         self.directory = Path(self.temp.name)
         self.location = patch("bandwagon.recovery.recovery_directory", return_value=self.directory)

@@ -58,10 +58,9 @@ def _save_recent_files(paths):
 class FileIOMixin:
 
     def _add_recent_file(self, path):
-        """파일을 열 때마다 "최근 파일" 목록 맨 앞으로 옮긴다(이미 있으면
-        중복 없이 그 항목을 앞으로 이동). open_path_smart()가 그림/프로젝트/
-        합성 파일 구분 없이 여는 모든 경로에서 공통으로 호출하므로, 메뉴
-        클릭이든 탐색기 파일 연결로 실행됐든 똑같이 기록된다."""
+        """파일을 열거나 저장하면 "최근 파일" 목록 맨 앞으로 옮긴다(이미 있으면
+        중복 없이 그 항목을 앞으로 이동). 파일 열기와 수동 저장 성공 시
+        공통으로 호출하며, 자동 복구 파일은 기록하지 않는다."""
         path = str(Path(path).resolve())
         recent = [p for p in _load_recent_files() if p != path]
         recent.insert(0, path)
@@ -412,7 +411,9 @@ class FileIOMixin:
         if path:
             self._last_dir = str(Path(path).parent)
             out_img = render_export(src, self.lanes, options, band_style=self._band_display_style)
-            out_img.save(path); self.status.showMessage(tr("status_saved", path=path))
+            out_img.save(path)
+            self._add_recent_file(path)
+            self.status.showMessage(tr("status_saved", path=path))
 
     def save_project(self):
         """Ctrl+S / "프로젝트 저장" — 이미 이 세션에서 연/저장한 프로젝트
@@ -565,6 +566,7 @@ class FileIOMixin:
             self._base_title = f"{Path(path).name} — {APP_NAME} v{APP_VERSION}"
             self._saved_snapshot = self._project_state_snapshot()
             self._refresh_title()
+            self._add_recent_file(path)
             self.status.showMessage(tr("status_project_saved", path=path))
             return True
         except Exception as ex:

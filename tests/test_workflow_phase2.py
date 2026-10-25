@@ -25,6 +25,7 @@ class WorkflowPhase2Test(unittest.TestCase):
         cls.app = QApplication.instance() or QApplication([])
 
     def setUp(self):
+        self.enterContext(patch('bandwagon.fileio._save_recent_files'))
         self.win = Analyzer()
         self.enterContext(patch.object(self.win, '_warn', side_effect=lambda title, message: self.fail(f'{title}: {message}')))
         pixels = np.full((160, 240), 230, dtype=np.uint8)

@@ -18,6 +18,7 @@ class MemoryOptimizationsTest(unittest.TestCase):
         cls.app = QApplication.instance() or QApplication([])
 
     def setUp(self):
+        self.enterContext(patch('bandwagon.fileio._save_recent_files'))
         self.win = Analyzer()
         self.image = Image.fromarray(np.random.default_rng(42).integers(
             0, 256, (259, 137, 3), dtype=np.uint8))

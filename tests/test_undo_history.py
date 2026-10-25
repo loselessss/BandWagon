@@ -2,6 +2,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -21,6 +22,7 @@ class UndoHistoryTest(unittest.TestCase):
         cls.app = QApplication.instance() or QApplication([])
 
     def setUp(self):
+        self.enterContext(patch('bandwagon.fileio._save_recent_files'))
         self.window = Analyzer()
         self.window._orig = Image.new("RGB", (100, 80), "white")
         self.window._after_load("undo-test.png")
