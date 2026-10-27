@@ -6,8 +6,8 @@
          IgnorableNamespaces="uap uap3 rescap">
   <Identity Name="@IDENTITY@" Publisher="@PUBLISHER@" Version="@VERSION@" ProcessorArchitecture="x64" />
   <Properties>
-    <DisplayName>BandWagon</DisplayName>
-    <PublisherDisplayName>BandWagon</PublisherDisplayName>
+    <DisplayName>@DISPLAY_NAME@</DisplayName>
+    <PublisherDisplayName>@PUBLISHER_DISPLAY_NAME@</PublisherDisplayName>
     <Description>Gel lane, band and molecular weight analysis</Description>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
@@ -17,7 +17,7 @@
   </Dependencies>
   <Applications>
     <Application Id="BandWagon" Executable="BandWagon.exe" EntryPoint="Windows.FullTrustApplication">
-      <uap:VisualElements DisplayName="BandWagon" Description="Gel lane, band and molecular weight analysis"
+      <uap:VisualElements DisplayName="@DISPLAY_NAME@" Description="Gel lane, band and molecular weight analysis"
                           BackgroundColor="transparent"
                           Square150x150Logo="Assets\Square150x150Logo.png"
                           Square44x44Logo="Assets\Square44x44Logo.png" />

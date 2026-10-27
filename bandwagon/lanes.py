@@ -42,6 +42,9 @@ class LaneKindCombo(QComboBox):
         rows = sum(max(view.sizeHintForRow(i), self.fontMetrics().height() + 8)
                    for i in range(self.count()))
         view.setMinimumHeight(rows + 2 * view.frameWidth() + 8)
+        # Windows styles may size the popup from the currently selected short
+        # label. Reserve enough width for every type, not just that label.
+        view.setMinimumWidth(max(self.width(), view.sizeHintForColumn(0) + 2 * view.frameWidth() + 12))
         super().showPopup()
 
 

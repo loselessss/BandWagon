@@ -100,7 +100,15 @@ jobs:
           $setup = "Output\BandWagon_Setup_${env:VERSION}.exe"
           if (-not (Test-Path -LiteralPath $setup)) { throw "Missing $setup" }
 
-      - name: Package MSIX (unsigned unless signing secrets are configured)
+      - name: Run release regression tests
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          .venv-build\Scripts\python.exe -m unittest discover -s tests -v
+          if ($LASTEXITCODE -ne 0) { throw 'Release regression tests failed.' }
+
+      - name: Package Store MSIX (Microsoft signs after submission)
         shell: pwsh
         env:
           MSIX_PFX_BASE64: ${{ secrets.MSIX_PFX_BASE64 }}
@@ -109,7 +117,7 @@ jobs:
           MSIX_IDENTITY: ${{ vars.MSIX_IDENTITY || 'loselessss.BandWagon' }}
           MSIX_TIMESTAMP_URL: ${{ vars.MSIX_TIMESTAMP_URL }}
         run: |
-          .venv-build\Scripts\python.exe scripts/build_msix.py
+          .venv-build\Scripts\python.exe scripts/build_msix.py --store
           if ($LASTEXITCODE -ne 0) { throw 'MSIX packaging/signing failed.' }
 
       - name: Package versioned and latest assets

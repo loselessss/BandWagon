@@ -3,7 +3,40 @@
 Windows 10 2004(빌드 19041) 이상·Windows 11 x64를 대상으로 합니다.
 기존 EXE 설치본과 포터블 ZIP은 계속 지원합니다.
 
-## 빌드
+## Microsoft Store 제출용 (현재 릴리스)
+
+스토어에 예약한 공개 정보는 `packaging/msix/store.json`에 고정합니다.
+
+| 항목 | 값 |
+| --- | --- |
+| 제품 이름 | BandWagon Gel Analyzer |
+| Package/Identity/Name | 8B91E56A.BandwagonGelanalyzer |
+| Package/Identity/Publisher | CN=2F094A43-B9EE-4C1D-8DA7-69C507CA03A4 |
+| Package/Properties/PublisherDisplayName | 신상규 |
+
+```powershell
+python scripts/build_windows.py
+.venv-build\Scripts\python.exe scripts/build_msix.py --store
+```
+
+`--store`는 위 값으로 패키지·시작 메뉴 표시 이름을 설정하고,
+서명 인증서 환경 변수가 있더라도 로컬 서명을 하지 않습니다.
+앱 내부 제목·EXE 설치본·포터블 이름은 BandWagon으로 유지합니다.
+버전 `2.10.0`의 패키지는 `2.10.0.0`, 파일은
+`Output/BandWagon_2.10.0_x64_unsigned.msix`입니다.
+Store는 제출 과정에서 서명하므로 Partner Center에는 이 서명 전 파일을 올립니다.
+일반 PC에 직접 설치할 배포 파일로 취급하지 않습니다.
+
+제출 전 확인:
+
+1. Partner Center의 해당 제품에서 위 예약명·ID·게시자가 일치하는지 확인합니다.
+2. 패키지 업로드 후 자동 검증 결과를 확인합니다. 빌드 성공은 스토어 심사 통과를 의미하지 않습니다.
+3. 스토어 설명·스크린샷·개인정보 및 연령 등급 등 필수 항목을 채우고 제출합니다.
+4. 스토어 설치본의 실행·파일 연결·프로젝트 저장·재열기·분석·출력을 확인합니다.
+
+직접 설치본의 인증서 신뢰 등록이나 스토어 제출·게시 자체는 빌드 작업에 포함하지 않습니다.
+
+## 직접 배포용 빌드 (선택)
 
 CPython 3.14.6 x64와 Windows 10/11 SDK의 MakeAppx·SignTool이 필요합니다.
 
@@ -49,16 +82,17 @@ RFC 3161 타임스탬프 서버를 사용할 경우 `MSIX_TIMESTAMP_URL` 또는
 
 Actions의 **MSIX package → Run workflow**로 릴리스 없이 패키지를 만들어
 `BandWagon-MSIX` artifact에서 받을 수 있습니다. 태그 릴리스 자동화에도
-같은 패키징 단계가 포함됩니다.
+같은 `--store` 패키징 단계가 포함됩니다. 둘 다 예약된 ID의 서명 전 제출용 파일입니다.
 
-서명하려면 저장소 설정에 다음을 등록합니다.
+직접 배포용으로 `--store` 없이 서명할 때만 다음 설정을 사용합니다.
 
 - Secrets `MSIX_PFX_BASE64`: PFX 파일의 Base64(줄바꿈 없는 값)
 - Secrets `MSIX_PFX_PASSWORD`: PFX 암호
 - Variables `MSIX_PUBLISHER`: 인증서 Subject와 일치하는 Publisher
 - 선택 Variables `MSIX_IDENTITY`, `MSIX_TIMESTAMP_URL`
 
-인증서 Secret이 없으면 이름에 `_unsigned`가 포함된 준비용 패키지가 생성됩니다.
+현재 스토어 워크플로에서는 이 인증서 설정을 사용하지 않습니다.
+직접 배포용 빌드에서 인증서가 없으면 이름에 `_unsigned`가 포함된 준비용 패키지가 생성됩니다.
 개인키는 일시적인 빌드 폴더에만 풀고 작업 후 제거합니다. 서명 오류가 발생하면
 서명되지 않은 파일을 정상 배포용 이름으로 내보내지 않습니다.
 

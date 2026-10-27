@@ -2,6 +2,8 @@
 
 새 버전은 `vX.Y.Z` 태그를 `main`에 푸시하면 `.github/workflows/release.yml`이
 자동으로 릴리스를 만듭니다.
+일반 구현·커밋·푸시에서는 버전을 올리지 않습니다. 미배포 변경은 모아 두고
+릴리스 시점에 한 번만 버전과 패치노트를 확정합니다.
 Windows 빌드는 CPython 3.14.6과 `requirements-build.lock`의 고정된 의존성을
 전용 가상환경에 설치해 진행합니다. GitHub push와 pull request에서는 Windows
 자동 테스트와 의존성 검증을 실행합니다.
@@ -19,6 +21,10 @@ Windows 빌드는 CPython 3.14.6과 `requirements-build.lock`의 고정된 의�
 - 대응 포터블 패키지: `BandWagon_Portable_<버전>.zip`
 - 포터블 최신 버전 별칭: `BandWagon_Portable_latest.zip`
 - 같은 태그의 소스와 `DEPENDENCIES_BUILD.md`를 함께 담은 ZIP: `BandWagon_Source_<버전>.zip`
+- 예약된 스토어 ID로 만든 제출용 MSIX: `BandWagon_<버전>_x64_unsigned.msix`
+
+MSIX는 Partner Center 업로드용이며 일반 설치용 서명 파일이 아닙니다.
+스토어 ID·이름과 준비 절차는 [MSIX 배포 안내](docs/MSIX.md)를 따릅니다.
 
 설치 파일과 대응 소스는 별도 릴리스가 아니라 같은 버전 릴리스 페이지의
 Assets에서 받을 수 있습니다. 버전별 소스 링크를 문서에 넣을 때는 다음처럼

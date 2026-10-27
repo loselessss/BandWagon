@@ -22,7 +22,7 @@ class RecentFilesTest(unittest.TestCase):
 
     def setUp(self):
         directory = self.enterContext(tempfile.TemporaryDirectory())
-        self.directory = Path(directory)
+        self.directory = Path(directory).resolve()
         self.enterContext(patch('bandwagon.fileio._RECENT_FILES_PATH',
                                 self.directory / 'recent.json'))
         settings_path = str(self.directory / 'settings.ini')

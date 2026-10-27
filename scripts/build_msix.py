@@ -6,6 +6,7 @@ the app updater. MSIX_PFX_PATH / MSIX_PFX_PASSWORD supply optional signing.
 import argparse
 import base64
 import binascii
+import json
 import os
 from pathlib import Path
 import re
@@ -51,26 +52,32 @@ def sdk_tool(name, sdk_bin=None):
     raise FileNotFoundError(f"Install Windows 10/11 SDK (Signing Tools): {name} missing")
 
 
-def manifest(version, identity='loselessss.BandWagon', publisher='CN=BandWagon'):
+def manifest(version, identity='loselessss.BandWagon', publisher='CN=BandWagon',
+             display_name='BandWagon', publisher_display_name='BandWagon'):
     if not re.fullmatch(r'[A-Za-z0-9.-]{3,50}', identity):
         raise ValueError("Invalid MSIX identity name")
     if not publisher.strip():
         raise ValueError("Publisher cannot be empty")
+    if not display_name.strip() or not publisher_display_name.strip():
+        raise ValueError('Display names cannot be empty')
     text = (ROOT / 'packaging/msix/AppxManifest.xml').read_text(encoding='utf-8')
     for key, value in {'IDENTITY': identity, 'PUBLISHER': publisher,
-                       'VERSION': package_version(version)}.items():
+                       'VERSION': package_version(version), 'DISPLAY_NAME': display_name,
+                       'PUBLISHER_DISPLAY_NAME': publisher_display_name}.items():
         text = text.replace('@' + key + '@', escape(value, {'"': '&quot;'}))
     ET.fromstring(text)
     return text
 
 
-def prepare_layout(payload, layout, version, identity, publisher):
+def prepare_layout(payload, layout, version, identity, publisher,
+                   display_name='BandWagon', publisher_display_name='BandWagon'):
     if not (payload / 'BandWagon.exe').is_file() or not (payload / '_internal').is_dir():
         raise ValueError("Build dist/BandWagon first: python scripts/build_windows.py")
     if any(payload.rglob('unins*.exe')):
         raise ValueError("Use a clean onedir build, not an installed application")
     shutil.copytree(payload, layout, dirs_exist_ok=True)
-    (layout / 'AppxManifest.xml').write_text(manifest(version, identity, publisher), encoding='utf-8')
+    (layout / 'AppxManifest.xml').write_text(
+        manifest(version, identity, publisher, display_name, publisher_display_name), encoding='utf-8')
     from PIL import Image
     assets = layout / 'Assets'
     assets.mkdir(exist_ok=True)
@@ -91,9 +98,17 @@ def build(args):
     if sys.platform != 'win32':
         raise ValueError("MSIX packaging requires Windows and Windows SDK")
     version = read_version()
+    store = getattr(args, 'store', False)
+    if store and args.require_signed:
+        raise ValueError('--store prepares an unsigned Store submission; do not use --require-signed')
+    settings = json.loads((ROOT / 'packaging/msix/store.json').read_text(encoding='utf-8')) if store else {
+        'identity': args.identity, 'publisher': args.publisher,
+        'display_name': getattr(args, 'display_name', 'BandWagon'),
+        'publisher_display_name': getattr(args, 'publisher_display_name', 'BandWagon'),
+    }
     makeappx = sdk_tool('makeappx.exe', args.sdk_bin)
-    pfx = os.environ.get('MSIX_PFX_PATH')
-    encoded_pfx = os.environ.get('MSIX_PFX_BASE64')
+    pfx = None if store else os.environ.get('MSIX_PFX_PATH')
+    encoded_pfx = None if store else os.environ.get('MSIX_PFX_BASE64')
     signing = bool(pfx or encoded_pfx)
     if pfx and encoded_pfx:
         raise ValueError("Set only one of MSIX_PFX_PATH and MSIX_PFX_BASE64")
@@ -117,7 +132,8 @@ def build(args):
             pfx = str(stage / 'signing.pfx')
             Path(pfx).write_bytes(certificate)
         layout = stage / 'layout'
-        prepare_layout(Path(args.payload).resolve(), layout, version, args.identity, args.publisher)
+        prepare_layout(Path(args.payload).resolve(), layout, version, settings['identity'], settings['publisher'],
+                       settings['display_name'], settings['publisher_display_name'])
         package = stage / 'BandWagon.msix'
         subprocess.run([str(makeappx), 'pack', '/d', str(layout), '/p', str(package), '/o'], check=True)
         if pfx:
@@ -135,7 +151,8 @@ def build(args):
         shutil.copy2(package, destination)
     print(f"MSIX built: {destination}")
     if not signing:
-        print("Unsigned build: sign with a trusted certificate before normal installation/distribution.")
+        print('Store submission: Microsoft signs the package after submission.' if store else
+              "Unsigned build: sign with a trusted certificate before normal installation/distribution.")
     return destination
 
 
@@ -148,6 +165,9 @@ def main():
     parser.add_argument('--publisher', default=os.environ.get('MSIX_PUBLISHER', 'CN=BandWagon'))
     parser.add_argument('--timestamp-url', default=os.environ.get('MSIX_TIMESTAMP_URL'))
     parser.add_argument('--require-signed', action='store_true')
+    parser.add_argument('--store', action='store_true', help='Use reserved Store identity; never apply a local certificate')
+    parser.add_argument('--display-name', default='BandWagon')
+    parser.add_argument('--publisher-display-name', default='BandWagon')
     args = parser.parse_args()
     try:
         build(args)

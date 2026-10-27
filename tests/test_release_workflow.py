@@ -8,6 +8,15 @@ WORKFLOW = ROOT / ".github" / "workflows" / "release.yml"
 
 
 class ReleaseWorkflowStructureTests(unittest.TestCase):
+    def test_release_metadata_and_notes_are_consistent(self):
+        from bandwagon.meta import APP_VERSION, RELEASE_DATE
+        installer = (ROOT / 'installer.iss').read_text(encoding='utf-8-sig')
+        changelog = (ROOT / 'CHANGELOG.md').read_text(encoding='utf-8')
+        self.assertIn(f'#define MyAppVersion "{APP_VERSION}"', installer)
+        self.assertTrue(changelog.startswith(f'# BandWagon v{APP_VERSION} 패치노트\n({RELEASE_DATE})'))
+        self.assertIn('scripts/build_msix.py --store', self.workflow)
+        self.assertIn('Release regression tests failed.', self.workflow)
+
     @classmethod
     def setUpClass(cls):
         cls.workflow = WORKFLOW.read_text(encoding="utf-8")

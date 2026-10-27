@@ -30,7 +30,7 @@ jobs:
           MSIX_IDENTITY: ${{ vars.MSIX_IDENTITY || 'loselessss.BandWagon' }}
           MSIX_TIMESTAMP_URL: ${{ vars.MSIX_TIMESTAMP_URL }}
         run: |
-          .venv-build\Scripts\python.exe scripts/build_msix.py
+          .venv-build\Scripts\python.exe scripts/build_msix.py --store
           if ($LASTEXITCODE -ne 0) { throw 'MSIX packaging/signing failed.' }
       - uses: actions/upload-artifact@v4
         with:

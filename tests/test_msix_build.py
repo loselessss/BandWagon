@@ -1,4 +1,5 @@
 import io
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -17,6 +18,35 @@ NS = {'p': 'http://schemas.microsoft.com/appx/manifest/foundation/windows10',
 
 
 class MsixBuildTest(unittest.TestCase):
+    def test_store_manifest_matches_reserved_identity_and_display_names(self):
+        config = json.loads((build_msix.ROOT / 'packaging/msix/store.json').read_text(encoding='utf-8'))
+        root = ET.fromstring(build_msix.manifest('2.10.0', config['identity'], config['publisher'],
+                                               config['display_name'], config['publisher_display_name']))
+        self.assertEqual(root.find('p:Identity', NS).get('Name'), '8B91E56A.BandwagonGelanalyzer')
+        self.assertEqual(root.find('p:Identity', NS).get('Publisher'), 'CN=2F094A43-B9EE-4C1D-8DA7-69C507CA03A4')
+        self.assertEqual(root.find('p:Properties/p:DisplayName', NS).text, 'BandWagon Gel Analyzer')
+        self.assertEqual(root.find('p:Properties/p:PublisherDisplayName', NS).text, '신상규')
+        self.assertEqual(root.find('.//uap:VisualElements', NS).get('DisplayName'), 'BandWagon Gel Analyzer')
+        self.assertNotIn('@DISPLAY_NAME@', ET.tostring(root, encoding='unicode'))
+
+    def test_store_mode_ignores_sideload_certificates(self):
+        with tempfile.TemporaryDirectory() as temp:
+            args = type('Args', (), dict(sdk_bin=None, require_signed=False, store=True,
+                                        payload='unused', output=temp))()
+            def fake_tool(command, check):
+                Path(command[command.index('/p') + 1]).write_bytes(b'package')
+            with patch.dict(os.environ, {'MSIX_PFX_PATH': 'not-for-store.pfx', 'MSIX_PFX_BASE64': 'not-for-store'}), \
+                    patch.object(build_msix.sys, 'platform', 'win32'), \
+                    patch.object(build_msix, 'sdk_tool', return_value=Path('makeappx.exe')) as sdk, \
+                    patch.object(build_msix, 'prepare_layout') as layout, \
+                    patch.object(build_msix.subprocess, 'run', side_effect=fake_tool) as run:
+                output = build_msix.build(args)
+            self.assertTrue(output.name.endswith('_unsigned.msix'))
+            sdk.assert_called_once_with('makeappx.exe', None)
+            self.assertEqual(layout.call_args.args[3:], ('8B91E56A.BandwagonGelanalyzer',
+                'CN=2F094A43-B9EE-4C1D-8DA7-69C507CA03A4', 'BandWagon Gel Analyzer', '신상규'))
+            self.assertEqual(run.call_count, 1)
+
     def test_manifest_keeps_file_paths_quoted_and_matches_app_version(self):
         root = ET.fromstring(build_msix.manifest('2.8.0', publisher='CN=Example & Research'))
         identity = root.find('p:Identity', NS)
