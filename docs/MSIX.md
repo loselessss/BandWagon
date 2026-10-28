@@ -22,8 +22,8 @@ python scripts/build_windows.py
 `--store`는 위 값으로 패키지·시작 메뉴 표시 이름을 설정하고,
 서명 인증서 환경 변수가 있더라도 로컬 서명을 하지 않습니다.
 앱 내부 제목·EXE 설치본·포터블 이름은 BandWagon으로 유지합니다.
-버전 `2.10.1`의 패키지는 `2.10.1.0`, 파일은
-`Output/BandWagon_2.10.1_x64_unsigned.msix`입니다.
+버전 `2.10.0`의 패키지는 `2.10.0.0`, 파일은
+`Output/BandWagon_2.10.0_x64_unsigned.msix`입니다.
 Store는 제출 과정에서 서명하므로 Partner Center에는 이 서명 전 파일을 올립니다.
 일반 PC에 직접 설치할 배포 파일로 취급하지 않습니다.
 
