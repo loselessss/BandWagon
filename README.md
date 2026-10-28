@@ -69,6 +69,10 @@ BandWagon은 이 흐름을 한곳에 모읍니다.
 
 ## 설치
 
+개인정보 처리·업데이트 통신·로컬 자료 보관과 삭제는
+[개인정보처리방침 / Privacy Policy](https://loselessss.github.io/BandWagon/privacy/)을 참고하세요.
+앱의 **옵션 → 개인정보처리방침**에서도 같은 페이지를 열 수 있습니다.
+
 [최신 릴리스](https://github.com/loselessss/BandWagon/releases/latest)에서
 사용 방식에 맞는 파일을 받으세요.
 

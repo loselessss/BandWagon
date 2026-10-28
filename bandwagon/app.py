@@ -17,11 +17,12 @@ from PyQt5.QtWidgets import (
     QStatusBar, QMenu, QTabWidget, QDialog, QDialogButtonBox,
     QScrollArea, QToolButton,
 )
-from PyQt5.QtCore import Qt, QTimer, QStandardPaths, QSettings, QByteArray, QEvent
+from PyQt5.QtCore import Qt, QTimer, QStandardPaths, QSettings, QByteArray, QEvent, QUrl
+from PyQt5.QtGui import QDesktopServices
 from . import i18n
 from .i18n import tr
 from .theme import *
-from .meta import (APP_NAME, APP_VERSION, RELEASE_DATE, HAS_CV2)
+from .meta import (APP_NAME, APP_VERSION, RELEASE_DATE, HAS_CV2, PRIVACY_POLICY_URL)
 from .models import CurveModel
 from .widgets import GelView, ProfileView
 from .dialogs import _dialog_style, _no_help_button
@@ -287,6 +288,11 @@ class Analyzer(RibbonMixin, StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, 
         m_info.addAction(a)
         a = QAction(tr("toolbar_about"), self); a.triggered.connect(self._show_about)
         m_info.addAction(a)
+        from .fluent_icons import icon
+        self.privacy_action = QAction(icon('help'), tr('toolbar_privacy'), self)
+        self.privacy_action.setToolTip(tr('toolbar_privacy_tip'))
+        self.privacy_action.triggered.connect(self._show_privacy)
+        m_info.addAction(self.privacy_action)
 
         # ── 언어 ─────────────────────────────────────────────────────
         # 예전엔 토글 버튼 하나였는데, 지금 언어가 뭔지 헷갈리지 않게
@@ -506,6 +512,10 @@ class Analyzer(RibbonMixin, StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, 
                    f"{tr('about_version', version=APP_VERSION, date=RELEASE_DATE)}\n\n"
                    f"{tr('about_author')}\n\n"
                    f"{tr('about_license_notice')}")
+
+    def _show_privacy(self):
+        if not QDesktopServices.openUrl(QUrl(PRIVACY_POLICY_URL)):
+            self.status.showMessage(tr('privacy_open_failed', url=PRIVACY_POLICY_URL), 15000)
 
     def _show_help(self):
         dlg = QDialog(self)

@@ -1,0 +1,6 @@
+title: BandWagon Gel Analyzer
+url: https://loselessss.github.io
+baseurl: /BandWagon
+markdown: kramdown
+exclude:
+  - MSIX.md
