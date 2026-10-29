@@ -667,7 +667,7 @@ def apply_bow_correction(img, amount):
     return _strip_remap(img, amount, bow=True)
 
 
-def apply_shear_correction(img, amount):
+def apply_shear_correction(img, amount, vertical=0):
     """img(PIL Image)에 기울기(전단) 보정을 적용한다. bow_correct가 열(x)
     기준 '세로' 포물선 이동인 것과 달리, 이건 행(y) 기준 '가로' 선형 이동
     이다 — 사진이 평행사변형으로 기울어져 찍혔을 때(젤 본체는 직사각형인데
@@ -675,6 +675,8 @@ def apply_shear_correction(img, amount):
     세로 위치에 비례해 좌우로 밀어 직사각형으로 되돌린다.
 
     amount(px): 이미지 위쪽(y=0)과 아래쪽(y=h-1) 사이의 총 가로 이동량.
+    vertical(px): 왼쪽과 오른쪽 사이의 총 세로 이동량. 양수는 왼쪽이
+    아래로 처진 사진을 편다. 두 전단을 합성해 한 번만 보간하며 크기는 유지한다.
     중심 행(h/2)은 이동 없음, 위쪽 절반은 -amount/2 ~ 0, 아래쪽 절반은
     0 ~ +amount/2로 선형 이동한다(부호는 위쪽 기준 오른쪽으로 치우친
     사진을 왼쪽으로 당겨 펴는 방향). cv2.remap, BORDER_REFLECT로 빈
@@ -683,12 +685,12 @@ def apply_shear_correction(img, amount):
 
     bow_correct처럼 모듈 레벨 함수 — apply_edit_op()가 참조해야 하므로
     클래스 안에 두면 순환 의존이 생긴다."""
-    if amount == 0:
+    if amount == 0 and vertical == 0:
         return img
-    return _strip_remap(img, amount, bow=False)
+    return _strip_remap(img, amount, bow=False, vertical=vertical)
 
 
-def _strip_remap(img, amount, bow, rows=128, offsets=None):
+def _strip_remap(img, amount, bow, rows=128, offsets=None, vertical=0):
     """Bound coordinate buffers to a strip; retain full-source border semantics."""
     import cv2
     arr = np.asarray(img if img.mode == "RGB" else img.convert("RGB"))
@@ -704,6 +706,12 @@ def _strip_remap(img, amount, bow, rows=128, offsets=None):
         map_x, map_y = np.meshgrid(xs, ys)
         if bow:
             map_y -= shift[np.newaxis, :]
+        elif vertical:
+            # Compose the inverse of two shears in one sampling pass. Unlike
+            # subtracting both independent offsets simultaneously, this remains
+            # invertible even for large corrections on small images.
+            map_y -= float(vertical) * ((map_x - w / 2.0) / max(w - 1, 1))
+            map_x -= float(amount) * ((map_y - h / 2.0) / max(h - 1, 1))
         else:
             shift = float(amount) * ((ys - h / 2.0) / max(h - 1, 1))
             map_x -= shift[:, np.newaxis]
@@ -770,9 +778,9 @@ def apply_edit_op(img, gray_override, op_name, params):
             apply_reference_curve(Image.fromarray(a), params["points"], params.get("baseline")).convert("L")))
         return out, gray
     if op_name == "shear_correct":
-        out = apply_shear_correction(img, params["amount"])
+        out = apply_shear_correction(img, params["amount"], params.get("vertical", 0))
         gray = _reapply_gray_geom(gray_override, lambda a: np.array(
-            apply_shear_correction(Image.fromarray(a), params["amount"]).convert("L")))
+            apply_shear_correction(Image.fromarray(a), params["amount"], params.get("vertical", 0)).convert("L")))
         return out, gray
     if op_name in ("adjust", "document"):
         # 밝기/대비/톤커브는 화면 표시용 파라미터일 뿐 픽셀 자체를 바꾸지

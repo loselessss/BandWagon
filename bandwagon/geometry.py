@@ -225,6 +225,19 @@ class GeometryMixin:
         btn_shear_reset = QPushButton(tr("reset_shear")); btn_shear_reset.setStyleSheet(self._btn_css())
         btn_shear_reset.clicked.connect(self._reset_shear_correction)
         shv.addLayout(shrow)
+        vrow = QHBoxLayout(); vrow.setSpacing(6)
+        vlbl = QLabel(tr('label_shear_vertical')); vlbl.setStyleSheet(f'color:{MUTE};font-size:12px;')
+        vlbl.setToolTip(tr('shear_vertical_hint')); vrow.addWidget(vlbl)
+        shlbl.setToolTip(tr('shear_horizontal_hint'))
+        self.shear_vertical_slider = FineSlider(Qt.Horizontal)
+        self.shear_vertical_slider.setRange(-150, 150)
+        self.shear_vertical_slider.setStyleSheet(self.shear_slider.styleSheet())
+        self.shear_vertical_slider.setToolTip(tr('shear_vertical_hint'))
+        vrow.addWidget(self.shear_vertical_slider, 1)
+        self.shear_vertical_spin = QSpinBox(); self.shear_vertical_spin.setRange(-150, 150)
+        self.shear_vertical_spin.setSuffix('px'); self._size_correction_spin(self.shear_vertical_spin)
+        self.shear_vertical_spin.setToolTip(tr('shear_vertical_hint'))
+        vrow.addWidget(self.shear_vertical_spin); shv.addLayout(vrow)
         shv.addWidget(btn_shear_reset)
         shear_hint = QLabel(tr("shear_sign_hint"))
         shear_hint.setStyleSheet(f"color:{MUTE};font-size:12px;"); shear_hint.setWordWrap(True)
@@ -235,6 +248,10 @@ class GeometryMixin:
         self.shear_spin.valueChanged.connect(self._on_shear_value_changed)
         self.shear_slider.sliderReleased.connect(self._commit_shear_correction)
         self.shear_spin.editingFinished.connect(self._commit_shear_correction)
+        self.shear_vertical_slider.valueChanged.connect(lambda v: self._on_shear_value_changed(v, vertical=True))
+        self.shear_vertical_spin.valueChanged.connect(lambda v: self._on_shear_value_changed(v, vertical=True))
+        self.shear_vertical_slider.sliderReleased.connect(self._commit_shear_correction)
+        self.shear_vertical_spin.editingFinished.connect(self._commit_shear_correction)
 
 
         # ===== 색감 보정 =====
@@ -283,7 +300,7 @@ class GeometryMixin:
         v.addWidget(note)
 
         self._geometry_shortcut_widgets = []
-        for spin in (self.rot_spin, self.bow_spin, self.shear_spin):
+        for spin in (self.rot_spin, self.bow_spin, self.shear_spin, self.shear_vertical_spin):
             for widget in (spin, spin.lineEdit()):
                 widget.installEventFilter(self)
                 self._geometry_shortcut_widgets.append(widget)
@@ -704,18 +721,26 @@ class GeometryMixin:
         self.status.showMessage(tr("status_bow_reset"))
 
     @staticmethod
-    def _apply_shear_correction(img, amount):
-        return apply_shear_correction(img, amount)
+    def _apply_shear_correction(img, amount, vertical=0):
+        return apply_shear_correction(img, amount, vertical)
+
+    def _shear_params(self, amount=None, vertical=None):
+        params = {'amount': self.shear_slider.value() if amount is None else amount}
+        vertical = self.shear_vertical_slider.value() if vertical is None else vertical
+        if vertical: params['vertical'] = vertical
+        return params
 
     @memory_safe_edit
-    def _on_shear_value_changed(self, v):
+    def _on_shear_value_changed(self, v, vertical=False):
         """_on_bow_value_changed와 동일한 패턴(기울기보정판). v는 세션
         기준(_shear_base) 대비 절대 이동량(px)이며, release해도 유지된다."""
         self._finish_other_geometry("shear")
-        if self.shear_slider.value() != v:
-            self.shear_slider.blockSignals(True); self.shear_slider.setValue(v); self.shear_slider.blockSignals(False)
-        if self.shear_spin.value() != v:
-            self.shear_spin.blockSignals(True); self.shear_spin.setValue(v); self.shear_spin.blockSignals(False)
+        slider = self.shear_vertical_slider if vertical else self.shear_slider
+        spin = self.shear_vertical_spin if vertical else self.shear_spin
+        if slider.value() != v:
+            slider.blockSignals(True); slider.setValue(v); slider.blockSignals(False)
+        if spin.value() != v:
+            spin.blockSignals(True); spin.setValue(v); spin.blockSignals(False)
         if self._orig is None:
             return
         if self._shear_base is None:
@@ -724,6 +749,11 @@ class GeometryMixin:
             self._shear_base = self._orig.copy()
             self._shear_session_pushed = False
             self._preview_small = None
+            # Starting a new operation after other geometry must not reapply
+            # the other axis's previous, already baked-in correction.
+            others = (self.shear_slider, self.shear_spin) if vertical else (self.shear_vertical_slider, self.shear_vertical_spin)
+            for control in others:
+                control.blockSignals(True); control.setValue(0); control.blockSignals(False)
         if self._preview_small is None:
             canvas_size = self.gel.size()
             self._preview_small, self._preview_scale = downscale_for_preview(
@@ -731,17 +761,19 @@ class GeometryMixin:
         # amount는 원본 px 단위라 미리보기 비율(_preview_scale)로 맞춰 줄인다.
         # v==0이면 _shear_base 자체를 보여준다(이유는 회전/곡률보정 버전과 동일
         # — self._orig엔 이전 기울기가 baked-in일 수 있음).
-        preview = self._preview_small if v == 0 else self._apply_shear_correction(
-            self._preview_small, v * self._preview_scale)
+        horizontal = self.shear_slider.value(); down = self.shear_vertical_slider.value()
+        preview = self._preview_small if horizontal == down == 0 else self._apply_shear_correction(
+            self._preview_small, horizontal * self._preview_scale, down * self._preview_scale)
         self.btn_undo.setEnabled(True)
         self.gel.set_image(pil_to_pixmap(preview), self._orig.size)
         self.status.showMessage(
             tr("status_image_info", w=self._orig.width, h=self._orig.height,
                bright=self.sl_bright.value(), contrast=self.sl_contrast.value()))
 
-    def _apply_shear_op(self, amount):
+    def _apply_shear_op(self, amount, vertical=None):
         """_apply_bow_op과 동일한 절대값-교체 로직(기울기보정판)."""
-        if amount == 0:
+        params = self._shear_params(amount, vertical)
+        if amount == 0 and not params.get('vertical', 0):
             if self._shear_session_pushed:
                 del self._edit_ops[self._edit_pos]
                 self._edit_pos -= 1
@@ -751,10 +783,10 @@ class GeometryMixin:
                     self.btn_undo.setEnabled(self._edit_pos >= 0)
             return
         if self._shear_session_pushed:
-            self._edit_ops[self._edit_pos] = ("shear_correct", {"amount": amount})
+            self._edit_ops[self._edit_pos] = ("shear_correct", params)
             self._replay_history()
         else:
-            self._record_op("shear_correct", {"amount": amount})
+            self._record_op("shear_correct", params)
             self._shear_session_pushed = True
 
     def _finalize_pending_shear(self):
@@ -763,7 +795,7 @@ class GeometryMixin:
             return
         v = self.shear_slider.value()
         if self._shear_session_pushed and self._edit_pos >= 0 \
-                and self._edit_ops[self._edit_pos] == ("shear_correct", {"amount": v}):
+                and self._edit_ops[self._edit_pos] == ("shear_correct", self._shear_params()):
             return
         self._apply_shear_op(v)
         self._preview_small = None
@@ -778,14 +810,15 @@ class GeometryMixin:
         self._finalize_pending_rotation()
         self._finalize_pending_bow()
         amount = self.shear_slider.value()
+        zero = amount == 0 and self.shear_vertical_slider.value() == 0
         self._apply_shear_op(amount)
-        if amount == 0:
+        if zero:
             self._shear_base = None
             self._preview_small = None
             self._preview_scale = 1.0
             self._shear_session_pushed = False
         self._refresh_after_pixels_changed()
-        if amount == 0:
+        if zero:
             self.status.showMessage(tr("status_shear_reset"))
         else:
             self.status.showMessage(tr("status_shear_applied"))
@@ -795,14 +828,17 @@ class GeometryMixin:
         """_reset_bow_correction과 동일한 역할(기울기보정판)."""
         if self._shear_base is None:
             self.shear_slider.setValue(0)
+            self.shear_vertical_slider.setValue(0)
             return
-        self._apply_shear_op(0)
+        self._apply_shear_op(0, 0)
         self._shear_base = None
         self._preview_small = None
         self._preview_scale = 1.0
         self._shear_session_pushed = False
         self.shear_slider.blockSignals(True); self.shear_slider.setValue(0); self.shear_slider.blockSignals(False)
         self.shear_spin.blockSignals(True); self.shear_spin.setValue(0); self.shear_spin.blockSignals(False)
+        self.shear_vertical_slider.blockSignals(True); self.shear_vertical_slider.setValue(0); self.shear_vertical_slider.blockSignals(False)
+        self.shear_vertical_spin.blockSignals(True); self.shear_vertical_spin.setValue(0); self.shear_vertical_spin.blockSignals(False)
         self._refresh_after_pixels_changed()
         self.status.showMessage(tr("status_shear_reset"))
 
@@ -1012,10 +1048,13 @@ class GeometryMixin:
         self.bow_spin.blockSignals(True); self.bow_spin.setValue(bow_amt); self.bow_spin.blockSignals(False)
 
         shear_amt = last_shear["amount"] if last_shear else 0
+        shear_vertical = last_shear.get('vertical', 0) if last_shear else 0
         self._shear_base = pre_last_img if last_op == "shear_correct" else None
         self._shear_session_pushed = last_op == "shear_correct"
         self.shear_slider.blockSignals(True); self.shear_slider.setValue(shear_amt); self.shear_slider.blockSignals(False)
         self.shear_spin.blockSignals(True); self.shear_spin.setValue(shear_amt); self.shear_spin.blockSignals(False)
+        self.shear_vertical_slider.blockSignals(True); self.shear_vertical_slider.setValue(shear_vertical); self.shear_vertical_slider.blockSignals(False)
+        self.shear_vertical_spin.blockSignals(True); self.shear_vertical_spin.setValue(shear_vertical); self.shear_vertical_spin.blockSignals(False)
 
     @memory_safe_edit
     def _commit_adjust(self):

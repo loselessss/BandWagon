@@ -109,7 +109,7 @@ class AdjustControlsTest(unittest.TestCase):
     def test_geometry_value_fields_fit_sign_and_units_at_minimum_window(self):
         self.win.resize(900, 620)
         for tool, spin in (('rotate', self.win.rot_spin), ('bow', self.win.bow_spin),
-                           ('shear', self.win.shear_spin)):
+                           ('shear', self.win.shear_spin), ('shear', self.win.shear_vertical_spin)):
             self.win._select_ribbon_tool(tool)
             for points in (9, 14):
                 spin.setFont(QFont(self.win.font().family(), points))

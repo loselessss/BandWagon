@@ -131,6 +131,12 @@ def main():
         straight.preview(); app.processEvents()
         win.grab().save(str(output / f"reference-curve-{scale}.png"))
         straight.cancel()
+        win._select_ribbon_tool('bow')
+        win.shear_slider.setValue(24); win.shear_vertical_slider.setValue(-18)
+        win._commit_shear_correction()
+        win.correction_tabs.widget(0).ensureWidgetVisible(win.correct_tools['shear'][1], 0, 8)
+        app.processEvents()
+        win.grab().save(str(output / f'parallelogram-{scale}.png'))
         win._saved_snapshot = win._project_state_snapshot()
         win.close(); app.processEvents()
 
