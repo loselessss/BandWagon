@@ -667,7 +667,7 @@ def apply_bow_correction(img, amount):
     return _strip_remap(img, amount, bow=True)
 
 
-def apply_shear_correction(img, amount, vertical=0):
+def apply_shear_correction(img, amount, vertical=0, trapezoid=0):
     """img(PIL Image)에 기울기(전단) 보정을 적용한다. bow_correct가 열(x)
     기준 '세로' 포물선 이동인 것과 달리, 이건 행(y) 기준 '가로' 선형 이동
     이다 — 사진이 평행사변형으로 기울어져 찍혔을 때(젤 본체는 직사각형인데
@@ -677,6 +677,8 @@ def apply_shear_correction(img, amount, vertical=0):
     amount(px): 이미지 위쪽(y=0)과 아래쪽(y=h-1) 사이의 총 가로 이동량.
     vertical(px): 왼쪽과 오른쪽 사이의 총 세로 이동량. 양수는 왼쪽이
     아래로 처진 사진을 편다. 두 전단을 합성해 한 번만 보간하며 크기는 유지한다.
+    trapezoid(%): 중앙 정렬된 사다리꼴의 폭 차이(-80..80).
+    양수는 좁은 윗변, 음수는 좁은 아랫변을 원근 변환으로 펼친다.
     중심 행(h/2)은 이동 없음, 위쪽 절반은 -amount/2 ~ 0, 아래쪽 절반은
     0 ~ +amount/2로 선형 이동한다(부호는 위쪽 기준 오른쪽으로 치우친
     사진을 왼쪽으로 당겨 펴는 방향). cv2.remap, BORDER_REFLECT로 빈
@@ -685,12 +687,14 @@ def apply_shear_correction(img, amount, vertical=0):
 
     bow_correct처럼 모듈 레벨 함수 — apply_edit_op()가 참조해야 하므로
     클래스 안에 두면 순환 의존이 생긴다."""
-    if amount == 0 and vertical == 0:
+    if not np.isfinite(trapezoid) or abs(trapezoid) > 80:
+        raise ValueError('Trapezoid correction must be between -80 and 80 percent')
+    if amount == 0 and vertical == 0 and trapezoid == 0:
         return img
-    return _strip_remap(img, amount, bow=False, vertical=vertical)
+    return _strip_remap(img, amount, bow=False, vertical=vertical, trapezoid=trapezoid)
 
 
-def _strip_remap(img, amount, bow, rows=128, offsets=None, vertical=0):
+def _strip_remap(img, amount, bow, rows=128, offsets=None, vertical=0, trapezoid=0):
     """Bound coordinate buffers to a strip; retain full-source border semantics."""
     import cv2
     arr = np.asarray(img if img.mode == "RGB" else img.convert("RGB"))
@@ -704,9 +708,18 @@ def _strip_remap(img, amount, bow, rows=128, offsets=None, vertical=0):
         end = min(start + rows, h)
         ys = np.arange(start, end, dtype=np.float32)
         map_x, map_y = np.meshgrid(xs, ys)
+        if trapezoid:
+            # Inverse homography from the output rectangle to a centered
+            # source trapezoid. Also correct vertical perspective, not just x.
+            a = 1.0 - max(float(trapezoid), 0) / 100.0
+            b = 1.0 + min(float(trapezoid), 0) / 100.0
+            y = map_y / max(h - 1, 1)
+            y = a * y / (b + (a - b) * y)
+            map_x = (w - 1) / 2.0 + (map_x - (w - 1) / 2.0) * (a + (b - a) * y)
+            map_y = y * max(h - 1, 1)
         if bow:
             map_y -= shift[np.newaxis, :]
-        elif vertical:
+        elif vertical or trapezoid:
             # Compose the inverse of two shears in one sampling pass. Unlike
             # subtracting both independent offsets simultaneously, this remains
             # invertible even for large corrections on small images.
@@ -778,9 +791,9 @@ def apply_edit_op(img, gray_override, op_name, params):
             apply_reference_curve(Image.fromarray(a), params["points"], params.get("baseline")).convert("L")))
         return out, gray
     if op_name == "shear_correct":
-        out = apply_shear_correction(img, params["amount"], params.get("vertical", 0))
+        out = apply_shear_correction(img, params["amount"], params.get("vertical", 0), params.get('trapezoid', 0))
         gray = _reapply_gray_geom(gray_override, lambda a: np.array(
-            apply_shear_correction(Image.fromarray(a), params["amount"], params.get("vertical", 0)).convert("L")))
+            apply_shear_correction(Image.fromarray(a), params["amount"], params.get("vertical", 0), params.get('trapezoid', 0)).convert("L")))
         return out, gray
     if op_name in ("adjust", "document"):
         # 밝기/대비/톤커브는 화면 표시용 파라미터일 뿐 픽셀 자체를 바꾸지

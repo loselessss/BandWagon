@@ -88,6 +88,26 @@ class CalmUiTest(unittest.TestCase):
         self.assertEqual(interior(), (138, 150, 160))
         self.assertEqual(render_export(self.source, self.win.lanes, DEFAULT_OPTIONS).tobytes(), before)
 
+    def test_all_band_edges_visible_without_selection_in_focus_view(self):
+        gel = self.win.gel
+        gel.focus_overlay = True
+        gel.show_guides = False
+        gel.selected_lane = None
+        for style in ('area', 'line'):
+            gel.band_display_style = style
+            for lane in self.win.lanes:
+                lane.peaks = [60]
+                lane.peak_bounds = [(50, 70)]
+            for selected in (None, self.win.lanes[0]):
+                gel.selected_lane = selected
+                gel.repaint()
+                rendered = gel.grab().toImage()
+                for lane in self.win.lanes:
+                    x = round(gel._ix_to_wx((lane.x1 + lane.x2) / 2))
+                    y = round(gel._iy_to_wy(60 if style == 'line' else 50))
+                    colors = [QColor(rendered.pixel(x, y + dy)).getRgb()[:3] for dy in (-1, 0, 1)]
+                    self.assertTrue(any(color != (138, 150, 160) for color in colors))
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -13,6 +13,19 @@ from bandwagon.models import Lane
 
 
 class LaneWorkflowTest(unittest.TestCase):
+    def test_auto_lanes_measure_marker_width_instead_of_image_margin(self):
+        preset = {'name': 'Three bands', 'mw': [100, 50, 25]}
+        self.win.marker_preset_combo.addItem(preset['name'], preset)
+        self.win.marker_preset_combo.setCurrentIndex(self.win.marker_preset_combo.count() - 1)
+        self.win._select_ribbon_tool('manual_lanes')
+        self.win._auto_lanes()
+        self.assertGreater(self.win.lanes[0].x1, 0)
+        self.assertLess(self.win.lanes[-1].x2, 159)
+        self.assertEqual(len({lane.x2 - lane.x1 + 1 for lane in self.win.lanes}), 1)
+        self.assertEqual(self.win.lanes[0].kind, 'marker')
+        self.assertTrue(self.win.lanes[1].mw)
+        self.assertEqual(self.win._active_tool, 'manual_lanes')
+
     def test_legacy_overlapping_lanes_are_not_analyzed_twice(self):
         self.win.lanes = [Lane(0, 10, 90), Lane(1, 80, 140)]
         with patch.object(self.win, '_info') as info, patch.object(Lane, 'analyze') as analyze:
@@ -29,7 +42,7 @@ class LaneWorkflowTest(unittest.TestCase):
         self.win._commit_lanes()
         self.win.gel.selected_lane = self.win.lanes[0]
         previous = [lane.to_dict() for lane in self.win.lanes]
-        self.win.btn_reference_lanes.click()
+        self.win._lanes_from_reference()
         self.assertEqual([(lane.x1, lane.x2) for lane in self.win.lanes], [(5, 74), (75, 144)])
         self.assertEqual(self.win.lanes[0].name, 'My ladder')
         self.assertEqual(self.win.lanes[0].kind, 'marker')
@@ -46,9 +59,9 @@ class LaneWorkflowTest(unittest.TestCase):
         self.win._auto_lanes()
         self.win.gel.selected_lane = self.win.lanes[0]
         before = [lane.to_dict() for lane in self.win.lanes]
-        self.win.sp_lane_n.setValue(3)
+        self.win.sp_lane_n.setValue(4)
         with patch.object(self.win, '_info') as info, patch.object(self.win, 'run_analysis') as analyze:
-            self.win.btn_reference_lanes.click()
+            self.win._lanes_from_reference()
         info.assert_called_once()
         analyze.assert_not_called()
         self.assertEqual([lane.to_dict() for lane in self.win.lanes], before)
@@ -153,7 +166,7 @@ class LaneWorkflowTest(unittest.TestCase):
         self.win._auto_lanes()
         self.win._select_ribbon_tool('manual_lanes')
         self.win.btn_detect_bands.click()
-        self.assertEqual(self.win._active_tool, 'results')
+        self.assertEqual(self.win._active_tool, 'manual_lanes')
         self.win.ribbon_strips[1].buttons['marker'].click()
         self.assertEqual(self.win._active_tool, 'marker')
         self.win.marker_lane_combo.setCurrentIndex(1)

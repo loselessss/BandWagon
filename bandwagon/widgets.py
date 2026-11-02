@@ -13,9 +13,9 @@ from PyQt5.QtWidgets import (
     QToolBar, QAction, QSizePolicy, QMessageBox, QSplitter, QTableWidget,
     QTableWidgetItem, QHeaderView, QTabWidget, QSpinBox, QDoubleSpinBox,
     QComboBox, QInputDialog, QDialog, QDialogButtonBox, QFormLayout,
-    QScrollArea, QCheckBox,
+    QScrollArea, QCheckBox, QToolTip,
 )
-from PyQt5.QtCore import Qt, QPoint, QPointF, QRectF, QRect, QSize, pyqtSignal, QTimer, QStandardPaths, QVariantAnimation
+from PyQt5.QtCore import Qt, QPoint, QPointF, QRectF, QRect, QSize, pyqtSignal, QTimer, QStandardPaths, QVariantAnimation, QEvent
 from PyQt5.QtGui import (
     QPainter, QPen, QColor, QPixmap, QImage, QBrush,
     QPainterPath, QLinearGradient, QFont, QFontMetrics, QPolygonF, QPalette,
@@ -263,6 +263,13 @@ class ChannelBar(QWidget):
 
 
 class GelView(CropToolMixin, QWidget):
+    def event(self, event):
+        if event.type() == QEvent.ToolTip:
+            QToolTip.hideText()
+            event.accept()
+            return True
+        return super().event(event)
+
     laneAdded = pyqtSignal(int, int)
     laneEdgeChanged = pyqtSignal()   # 기존 레인의 x1/x2를 드래그로 조정 완료
     cornerChanged = pyqtSignal(int)
@@ -297,6 +304,7 @@ class GelView(CropToolMixin, QWidget):
         self._lane_move_drag = None   # (lane, drag_start_wx, orig_x1, orig_x2) 레인 라벨을 잡고 평행이동 중일 때
         self.corners = []
         self.crop_rect = None
+        self.crop_quad = None
         self._crop_drag = None
         self._crop_fresh = True
         self._corner_drag = None
@@ -862,7 +870,7 @@ class GelView(CropToolMixin, QWidget):
                 qp.drawLine(QPointF(x2, r.top()), QPointF(x2, r.bottom()))
             if not self.show_overlay:
                 continue  # lane 모드에서도 경계만 보이고 라벨/밴드선/MW는 숨김
-            if lane.peaks is not None and (not self.focus_overlay or selected or lane.kind == 'marker'):
+            if lane.peaks is not None:
                 bounds = lane.peak_bounds if lane.peak_bounds else [
                     (max(0, int(py) - 5), int(py) + 5) for py in lane.peaks]
                 if self.band_display_style == "line":
@@ -871,8 +879,8 @@ class GelView(CropToolMixin, QWidget):
                     for j, py in enumerate(lane.peaks):
                         wy = self._iy_to_wy(float(py))
                         is_sel = self.selected_band == (lane, j)
-                        band_color = QColor(CYAN if selected else MUTE) if self.focus_overlay else QColor(lane.color)
-                        band_color.setAlpha(220 if selected or not self.focus_overlay else 100)
+                        band_color = QColor(CYAN if self.focus_overlay and selected else lane.color)
+                        band_color.setAlpha(220)
                         qp.setPen(QPen(band_color, 3 if is_sel else 1))
                         qp.drawLine(QPointF(x1, wy), QPointF(x2, wy))
                 else:
@@ -882,8 +890,8 @@ class GelView(CropToolMixin, QWidget):
                         band_col = QColor(CYAN if selected else MUTE) if self.focus_overlay else QColor(lane.color)
                         band_col.setAlpha((45 if is_sel else 15) if self.focus_overlay else (90 if is_sel else 60))
                         qp.fillRect(QRectF(x1, wtop, x2 - x1, wbot - wtop), band_col)
-                        edge_color = QColor(CYAN if selected else MUTE) if self.focus_overlay else QColor(lane.color)
-                        edge_color.setAlpha(220 if selected or not self.focus_overlay else 100)
+                        edge_color = QColor(CYAN if self.focus_overlay and selected else lane.color)
+                        edge_color.setAlpha(220)
                         qp.setPen(QPen(edge_color, 2 if is_sel else 1))
                         qp.drawLine(QPointF(x1, wtop), QPointF(x2, wtop))
                         qp.drawLine(QPointF(x1, wbot), QPointF(x2, wbot))
@@ -920,7 +928,7 @@ class GelView(CropToolMixin, QWidget):
                     qp.drawText(name_rect.translated(1, 1), Qt.TextWordWrap | Qt.AlignHCenter | Qt.AlignTop, tag)
                     qp.setPen(QColor(CYAN if selected else INKT))
                 qp.drawText(name_rect, Qt.TextWordWrap | Qt.AlignHCenter | Qt.AlignTop, tag)
-                if lane.peaks is None or (self.focus_overlay and not selected and lane.kind != 'marker'):
+                if lane.peaks is None:
                     continue
                 font_mw = QFont("DejaVu Sans Mono", 7, QFont.Bold)
                 qp.setFont(font_mw)
@@ -1059,7 +1067,8 @@ class GelView(CropToolMixin, QWidget):
         if self.mode == 'crop' and e.button() == Qt.LeftButton and self.crop_rect is not None:
             x, y = self._wpos_to_img(e.x(), e.y())
             left, top, right, bottom = self.crop_rect
-            if left <= x <= right and top <= y <= bottom:
+            if (left <= x <= right and top <= y <= bottom
+                    and (self.crop_quad is None or self._crop_hit(e.x(), e.y()) != 'new')):
                 self.cropApplyRequested.emit()
                 return
         super().mouseDoubleClickEvent(e)

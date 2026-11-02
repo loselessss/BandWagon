@@ -102,6 +102,7 @@ class RibbonMixin:
         for key, label, symbol, callback in (
                 ('file', 'menu_file', 'open', None),
                 ('save', 'toolbar_project_save', 'save', self.save_project),
+                ('copy', 'toolbar_copy_result', 'copy', self.copy_image),
                 ('undo', 'toolbar_undo', 'undo', self._undo),
                 ('redo', 'toolbar_redo', 'redo', self._redo)):
             button = QToolButton(); button.setIcon(icon(symbol)); button.setIconSize(QSize(18, 18))
@@ -159,6 +160,7 @@ class RibbonMixin:
 
     def _update_workflow_state(self):
         if not hasattr(self, 'ribbon') or not hasattr(self, 'workflow_next'): return
+        self._update_marker_review()
         stage = self.ribbon.currentIndex()
         image = self._orig is not None
         detected = bool(self.lanes) and any(lane.peaks is not None and len(lane.peaks) for lane in self.lanes)
@@ -210,12 +212,10 @@ class RibbonMixin:
     def _run_band_detection(self):
         self._finish_tool_preview()
         if self.run_analysis():
-            if (not self._compute_mw() and self._prepared_marker_pending
-                    and self.marker_preset_combo.currentData() is not None):
-                self._select_ribbon_tool('marker')
-                self._configure_marker_lane()
-            else:
-                self._select_ribbon_tool('results')
+            # Detection is a review step, not permission to leave the editor.
+            # Prepared markers are applied by run_analysis; unmatched markers
+            # can be configured explicitly after inspecting the detected bands.
+            self._update_workflow_state()
 
     def _invert_ribbon_colors(self):
         if self._orig is None: return

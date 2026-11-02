@@ -257,6 +257,8 @@ class FileIOMixin:
         self.shear_spin.blockSignals(True); self.shear_spin.setValue(0); self.shear_spin.blockSignals(False)
         self.shear_vertical_slider.blockSignals(True); self.shear_vertical_slider.setValue(0); self.shear_vertical_slider.blockSignals(False)
         self.shear_vertical_spin.blockSignals(True); self.shear_vertical_spin.setValue(0); self.shear_vertical_spin.blockSignals(False)
+        for control in (self.trapezoid_slider, self.trapezoid_spin):
+            control.blockSignals(True); control.setValue(0); control.blockSignals(False)
         for m in self.curves.values(): m.reset()
         self.curve.model = self.curves[self._ch]; self.curve._sel = None
         self.sl_bright.setValue(0); self.sl_contrast.setValue(0)

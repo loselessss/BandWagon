@@ -88,18 +88,10 @@ class AdjustControlsTest(unittest.TestCase):
         self.win._select_ribbon_tool('crop')
         self.assertNotIn('warp', self.win.ribbon_strips[0].buttons)
         crop_group = self.win.correct_tools['crop'][1]
-        self.assertTrue(self.win.btn_corner.isVisibleTo(crop_group))
+        self.assertFalse(self.win.btn_corner.isVisibleTo(crop_group))
         self.assertTrue(self.win.chk_warp_curve.isVisibleTo(crop_group))
         self.assertTrue(self.win.btn_crop.isChecked())
-        self.win.gel.corners = [(20, 20), (170, 20), (170, 140), (20, 140)]
-        self.win.btn_corner.click()
-        self.assertTrue(self.win.btn_corner.isChecked())
-        self.assertFalse(self.win.btn_crop.isChecked())
-        with patch.object(self.win, '_manual_warp') as warp, patch.object(self.win, '_apply_crop') as crop:
-            QTest.keyClick(self.win, Qt.Key_Return)
-            warp.assert_called_once()
-            crop.assert_not_called()
-        self.win.btn_crop.click()
+        self.win.gel.set_crop_quad([(20, 20), (170, 30), (170, 140), (20, 140)])
         self.assertFalse(self.win.btn_corner.isChecked())
         with patch.object(self.win, '_manual_warp') as warp, patch.object(self.win, '_apply_crop') as crop:
             QTest.keyClick(self.win, Qt.Key_Return)
@@ -177,8 +169,8 @@ class AdjustControlsTest(unittest.TestCase):
         self.assertEqual(self.win._orig.size, (1400, 900))
         self.win.btn_undo.trigger()
         self.assertEqual(self.win._orig.size, self.source.size)
-        self.win.gel.corners = quad.tolist()
-        self.click("btn_apply_warp")
+        self.win.gel.set_crop_quad(quad.tolist())
+        self.click("crop_apply")
         self.assertEqual(self.win._orig.size, (1400, 900))
 
     def test_curve_clicks_keep_zoom_pan_and_image_coordinates(self):
@@ -207,7 +199,7 @@ class AdjustControlsTest(unittest.TestCase):
         self.assertIsNotNone(self.win._inline_curve)
         self.win._inline_curve.cancel()
         self.assertEqual(self.win._orig.size, (1400, 900))
-        self.assertEqual([op for op, _ in self.win._edit_ops], ["warp"])
+        self.assertEqual([op for op, _ in self.win._edit_ops], ["crop"])
 
     def test_switching_geometry_preserves_pending_values(self):
         self.win.rot_slider.setValue(4)

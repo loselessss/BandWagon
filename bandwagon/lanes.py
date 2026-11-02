@@ -22,7 +22,7 @@ from .imaging import lane_boundary_signal
 from .fluent_icons import icon
 from .theme import *
 from .models import Lane
-from .lane_geometry import valid_lane_spans, regular_lane_spans
+from .lane_geometry import valid_lane_spans, regular_lane_spans, signal_lane_spans
 from .widgets import StdCurveView, FineSlider
 from .checkbox import TickCheckBox
 from .dialogs import MarkerDialog, MarkerPresetManager, _dialog_style, _no_help_button
@@ -131,11 +131,6 @@ class LanesMixin:
         auto = QPushButton(tr("btn_auto_detect_lanes")); auto.clicked.connect(self._auto_lanes)
         auto.setStyleSheet(self._btn_css())
         h.addWidget(auto)
-        self.btn_reference_lanes = QPushButton(tr('btn_reference_lanes'))
-        self.btn_reference_lanes.setStyleSheet(self._btn_css())
-        self.btn_reference_lanes.setToolTip(tr('reference_lanes_tip'))
-        self.btn_reference_lanes.clicked.connect(self._lanes_from_reference)
-        h.addWidget(self.btn_reference_lanes)
         self.selected_lane_summary = QLabel(tr('workflow_select_lane_hint'))
         self.selected_lane_summary.setWordWrap(True)
         self.selected_lane_summary.setStyleSheet(f'color:{CYAN};padding:4px 0;')
@@ -338,6 +333,14 @@ class LanesMixin:
         self.btn_detect_bands.setToolTip(tr('ribbon_detect_tip'))
         self.btn_detect_bands.clicked.connect(lambda _checked=False: self._run_band_detection())
         detect_layout.addWidget(self.btn_detect_bands)
+        self.marker_review_notice = QLabel(); self.marker_review_notice.setWordWrap(True)
+        self.marker_review_notice.setStyleSheet(f'color:{MUTE};font-size:11px;')
+        self.btn_marker_review = QPushButton(tr('marker_review_here'))
+        self.btn_marker_review.setStyleSheet(self._btn_css())
+        self.btn_marker_review.clicked.connect(self._resolve_prepared_marker_here)
+        detect_layout.addWidget(self.marker_review_notice)
+        detect_layout.addWidget(self.btn_marker_review)
+        self.marker_review_notice.hide(); self.btn_marker_review.hide()
         v.insertWidget(v.indexOf(self.band_basic_box) + 1, self.band_detect_wrap)
 
         v.addStretch()
@@ -437,6 +440,30 @@ class LanesMixin:
         self._prepared_marker_pending = False
         return True
 
+    def _update_marker_review(self):
+        if not hasattr(self, 'btn_marker_review'): return
+        preset = self.marker_preset_combo.currentData()
+        row = self.sp_marker_lane.value() - 1
+        lane = self.lanes[row] if 0 <= row < len(self.lanes) else None
+        pending = bool(preset and self._prepared_marker_pending and lane is not None
+                       and lane.peaks is not None and not self._analysis_stale)
+        self.marker_review_notice.setVisible(pending)
+        self.btn_marker_review.setVisible(pending)
+        if pending:
+            self.marker_review_notice.setText(tr('marker_review_counts', name=lane.name,
+                                                detected=len(lane.peaks), expected=len(preset['mw'])))
+            self.btn_marker_review.setEnabled(len(lane.peaks) > 0)
+
+    def _resolve_prepared_marker_here(self):
+        row = self.sp_marker_lane.value() - 1
+        if not 0 <= row < len(self.lanes) or self._analysis_stale: return
+        lane = self.lanes[row]
+        if not self._edit_marker(lane, prepared=True): return
+        lane.kind = 'marker'
+        self._prepared_marker_pending = False
+        self._compute_mw(); self._refresh_results(); self._commit_lanes()
+        self.gel.update(); self._update_marker_review()
+
     def _update_marker_controls(self):
         if not hasattr(self, 'marker_lane_combo'): return
         previous = self.marker_lane_combo.currentData()
@@ -469,6 +496,8 @@ class LanesMixin:
         if lane is not None and not refreshing:
             self.sp_marker_lane.blockSignals(True); self.sp_marker_lane.setValue(index + 1)
             self.sp_marker_lane.blockSignals(False)
+            if self.marker_preset_combo.currentData() is not None:
+                self._prepared_marker_pending = True
         if getattr(self, '_active_tool', None) == 'marker':
             self.gel.selected_lane = lane
             self.gel.update()
@@ -778,6 +807,17 @@ class LanesMixin:
         spans = self._split_lanes_by_count(sm, n_target, W)
         if spans is None or not valid_lane_spans(spans, W, count=n_target, contiguous=True):
             self._info(tr("detect_fail_title"), tr("detect_fail_count_msg", n=n_target))
+            return
+
+        marker_index = None
+        if self.marker_preset_combo.currentData() is not None:
+            marker_index = self.sp_marker_lane.value() - 1
+        else:
+            marker_index = next((i for i, lane in enumerate(sorted(self.lanes, key=lambda item: item.x1))
+                                 if lane.kind == 'marker'), None)
+        spans = signal_lane_spans(sm, spans, marker_index)
+        if spans is None:
+            self._info(tr('detect_fail_title'), tr('detect_fail_count_msg', n=n_target))
             return
 
         self._clear_lanes()
@@ -1188,14 +1228,14 @@ class LanesMixin:
                 self._select_ribbon_tool('marker')
                 self.status.showMessage(tr('mw_regression_placeholder'))
 
-    def _edit_marker(self, lane):
+    def _edit_marker(self, lane, prepared=False):
         """Apply a matching preset immediately; ask only for manual entry or
         ambiguous band assignments. Return False on cancellation/no bands."""
         if lane.peaks is None or len(lane.peaks) == 0:
             self._info(tr("no_bands_title"), tr("no_bands_run_analysis_msg"))
             return False
         preset = None
-        if getattr(self, '_active_tool', None) == 'marker':
+        if prepared or getattr(self, '_active_tool', None) == 'marker':
             preset = self.marker_preset_combo.currentData()
         if preset is not None and len(preset['mw']) == len(lane.peaks):
             lane.marker_mw = list(preset['mw'])

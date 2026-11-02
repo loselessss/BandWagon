@@ -72,17 +72,65 @@ class WorkflowNavigationTest(unittest.TestCase):
         self.win._auto_lanes()
         self.assertTrue(self.win.workflow_next.isEnabled())
         self.assertEqual(self.win.lanes[1].marker_mw, [100, 50, 25])
+        self.assertTrue(self.win.lanes[0].mw)
+        self.assertFalse(self.win.btn_marker_review.isVisible())
         self.win.sp_prom.setValue(85)
         self.assertFalse(self.win.workflow_next.isEnabled())
         self.assertEqual(self.win.workflow_hint.text(), tr('workflow_stale_hint'))
         self.win.btn_detect_bands.click()
         self.assertTrue(self.win.workflow_next.isEnabled())
+        self.assertEqual(self.win.ribbon.currentIndex(), 2)
+        self.win.workflow_next.click()
         self.assertEqual(self.win.ribbon.currentIndex(), 3)
         self.assertEqual(self.win.result_table.rowCount(), 6)
         self.assertEqual(self.win.lanes[1].marker_mw, [100, 50, 25])
         with patch.object(self.win, 'copy_image') as copy:
             self.win.workflow_next.click()
             copy.assert_called_once()
+
+    def test_marker_mismatch_can_be_resolved_in_step_three(self):
+        preset = {'name': 'Four bands', 'mw': [100, 75, 50, 25]}
+        self.win.marker_preset_combo.addItem(preset['name'], preset)
+        self.win.marker_preset_combo.setCurrentIndex(self.win.marker_preset_combo.count() - 1)
+        self.win._select_ribbon_tool('manual_lanes')
+        self.win._auto_lanes()
+        self.assertEqual(self.win._active_tool, 'manual_lanes')
+        self.assertFalse(self.win.btn_marker_review.isHidden())
+        self.assertIn('3', self.win.marker_review_notice.text())
+        with patch('bandwagon.lanes.MarkerDialog') as dialog:
+            dialog.return_value.preset_combo.findText.return_value = -1
+            dialog.return_value.exec_.return_value = 0
+            self.win.btn_marker_review.click()
+        self.assertTrue(self.win._prepared_marker_pending)
+        with patch('bandwagon.lanes.MarkerDialog') as dialog:
+            dialog.return_value.preset_combo.findText.return_value = -1
+            dialog.return_value.exec_.return_value = 1
+            dialog.return_value.values.return_value = [100, 50, 25]
+            self.win.btn_marker_review.click()
+        self.assertEqual(self.win._active_tool, 'manual_lanes')
+        self.assertEqual(self.win.lanes[0].kind, 'marker')
+        self.assertTrue(self.win.lanes[1].mw)
+        self.assertFalse(self.win._prepared_marker_pending)
+        self.assertTrue(self.win.btn_marker_review.isHidden())
+
+    def test_copy_quick_action_available_in_every_stage(self):
+        # The button invokes the same export-options dialog as File > Copy.
+        with patch.object(self.win, '_export_options', return_value=None) as options:
+            for stage in range(4):
+                self.win.ribbon.setCurrentIndex(stage)
+                self.win.quick_buttons['copy'].click()
+                self.assertEqual(self.win.ribbon.currentIndex(), stage)
+            self.assertEqual(options.call_count, 4)
+
+    def test_gel_does_not_show_inherited_tooltips(self):
+        from PyQt5.QtCore import QEvent
+        from PyQt5.QtGui import QHelpEvent
+        self.win.gel.setToolTip('must not cover the image')
+        event = QHelpEvent(QEvent.ToolTip, QPoint(20, 20), QPoint(20, 20))
+        with patch('bandwagon.widgets.QToolTip.showText') as popup:
+            QApplication.sendEvent(self.win.gel, event)
+        popup.assert_not_called()
+        self.assertTrue(event.isAccepted())
 
     def test_free_navigation_keeps_analysis_selection_and_settings(self):
         self.win._auto_lanes()

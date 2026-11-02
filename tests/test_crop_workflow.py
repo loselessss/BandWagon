@@ -16,6 +16,7 @@ from bandwagon.app import Analyzer
 from bandwagon.i18n import tr
 from bandwagon.models import Lane
 from bandwagon.lane_geometry import valid_lane_spans
+from bandwagon.imaging import apply_edit_op
 
 
 class CropWorkflowTest(unittest.TestCase):
@@ -82,11 +83,12 @@ class CropWorkflowTest(unittest.TestCase):
         self.assertLessEqual(right, 200); self.assertLessEqual(bottom, 160)
         self.assertIsNone(self.win.gel._crop_drag)
 
-    def test_all_eight_crop_handles_preserve_axis_aligned_bounds(self):
+    def test_all_eight_crop_handles_update_bounds_and_corners_enable_perspective(self):
         self.win._select_ribbon_tool('crop')
         for handle in ('nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'):
             with self.subTest(handle=handle):
                 gel = self.win.gel
+                gel.crop_quad = None
                 gel.crop_rect = (40, 30, 140, 120)
                 gel._crop_fresh = False
                 xs = {'w': 40, 'e': 140}; ys = {'n': 30, 's': 120}
@@ -98,6 +100,7 @@ class CropWorkflowTest(unittest.TestCase):
                 expected = (25 if 'w' in handle else 40, 15 if 'n' in handle else 30,
                             155 if 'e' in handle else 140, 135 if 's' in handle else 120)
                 np.testing.assert_allclose(gel.crop_rect, expected, atol=.8)
+                self.assertEqual(gel.crop_quad is not None, len(handle) == 2)
 
     def test_crop_escape_preserves_pixels_and_clears_selection(self):
         self.win._select_ribbon_tool('crop')
@@ -107,6 +110,47 @@ class CropWorkflowTest(unittest.TestCase):
         self.assertIsNone(self.win.gel.crop_rect)
         self.assertEqual(self.win._orig.tobytes(), self.source.tobytes())
         self.assertEqual(self.win._edit_pos, -1)
+
+    def test_corner_drag_applies_perspective_and_undo_restores_same_selection(self):
+        pixels = np.arange(160 * 200, dtype=np.uint8).reshape(160, 200)
+        self.win._wb_gray_override = pixels.copy()
+        self.win._pristine_wb_gray_override = pixels.copy()
+        self.win._select_ribbon_tool('crop')
+        self.drag((30, 20), (170, 140))
+        self.drag((30, 20), (55, 35))
+        quad = list(self.win.gel.crop_quad)
+        self.assertEqual(self.win.gel.mode, 'crop')
+        expected, uv = apply_edit_op(self.source, pixels, 'warp', {'corners': quad})
+        QTest.keyClick(self.win, Qt.Key_Return)
+        self.assertEqual(self.win._edit_ops[-1][0], 'warp')
+        self.assertEqual(self.win._orig.tobytes(), expected.tobytes())
+        np.testing.assert_array_equal(self.win._wb_gray_override, uv)
+        self.win._undo()
+        self.assertEqual(self.win.gel.mode, 'crop')
+        np.testing.assert_allclose(self.win.gel.crop_quad, quad)
+        self.win._redo()
+        self.assertEqual(self.win._orig.tobytes(), expected.tobytes())
+        self.assertIsNone(self.win.gel.crop_quad)
+
+    def test_perspective_selection_moves_and_rejects_crossed_corners(self):
+        self.win._select_ribbon_tool('crop')
+        gel = self.win.gel
+        quad = [(40, 30), (150, 40), (160, 120), (30, 125)]
+        self.assertTrue(gel.set_crop_quad(quad))
+        self.drag((90, 80), (100, 85))
+        np.testing.assert_allclose(gel.crop_quad, np.array(quad) + [10, 5], atol=.8)
+        previous = list(gel.crop_quad)
+        self.assertFalse(gel.set_crop_quad([previous[0], previous[2], previous[1], previous[3]]))
+        self.assertEqual(gel.crop_quad, previous)
+        self.win._reset_crop()
+        self.assertIsNone(gel.crop_quad)
+        self.assertEqual(gel.crop_rect, (0, 0, 200, 160))
+
+    def test_axis_aligned_quad_crops_without_resampling(self):
+        self.win._select_ribbon_tool('crop')
+        self.win.gel.set_crop_quad([(20, 15), (150, 15), (150, 120), (20, 120)])
+        self.win._apply_crop()
+        self.assertEqual(self.win._edit_ops[-1], ('crop', {'box': [20, 15, 150, 120]}))
 
     def test_crop_applies_to_rgb_and_uv_and_undo_restores_crop_selection(self):
         pixels = np.arange(160 * 200, dtype=np.uint8).reshape(160, 200)
@@ -146,16 +190,16 @@ class CropWorkflowTest(unittest.TestCase):
         self.assertEqual(self.win._orig.size, (110, 90))
         self.assertEqual(gel.mode, 'view')
 
-    def test_auto_warp_turns_off_rectangular_crop_mode(self):
+    def test_auto_warp_uses_same_crop_selection(self):
         self.win._select_ribbon_tool('crop')
         quad = np.array([[5, 5], [190, 5], [190, 150], [5, 150]], dtype=np.float32)
         with patch('bandwagon.geometry.find_gel_quad', return_value=quad), \
                 patch.object(self.win, '_ask', return_value=False):
             self.win._auto_warp()
-        self.assertFalse(self.win.btn_crop.isChecked())
-        self.assertTrue(self.win.btn_corner.isChecked())
-        self.assertEqual(self.win.gel.mode, 'corner')
-        self.assertIsNone(self.win.gel.crop_rect)
+        self.assertTrue(self.win.btn_crop.isChecked())
+        self.assertFalse(self.win.btn_corner.isChecked())
+        self.assertEqual(self.win.gel.mode, 'crop')
+        np.testing.assert_allclose(self.win.gel.crop_quad, quad)
 
     def test_manual_lane_add_resize_and_move_cannot_overlap_even_after_table_reorder(self):
         self.win.lanes = [Lane(1, 110, 150), Lane(0, 30, 80)]

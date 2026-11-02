@@ -134,34 +134,17 @@ class GeometryMixin:
         self.crop_size_label.setStyleSheet(f'color:{MUTE};font-size:11px;')
         crv.addWidget(self.crop_size_label)
 
-        region = QGroupBox(tr('manual_perspective')); region.setStyleSheet(self._group_css())
-        rgl = QVBoxLayout(region); rgl.setSpacing(5)
-        info = QLabel(tr("warp_short_hint"))
-        info.setToolTip(tr("warp_intro"))
-        info.setStyleSheet(f"color:{MUTE};font-size:11px;"); info.setWordWrap(True)
-        rgl.addWidget(info)
         auto = QPushButton(tr("btn_auto_warp")); auto.clicked.connect(self._auto_warp); auto.setStyleSheet(self._btn_accent_css())
         self.btn_auto_warp = auto
         crv.insertWidget(0, auto)
         self.chk_warp_curve = QCheckBox(tr("warp_then_curve"))
         self.chk_warp_curve.setStyleSheet(f"color:{INKT};font-size:11px;" + self._checkbox_css())
         crv.insertWidget(1, self.chk_warp_curve)
-        self.btn_corner = QPushButton(tr("btn_corner_mode_off")); self.btn_corner.setCheckable(True)
+        # Legacy history/shortcut adapter, not a second user-facing tool.
+        self.btn_corner = QPushButton(tr("btn_corner_mode_off"), crop); self.btn_corner.setCheckable(True)
         self.btn_corner.clicked.connect(self._toggle_corner_mode); self.btn_corner.setStyleSheet(self._btn_css())
-        rgl.addWidget(self.btn_corner)
-        order_hint = QLabel(tr("corner_short_hint"))
-        order_hint.setToolTip(tr("corner_click_order"))
-        order_hint.setStyleSheet(f"color:{MUTE};font-size:11px;"); order_hint.setWordWrap(True)
-        order_hint.setAlignment(Qt.AlignCenter)
-        rgl.addWidget(order_hint)
-        self.corner_label = QLabel(tr("corner_count", n=0))
-        self.corner_label.setStyleSheet(f"color:{CYAN};font-size:11px;font-family:'DejaVu Sans Mono';")
-        self.corner_label.setAlignment(Qt.AlignCenter)
-        rgl.addWidget(self.corner_label)
-        wr = QPushButton(tr("btn_apply_warp")); wr.clicked.connect(self._manual_warp); wr.setStyleSheet(self._btn_css())
-        wc = QPushButton(tr("btn_reset_corners")); wc.clicked.connect(self._clear_corners); wc.setStyleSheet(self._btn_css())
-        rgl.addWidget(wr); rgl.addWidget(wc)
-        crv.addWidget(region)
+        self.btn_corner.hide()
+        self.corner_label = QLabel(tr("corner_count", n=0), crop); self.corner_label.hide()
         v.addWidget(crop)
 
         bow = QGroupBox(tr("group_bow_correction")); bow.setStyleSheet(self._group_css())
@@ -242,6 +225,20 @@ class GeometryMixin:
         shear_hint = QLabel(tr("shear_sign_hint"))
         shear_hint.setStyleSheet(f"color:{MUTE};font-size:12px;"); shear_hint.setWordWrap(True)
         shv.addWidget(shear_hint)
+        trow = QHBoxLayout()
+        trow.addWidget(QLabel(tr('trapezoid_correct')))
+        self.trapezoid_slider = FineSlider(Qt.Horizontal)
+        self.trapezoid_slider.setRange(-80, 80)
+        self.trapezoid_slider.setStyleSheet(self.shear_slider.styleSheet())
+        self.trapezoid_spin = QSpinBox(); self.trapezoid_spin.setRange(-80, 80)
+        self.trapezoid_spin.setSuffix('%'); self._size_correction_spin(self.trapezoid_spin)
+        for control in (self.trapezoid_slider, self.trapezoid_spin):
+            control.setToolTip(tr('trapezoid_hint'))
+            control.valueChanged.connect(lambda value: self._on_shear_value_changed(value, trapezoid=True))
+        self.trapezoid_slider.sliderReleased.connect(self._commit_shear_correction)
+        self.trapezoid_spin.editingFinished.connect(self._commit_shear_correction)
+        trow.addWidget(self.trapezoid_slider, 1); trow.addWidget(self.trapezoid_spin)
+        shv.insertLayout(3, trow)
         v.addWidget(shear)
 
         self.shear_slider.valueChanged.connect(self._on_shear_value_changed)
@@ -300,7 +297,7 @@ class GeometryMixin:
         v.addWidget(note)
 
         self._geometry_shortcut_widgets = []
-        for spin in (self.rot_spin, self.bow_spin, self.shear_spin, self.shear_vertical_spin):
+        for spin in (self.rot_spin, self.bow_spin, self.shear_spin, self.shear_vertical_spin, self.trapezoid_spin):
             for widget in (spin, spin.lineEdit()):
                 widget.installEventFilter(self)
                 self._geometry_shortcut_widgets.append(widget)
@@ -350,6 +347,17 @@ class GeometryMixin:
             self._info(tr('tool_crop'), tr('crop_hint'))
             return
         self._finalize_pending_rotation(); self._finalize_pending_bow(); self._finalize_pending_shear()
+        quad = self.gel.crop_quad
+        if quad is not None:
+            tl, tr_, br, bl = quad
+            rectangular = (abs(tl[1]-tr_[1]) < 1e-6 and abs(bl[1]-br[1]) < 1e-6
+                           and abs(tl[0]-bl[0]) < 1e-6 and abs(tr_[0]-br[0]) < 1e-6)
+            if not rectangular:
+                if not HAS_CV2:
+                    self._warn(tr('opencv_required_title'), tr('opencv_required_warp_msg'))
+                    return
+                self._warp(np.array(quad, dtype=np.float32))
+                return
         x1, y1, x2, y2 = self.gel.crop_rect
         w, h = self._orig.size
         left = max(0, min(w - 1, int(np.floor(x1))))
@@ -721,22 +729,24 @@ class GeometryMixin:
         self.status.showMessage(tr("status_bow_reset"))
 
     @staticmethod
-    def _apply_shear_correction(img, amount, vertical=0):
-        return apply_shear_correction(img, amount, vertical)
+    def _apply_shear_correction(img, amount, vertical=0, trapezoid=0):
+        return apply_shear_correction(img, amount, vertical, trapezoid)
 
     def _shear_params(self, amount=None, vertical=None):
         params = {'amount': self.shear_slider.value() if amount is None else amount}
         vertical = self.shear_vertical_slider.value() if vertical is None else vertical
         if vertical: params['vertical'] = vertical
+        if self.trapezoid_slider.value(): params['trapezoid'] = self.trapezoid_slider.value()
         return params
 
     @memory_safe_edit
-    def _on_shear_value_changed(self, v, vertical=False):
+    def _on_shear_value_changed(self, v, vertical=False, trapezoid=False):
         """_on_bow_value_changed와 동일한 패턴(기울기보정판). v는 세션
         기준(_shear_base) 대비 절대 이동량(px)이며, release해도 유지된다."""
         self._finish_other_geometry("shear")
         slider = self.shear_vertical_slider if vertical else self.shear_slider
         spin = self.shear_vertical_spin if vertical else self.shear_spin
+        if trapezoid: slider, spin = self.trapezoid_slider, self.trapezoid_spin
         if slider.value() != v:
             slider.blockSignals(True); slider.setValue(v); slider.blockSignals(False)
         if spin.value() != v:
@@ -751,7 +761,9 @@ class GeometryMixin:
             self._preview_small = None
             # Starting a new operation after other geometry must not reapply
             # the other axis's previous, already baked-in correction.
-            others = (self.shear_slider, self.shear_spin) if vertical else (self.shear_vertical_slider, self.shear_vertical_spin)
+            others = [c for c in (self.shear_slider, self.shear_spin,
+                      self.shear_vertical_slider, self.shear_vertical_spin,
+                      self.trapezoid_slider, self.trapezoid_spin) if c not in (slider, spin)]
             for control in others:
                 control.blockSignals(True); control.setValue(0); control.blockSignals(False)
         if self._preview_small is None:
@@ -762,8 +774,9 @@ class GeometryMixin:
         # v==0이면 _shear_base 자체를 보여준다(이유는 회전/곡률보정 버전과 동일
         # — self._orig엔 이전 기울기가 baked-in일 수 있음).
         horizontal = self.shear_slider.value(); down = self.shear_vertical_slider.value()
-        preview = self._preview_small if horizontal == down == 0 else self._apply_shear_correction(
-            self._preview_small, horizontal * self._preview_scale, down * self._preview_scale)
+        taper = self.trapezoid_slider.value()
+        preview = self._preview_small if horizontal == down == taper == 0 else self._apply_shear_correction(
+            self._preview_small, horizontal * self._preview_scale, down * self._preview_scale, taper)
         self.btn_undo.setEnabled(True)
         self.gel.set_image(pil_to_pixmap(preview), self._orig.size)
         self.status.showMessage(
@@ -773,7 +786,7 @@ class GeometryMixin:
     def _apply_shear_op(self, amount, vertical=None):
         """_apply_bow_op과 동일한 절대값-교체 로직(기울기보정판)."""
         params = self._shear_params(amount, vertical)
-        if amount == 0 and not params.get('vertical', 0):
+        if amount == 0 and not params.get('vertical', 0) and not params.get('trapezoid', 0):
             if self._shear_session_pushed:
                 del self._edit_ops[self._edit_pos]
                 self._edit_pos -= 1
@@ -810,7 +823,7 @@ class GeometryMixin:
         self._finalize_pending_rotation()
         self._finalize_pending_bow()
         amount = self.shear_slider.value()
-        zero = amount == 0 and self.shear_vertical_slider.value() == 0
+        zero = amount == 0 and self.shear_vertical_slider.value() == 0 and self.trapezoid_slider.value() == 0
         self._apply_shear_op(amount)
         if zero:
             self._shear_base = None
@@ -826,6 +839,8 @@ class GeometryMixin:
     @memory_safe_edit
     def _reset_shear_correction(self):
         """_reset_bow_correction과 동일한 역할(기울기보정판)."""
+        for control in (self.trapezoid_slider, self.trapezoid_spin):
+            control.blockSignals(True); control.setValue(0); control.blockSignals(False)
         if self._shear_base is None:
             self.shear_slider.setValue(0)
             self.shear_vertical_slider.setValue(0)
@@ -1049,6 +1064,9 @@ class GeometryMixin:
 
         shear_amt = last_shear["amount"] if last_shear else 0
         shear_vertical = last_shear.get('vertical', 0) if last_shear else 0
+        taper = last_shear.get('trapezoid', 0) if last_shear else 0
+        for control in (self.trapezoid_slider, self.trapezoid_spin):
+            control.blockSignals(True); control.setValue(taper); control.blockSignals(False)
         self._shear_base = pre_last_img if last_op == "shear_correct" else None
         self._shear_session_pushed = last_op == "shear_correct"
         self.shear_slider.blockSignals(True); self.shear_slider.setValue(shear_amt); self.shear_slider.blockSignals(False)
@@ -1268,6 +1286,9 @@ class GeometryMixin:
             self.gel._crop_fresh = False
             self.gel.cropChanged.emit(self.gel.crop_rect)
             self.gel.update()
+        elif undone_op == 'warp':
+            self._select_ribbon_tool('crop')
+            self.gel.set_crop_quad(undone_params['corners'])
         if hasattr(self, "btn_undo"):
             self.btn_undo.setEnabled(self._edit_pos >= 0)
         if hasattr(self, "btn_redo"):
@@ -1502,17 +1523,13 @@ class GeometryMixin:
             self._info(tr("warp_detect_fail_title"), tr("warp_detect_fail_msg") +
                        tr("corner_click_order")); self._enter_manual_corner_mode(); return
         ordered = self._order_corners(quad)
-        self.gel.corners = [tuple(map(float, p)) for p in ordered]
-        # Detected corners must remain visible for the confirmation preview,
-        # but disappear when leaving the corner tool (coordinates are kept).
-        self._enter_manual_corner_mode()
-        self.gel.update(); self.corner_label.setText(tr("corner_count_auto"))
+        self.btn_crop.setChecked(True)
+        self._toggle_crop_mode(True)
+        self.gel.set_crop_quad(ordered)
         if self._ask(tr("auto_detect_done_title"), tr("auto_detect_done_msg")):
-            self._warp(ordered)
+            self._apply_crop()
             if self.chk_warp_curve.isChecked():
                 self._reference_bow()
-        else:
-            self._enter_manual_corner_mode()
 
     def _enter_manual_corner_mode(self):
         """코너 지정 모드를 켜고 버튼 상태를 맞춘다 (자동 인식 실패/거절 시 공통 사용)."""

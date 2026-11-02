@@ -133,10 +133,8 @@ class InlineCurve(QWidget):
             if self.drag is not None: self.move_point(event)
             self.drag = None; self.group_start = None; return True
         if kind == QEvent.ToolTip:
-            grip = self.line_grip()
-            if abs(event.x() - grip.x()) <= 10 and abs(event.y() - grip.y()) <= 16:
-                QToolTip.showText(event.globalPos(), tr('curve_move_line'), self.gel)
-                return True
+            QToolTip.hideText()
+            return True
         return False
 
     def line_grip(self):

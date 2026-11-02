@@ -15,6 +15,25 @@ from bandwagon.imaging import apply_shear_correction, apply_edit_op
 
 
 class ParallelogramMathTest(unittest.TestCase):
+    def test_trapezoid_matches_projective_transform_both_signs(self):
+        h, w = 275, 330
+        arr = np.random.default_rng(5).integers(0, 256, (h, w, 3), dtype=np.uint8)
+        image = Image.fromarray(arr)
+        for taper in (-80, -40, 40, 80):
+            a = 1 - max(taper, 0) / 100
+            b = 1 + min(taper, 0) / 100
+            center = (w - 1) / 2
+            src = np.float32([[center * (1-a), 0], [center * (1+a), 0],
+                              [center * (1+b), h-1], [center * (1-b), h-1]])
+            dst = np.float32([[0, 0], [w-1, 0], [w-1, h-1], [0, h-1]])
+            matrix = cv2.getPerspectiveTransform(src, dst)
+            expected = cv2.warpPerspective(arr, matrix, (w, h), borderMode=cv2.BORDER_REFLECT)
+            actual = np.asarray(apply_shear_correction(image, 0, 0, taper))
+            # Floating-point roundoff can change OpenCV's 1/32-pixel bins.
+            self.assertLess(np.abs(actual.astype(float) - expected).mean(), 0.05)
+        for taper in (-81, 81, float('nan')):
+            with self.assertRaises(ValueError): apply_shear_correction(image, 0, 0, taper)
+
     def test_both_signs_straighten_lanes_and_bands(self):
         h, w = 200, 240
         for amount in (-50, 50):
@@ -92,6 +111,38 @@ class ParallelogramControlsTest(unittest.TestCase):
         self.win.shear_slider.setValue(x)
         self.win.shear_vertical_slider.setValue(y)
         self.win._commit_shear_correction()
+
+    def test_trapezoid_entry_apply_undo_redo_and_uv(self):
+        self.win.trapezoid_slider.setValue(40)
+        self.assertEqual(self.win._active_tool, 'bow')
+        self.assertEqual(self.win.trapezoid_spin.value(), 40)
+        self.assertEqual(self.win._orig.tobytes(), self.source.tobytes())
+        self.win._commit_shear_correction()
+        expected, uv = apply_edit_op(self.source, np.asarray(self.source)[:, :, 0],
+                                     'shear_correct', {'amount': 0, 'trapezoid': 40})
+        self.assertEqual(self.win._orig.tobytes(), expected.tobytes())
+        np.testing.assert_array_equal(self.win._wb_gray_override, uv)
+        self.assertEqual(self.win.gel.mode, 'view')
+        self.win._undo()
+        self.assertEqual(self.win._orig.tobytes(), self.source.tobytes())
+        self.win._redo()
+        self.assertEqual(self.win._orig.tobytes(), expected.tobytes())
+        self.assertEqual(self.win.trapezoid_spin.value(), 40)
+        self.win._reset_shear_correction()
+        self.assertEqual(self.win._orig.tobytes(), self.source.tobytes())
+        self.assertEqual(self.win.trapezoid_spin.value(), 0)
+
+    def test_trapezoid_zero_and_new_image_reset(self):
+        self.win.trapezoid_slider.setValue(-50)
+        self.win._commit_shear_correction()
+        self.win.trapezoid_slider.setValue(0)
+        self.win._commit_shear_correction()
+        self.assertEqual(self.win._orig.tobytes(), self.source.tobytes())
+        self.win.trapezoid_slider.setValue(80)
+        self.win._select_ribbon_tool('rotate')
+        self.assertEqual(self.win._edit_ops[-1][1]['trapezoid'], 80)
+        self.win._orig = self.source.copy(); self.win._after_load('new.png')
+        self.assertEqual(self.win.trapezoid_slider.value(), 0)
 
     def test_preview_commit_undo_redo_and_reset_both_axes(self):
         self.win.shear_slider.setValue(30); self.win.shear_vertical_slider.setValue(20)
