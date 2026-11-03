@@ -16,6 +16,27 @@ from bandwagon.imaging import apply_edit_op, apply_reference_curve, reference_cu
 
 
 class AdjustControlsTest(unittest.TestCase):
+    def test_geometry_previews_keep_tone_curve_and_brightness(self):
+        self.win.curves['RGB'].points = [(0, 25), (128, 190), (255, 255)]
+        self.win.curves['RGB']._rebuild()
+        self.win.sl_bright.setValue(12)
+        self.win._commit_adjust()
+        snapshot = self.win.curves['RGB'].to_dict()
+        for tool, slider in (('rotate', self.win.rot_slider), ('bow', self.win.bow_slider),
+                             ('shear', self.win.shear_slider)):
+            self.win._select_ribbon_tool(tool)
+            with patch.object(self.win, '_apply_color_pipeline', wraps=self.win._apply_color_pipeline) as color:
+                slider.setValue(8)
+                self.assertTrue(color.called, tool)
+            self.win._finish_tool_preview()
+            self.assertEqual(self.win.curves['RGB'].to_dict(), snapshot)
+            self.assertEqual(self.win.sl_bright.value(), 12)
+        self.win._reference_bow()
+        with patch.object(self.win, '_apply_color_pipeline', wraps=self.win._apply_color_pipeline) as color:
+            self.win._inline_curve.preview()
+            color.assert_called_once()
+        self.win._inline_curve.cancel()
+
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])

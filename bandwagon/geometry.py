@@ -521,7 +521,7 @@ class GeometryMixin:
         preview = self._preview_small if v == 0 else self._preview_small.rotate(
             -v, resample=Image.BILINEAR, expand=False, fillcolor=(255, 255, 255))
         self.btn_undo.setEnabled(True)
-        self.gel.set_image(pil_to_pixmap(preview), self._orig.size)
+        self.gel.set_image(pil_to_pixmap(self._apply_color_pipeline(preview)), self._orig.size)
         self.status.showMessage(
             tr("status_image_info", w=self._orig.width, h=self._orig.height,
                bright=self.sl_bright.value(), contrast=self.sl_contrast.value()))
@@ -656,7 +656,7 @@ class GeometryMixin:
         preview = self._preview_small if v == 0 else self._apply_bow_correction(
             self._preview_small, v * self._preview_scale)
         self.btn_undo.setEnabled(True)
-        self.gel.set_image(pil_to_pixmap(preview), self._orig.size)
+        self.gel.set_image(pil_to_pixmap(self._apply_color_pipeline(preview)), self._orig.size)
         self.status.showMessage(
             tr("status_image_info", w=self._orig.width, h=self._orig.height,
                bright=self.sl_bright.value(), contrast=self.sl_contrast.value()))
@@ -778,7 +778,7 @@ class GeometryMixin:
         preview = self._preview_small if horizontal == down == taper == 0 else self._apply_shear_correction(
             self._preview_small, horizontal * self._preview_scale, down * self._preview_scale, taper)
         self.btn_undo.setEnabled(True)
-        self.gel.set_image(pil_to_pixmap(preview), self._orig.size)
+        self.gel.set_image(pil_to_pixmap(self._apply_color_pipeline(preview)), self._orig.size)
         self.status.showMessage(
             tr("status_image_info", w=self._orig.width, h=self._orig.height,
                bright=self.sl_bright.value(), contrast=self.sl_contrast.value()))

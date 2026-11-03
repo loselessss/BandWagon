@@ -165,7 +165,7 @@ class InlineCurve(QWidget):
         sy = (self.small.height - 1) / (self.height - 1)
         points = [(x * sx, y * sy) for x, y in self.points]
         out = self.small if self.original else apply_reference_curve(self.small, points, self.baseline * sy)
-        self.gel.set_image(pil_to_pixmap(out), (self.width, self.height))
+        self.gel.set_image(pil_to_pixmap(self.window._apply_color_pipeline(out)), (self.width, self.height))
 
     def show_original(self, on):
         self.original = on; self.preview()
