@@ -232,7 +232,9 @@ class Analyzer(RibbonMixin, StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, 
         a = QAction(tr("menu_project_open_location"), self); a.triggered.connect(self.open_project_location)
         a.setToolTip(tr("menu_project_open_location_tip")); m_file.addAction(a)
         m_file.addSeparator()
-        a = QAction(tr("toolbar_copy_result"), self); a.triggered.connect(self.copy_image)
+        a = QAction(tr("toolbar_copy_result"), self); a.triggered.connect(self._copy_current_context)
+        a.setShortcut('Ctrl+C')
+        a.setShortcutContext(Qt.WindowShortcut)
         a.setToolTip(tr("toolbar_copy_result_tip")); m_file.addAction(a)
         a = QAction(tr("toolbar_save_result"), self); a.triggered.connect(self.save_image)
         a.setToolTip(tr("toolbar_save_result_tip")); m_file.addAction(a)
@@ -682,11 +684,7 @@ class Analyzer(RibbonMixin, StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, 
             elif e.key() == Qt.Key_C:
                 # 분석/레인 표에 포커스가 있으면 선택 셀을 표로 복사,
                 # 그 외(캔버스 등)에서는 기존처럼 결과 이미지를 복사한다(요청#9).
-                fw = QApplication.focusWidget()
-                if fw in (getattr(self, "result_table", None), getattr(self, "lane_table", None)):
-                    self._copy_table_selection(fw)
-                else:
-                    self.copy_image()
+                self._copy_current_context()
         elif e.key() in (Qt.Key_Return, Qt.Key_Enter):
             # 젤 영역 지정 모드에서 코너 4개가 있으면 Enter로 바로 변환 적용
             if self.gel.mode == 'crop' and self.gel.crop_rect is not None:
@@ -698,6 +696,15 @@ class Analyzer(RibbonMixin, StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, 
                 super().keyPressEvent(e)
         else:
             super().keyPressEvent(e)
+
+    def _copy_current_context(self):
+        fw = QApplication.focusWidget()
+        if fw in (getattr(self, 'result_table', None), getattr(self, 'lane_table', None)):
+            self._copy_table_selection(fw)
+        elif hasattr(fw, 'hasSelectedText') and fw.hasSelectedText() and hasattr(fw, 'copy'):
+            fw.copy()
+        else:
+            self.copy_image()
 
     def _copy_table_selection(self, table):
         """선택한 표 셀들을 탭(TSV) 형식으로 클립보드에 복사한다 — 엑셀/구글시트에

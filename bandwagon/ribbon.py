@@ -64,6 +64,7 @@ class RibbonMixin:
         pages = [
             ('workflow_prepare', [action('open','dlg_open_title','open',self.open_anything),
                 action('paste','toolbar_paste','paste',self.paste_image),
+                action('prepare_copy','toolbar_copy_result','copy',self.copy_image),
                 action('western','menu_western','open',lambda: None)]
                 + [setting(k, label, sym) for k,label,sym in (
                 ('rotate','tool_orientation','rotate'),('crop','tool_crop','crop'),
@@ -79,6 +80,7 @@ class RibbonMixin:
                 action('csv','toolbar_export_csv','download',self.export_csv)])]
         category_icons = ('adjust', 'marker', 'lanes', 'analysis')
         existing_tips = {
+            'prepare_copy': 'toolbar_copy_result_tip',
             'save': 'toolbar_project_save_tip', 'save_as': 'toolbar_project_save_as_tip',
             'copy': 'toolbar_copy_result_tip', 'image': 'toolbar_save_result_tip',
             'make': 'toolbar_composite_studio_tip', 'import': 'toolbar_composite_import_tip',

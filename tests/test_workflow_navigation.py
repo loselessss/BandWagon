@@ -122,6 +122,23 @@ class WorkflowNavigationTest(unittest.TestCase):
                 self.assertEqual(self.win.ribbon.currentIndex(), stage)
             self.assertEqual(options.call_count, 4)
 
+    def test_prepare_ctrl_c_works_from_ribbon_button_focus(self):
+        self.win.ribbon.setCurrentIndex(0)
+        self.win.show(); self.win.activateWindow(); self.app.processEvents()
+        button = self.win.ribbon_strips[0].buttons['prepare_copy']
+        button.setFocus(); self.app.processEvents()
+        with patch.object(self.win, 'copy_image') as copy:
+            QTest.keyClick(button, Qt.Key_C, Qt.ControlModifier)
+            copy.assert_called_once()
+        self.assertEqual(self.win.ribbon.currentIndex(), 0)
+
+    def test_prepare_ribbon_copies_image_without_leaving_prepare(self):
+        self.win.ribbon.setCurrentIndex(0)
+        with patch.object(self.win, '_export_options', return_value=None) as options:
+            self.win.ribbon_strips[0].buttons['prepare_copy'].click()
+        options.assert_called_once()
+        self.assertEqual(self.win.ribbon.currentIndex(), 0)
+
     def test_gel_does_not_show_inherited_tooltips(self):
         from PyQt5.QtCore import QEvent
         from PyQt5.QtGui import QHelpEvent
