@@ -539,6 +539,7 @@ class LanesMixin:
         v.addWidget(self.analysis_notice)
 
         self.chk_mw_extrapolate = TickCheckBox(tr('mw_extrapolate'))
+        self.chk_mw_extrapolate.setProperty('essentialHoverHelp', True)
         self.chk_mw_extrapolate.setToolTip(tr('mw_extrapolate_tip'))
         self.chk_mw_extrapolate.toggled.connect(self._on_mw_extrapolate)
         v.addWidget(self.chk_mw_extrapolate)
@@ -1121,6 +1122,13 @@ class LanesMixin:
             if it:
                 self.lanes[row].name = it.text(); self.gel.update()
                 self._commit_lanes()
+
+    def _rename_lane_from_preview(self, lane):
+        if lane not in self.lanes: return
+        row = self.lanes.index(lane)
+        self._select_ribbon_tool('lane_list')
+        if self._active_tool != 'lane_list': return
+        QTimer.singleShot(0, lambda: self._edit_next_lane_name(row))
 
     def _edit_next_lane_name(self, row):
         if 0 <= row < self.lane_table.rowCount():

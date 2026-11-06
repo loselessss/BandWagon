@@ -184,6 +184,31 @@ class GelInteractionsTest(unittest.TestCase):
         finally:
             win.close()
 
+    def test_preview_double_click_opens_name_editor_and_enter_advances(self):
+        win = Analyzer()
+        try:
+            win._orig = Image.new('RGB', (160, 200), 'white'); win._after_load('rename.png')
+            win.lanes = [Lane(0, 10, 60), Lane(1, 90, 140)]
+            win._rebuild_lane_table(); win.gel.set_lanes(win.lanes); win._commit_lanes()
+            win._select_ribbon_tool('manual_lanes'); win.show(); win.activateWindow()
+            self.app.processEvents()
+            x = round(win.gel._ix_to_wx(30)); y = round(win.gel._rect.top() + 7)
+            spans = [(lane.x1, lane.x2) for lane in win.lanes]
+            QTest.mouseDClick(win.gel, Qt.LeftButton, pos=QPoint(x, y))
+            editor = self.wait_for_lane_editor(win, 0)
+            self.assertEqual(win._active_tool, 'lane_list')
+            editor.setText('My sample'); QTest.keyClick(editor, Qt.Key_Return)
+            editor = self.wait_for_lane_editor(win, 1)
+            self.assertEqual(win.lanes[0].name, 'My sample')
+            self.assertEqual([(lane.x1, lane.x2) for lane in win.lanes], spans)
+            QTest.keyClick(editor, Qt.Key_Escape)
+            win._undo()
+            self.assertEqual(win.lanes[0].name, 'Lane 1')
+            win._redo()
+            self.assertEqual(win.lanes[0].name, 'My sample')
+        finally:
+            win._saved_snapshot = win._project_state_snapshot(); win.close()
+
     def test_enter_after_lane_name_opens_next_name(self):
         win = Analyzer()
         try:

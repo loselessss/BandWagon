@@ -33,6 +33,7 @@ from .checkbox import TickCheckBox as QCheckBox
 from .lanes import LanesMixin
 from .fileio import FileIOMixin
 from .recovery import RecoveryMixin
+from .tooltips import install_quiet_tooltips
 from .updater import GitHubUpdateService
 from .update_dialog import UpdateCheckWorker, UpdateDialog
 
@@ -46,6 +47,7 @@ class Analyzer(RibbonMixin, StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, 
 
     def __init__(self, path=None, splash=None):
         super().__init__()
+        install_quiet_tooltips()
         self._base_title = f"{APP_NAME} v{APP_VERSION}"
         self.setWindowTitle(self._base_title)
         self.setMinimumSize(900, 620)
@@ -361,6 +363,7 @@ class Analyzer(RibbonMixin, StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, 
         self.gel.vrangeChanged.connect(self._on_vrange_changed)
         self.gel.bandSelected.connect(self._on_gel_band_selected)
         self.gel.laneSelected.connect(self._on_gel_lane_selected)
+        self.gel.laneRenameRequested.connect(self._rename_lane_from_preview)
         self.gel.modeChanged.connect(self._update_mode_hint)
         self.gel.zoomChanged.connect(self._on_zoom_changed)
         lv.addWidget(self.gel, 1)

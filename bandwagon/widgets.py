@@ -277,6 +277,7 @@ class GelView(CropToolMixin, QWidget):
     zoomChanged = pyqtSignal(float)  # 현재 줌 배율(1.0 = 100%)
     bandSelected = pyqtSignal(object, int)  # 이미지에서 선택한 (레인, 밴드 번호)
     laneSelected = pyqtSignal(object)
+    laneRenameRequested = pyqtSignal(object)
     modeChanged = pyqtSignal(str)
     cropChanged = pyqtSignal(object)
     cropApplyRequested = pyqtSignal()
@@ -507,12 +508,17 @@ class GelView(CropToolMixin, QWidget):
 
     def _lane_label_hit(self, wx, wy):
         """레인 이름 라벨(좌상단에 그려지는 텍스트) 영역을 클릭했는지 검사.
-        paintEvent에서 그리는 라벨 사각형(QRectF(x1+2, top+2, max(40,폭), 16))과
+        paintEvent에서 그리는 최대 세 줄 라벨 사각형과
         동일한 영역을 써서, 보이는 라벨과 클릭 가능 영역이 정확히 일치하게 한다."""
         r = self._rect
         for lane in self.lanes:
             x1 = self._ix_to_wx(lane.x1); x2 = self._ix_to_wx(lane.x2)
-            label_rect = QRectF(x1 + 2, r.top() + 2, max(40, x2 - x1), 16)
+            width = max(40, x2 - x1)
+            metrics = QFontMetrics(QFont('DejaVu Sans', 8, QFont.Normal if self.focus_overlay else QFont.Bold))
+            tag = lane.name + (' [M]' if lane.kind == 'marker' else ' [BSA]' if lane.kind == 'bsa' else '')
+            natural = metrics.boundingRect(QRect(0, 0, int(width), 10000), Qt.TextWordWrap, tag)
+            height = min(natural.height(), metrics.lineSpacing() * 3)
+            label_rect = QRectF(x1 + 2, r.top() + 2, width, height)
             if label_rect.contains(QPointF(wx, wy)):
                 return lane
         return None
@@ -1064,6 +1070,16 @@ class GelView(CropToolMixin, QWidget):
         painter.restore()
 
     def mouseDoubleClickEvent(self, e):
+        if e.button() == Qt.LeftButton and self.mode in ('view', 'lane') and self.show_overlay:
+            lane = self._lane_label_hit(e.x(), e.y())
+            if lane is not None:
+                self._lane_move_drag = None
+                self._lane_edge_drag = None
+                self._lane_a = self._lane_b = None
+                self._pan_drag = None
+                self.laneRenameRequested.emit(lane)
+                e.accept()
+                return
         if self.mode == 'crop' and e.button() == Qt.LeftButton and self.crop_rect is not None:
             x, y = self._wpos_to_img(e.x(), e.y())
             left, top, right, bottom = self.crop_rect
