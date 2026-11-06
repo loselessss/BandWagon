@@ -10,6 +10,30 @@ from bandwagon.models import Lane
 
 
 class MwReferenceTest(unittest.TestCase):
+    def test_extrapolation_is_optional_and_never_clamps_to_endpoint(self):
+        win = Analyzer()
+        try:
+            win._orig = Image.new('RGB', (120, 160), 'white'); win._after_load('extrap.png')
+            marker = Lane(0, 0, 50); marker.kind = 'marker'
+            marker.marker_mw = [150, 75]; marker.peaks = np.array([40, 80])
+            sample = Lane(1, 60, 110); sample.peaks = np.array([20, 60, 100, 140])
+            win.lanes = [marker, sample]
+            self.assertFalse(win.chk_mw_extrapolate.isChecked())
+            win._compute_mw()
+            self.assertIsNone(sample.mw[0]); self.assertIsNone(sample.mw[2]); self.assertIsNone(sample.mw[3])
+            inside = sample.mw[1]
+            win.chk_mw_extrapolate.blockSignals(True); win.chk_mw_extrapolate.setChecked(True)
+            win.chk_mw_extrapolate.blockSignals(False)
+            win._compute_mw()
+            self.assertGreater(sample.mw[0], 150)
+            self.assertEqual(sample.mw[1], inside)
+            self.assertTrue(75 > sample.mw[2] > sample.mw[3] > 0)
+            self.assertTrue(win._current_document_snapshot()['mw_extrapolate'])
+            win._apply_document_snapshot({'mw_extrapolate': False})
+            self.assertFalse(win.chk_mw_extrapolate.isChecked())
+        finally:
+            win._saved_snapshot = win._project_state_snapshot(); win.close()
+
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])

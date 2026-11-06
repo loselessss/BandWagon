@@ -538,6 +538,10 @@ class LanesMixin:
         self.analysis_notice.setStyleSheet(f"color:{CYAN};font-size:12px;padding:6px;")
         v.addWidget(self.analysis_notice)
 
+        self.chk_mw_extrapolate = TickCheckBox(tr('mw_extrapolate'))
+        self.chk_mw_extrapolate.setToolTip(tr('mw_extrapolate_tip'))
+        self.chk_mw_extrapolate.toggled.connect(self._on_mw_extrapolate)
+        v.addWidget(self.chk_mw_extrapolate)
         self.result_table = ResultTable(0, 5)
         self.result_table.setHorizontalHeaderLabels([tr("result_col_sample"), tr("col_band"), tr("result_col_mw"), tr("col_intensity"), tr("col_volume")])
         self.result_table.verticalHeader().setVisible(False)
@@ -1309,6 +1313,11 @@ class LanesMixin:
         if marker_changed: self._commit_lanes()
         return True
 
+    def _on_mw_extrapolate(self, enabled):
+        if getattr(self, '_history_suspended', False): return
+        self._compute_mw(); self._refresh_results()
+        self._commit_document_state()
+
     def _compute_mw(self):
         # Never retain a previous calibration when its marker was removed or
         # now has too few valid points (including undo/redo of marker settings).
@@ -1367,11 +1376,19 @@ class LanesMixin:
                 mw_list = []
                 for index in range(len(lane.peaks)):
                     x = lane.mw_reference_y(index) / H
-                    # 마커 범위 밖(가장 큰/작은 마커보다 더 위/아래)은 외삽이라
-                    # 신뢰도가 떨어지므로 범위 끝값으로 고정(clamp)해 비현실적인
-                    # 값이 나오지 않게 한다.
-                    xc = min(max(x, rf_min), rf_max)
-                    mw_list.append(round(10 ** float(pchip(xc)), 1))
+                    # Outside the calibration range, omit by default; never
+                    # present a clamped endpoint as a measured MW.
+                    if x < rf_min or x > rf_max:
+                        if not self.chk_mw_extrapolate.isChecked():
+                            mw_list.append(None)
+                            continue
+                        # Continue the nearest terminal log(MW) slope rather
+                        # than extrapolating a cubic that can turn back up.
+                        i, j = (0, 1) if x < rf_min else (-2, -1)
+                        value = logmw_uniq[i] + (x-rf_uniq[i]) * (logmw_uniq[j]-logmw_uniq[i]) / (rf_uniq[j]-rf_uniq[i])
+                    else:
+                        value = float(pchip(x))
+                    mw_list.append(round(10 ** value, 1) if np.isfinite(value) and -3 <= value <= 9 else None)
                 lane.mw = mw_list
         self.gel.update()
         self.mw_r2_label.setText(tr("mw_interp_result", r2=r2, n_markers=len(markers), n_points=len(rf_uniq)))

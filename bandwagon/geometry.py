@@ -1111,6 +1111,7 @@ class GeometryMixin:
             "channel": self._ch,
             "memo": self.memo_edit.toPlainText(),
             "band_display_style": self._band_display_style,
+            "mw_extrapolate": self.chk_mw_extrapolate.isChecked(),
             "analysis_params": {
                 "prominence": self.sp_prom.value(),
                 "distance": self.sp_dist.value(),
@@ -1199,6 +1200,7 @@ class GeometryMixin:
             self.memo_edit.blockSignals(False)
 
             ap = snapshot.get("analysis_params") or {}
+            self.chk_mw_extrapolate.setChecked(bool(snapshot.get('mw_extrapolate', False)))
             self.sp_prom.setValue(int(ap.get("prominence", 90)))
             self.sp_dist.setValue(int(ap.get("distance", 6)))
             self.sl_band_thresh.setValue(int(ap.get("band_threshold", 40)))

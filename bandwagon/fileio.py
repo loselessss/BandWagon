@@ -309,6 +309,7 @@ class FileIOMixin:
             "contrast": self.sl_contrast.value(),
             "channel": self._ch,
             "band_display_style": self._band_display_style,
+            "mw_extrapolate": self.chk_mw_extrapolate.isChecked(),
             "curves": {ch: m.to_dict() for ch, m in self.curves.items()},
             "lanes": [lane.to_dict() for lane in self.lanes],
             "memo": self.memo_edit.toPlainText(),
@@ -457,6 +458,7 @@ class FileIOMixin:
             "contrast": self.sl_contrast.value(),
             "channel": self._ch,
             "band_display_style": self._band_display_style,
+            "mw_extrapolate": self.chk_mw_extrapolate.isChecked(),
             "curves": {ch: m.to_dict() for ch, m in self.curves.items()},
             "lanes": [lane.to_dict() for lane in self.lanes],
             "memo": self.memo_edit.toPlainText(),
@@ -660,6 +662,7 @@ class FileIOMixin:
                 "channel": project.get("channel", "RGB"),
                 "memo": project.get("memo", ""),
                 "band_display_style": project.get("band_display_style", "area"),
+                "mw_extrapolate": project.get('mw_extrapolate', False),
                 "analysis_params": {
                     "prominence": ap.get("prominence", 90),
                     "distance": ap.get("distance", 6),
