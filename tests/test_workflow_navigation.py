@@ -292,7 +292,12 @@ class WorkflowNavigationTest(unittest.TestCase):
         with patch('bandwagon.lanes.load_marker_presets', return_value=presets):
             self.win._select_ribbon_tool('marker')
         self.win.resize(900, 620); self.win.show(); self.app.processEvents()
-        self.assertEqual(self.win.lane_settings_scroll.horizontalScrollBar().maximum(), 0)
+        scroll = self.win.lane_settings_scroll
+        from PyQt5.QtWidgets import QWidget
+        details = [(type(w).__name__, w.objectName(), w.width(), w.minimumWidth(),
+                    w.minimumSizeHint().width(), w.sizeHint().width())
+                   for w in scroll.widget().findChildren(QWidget) if w.isVisible()]
+        self.assertEqual(scroll.horizontalScrollBar().maximum(), 0, repr(details))
         self.assertTrue(self.win.workflow_next.isVisible())
         for combo in (self.win.marker_preset_combo, self.win.marker_lane_combo):
             self.assertLessEqual(combo.width(), self.win.lane_settings_scroll.viewport().width())
