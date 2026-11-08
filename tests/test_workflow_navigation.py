@@ -60,18 +60,29 @@ class WorkflowNavigationTest(unittest.TestCase):
         self.assertEqual(self.win.ribbon.currentIndex(), 0)
         self.win.workflow_next.click()
         self.assertEqual(self.win.ribbon.currentIndex(), 1)
+        self.assertEqual(self.win._active_tool, 'manual_lanes')
+        with patch.object(self.win, 'run_analysis', wraps=self.win.run_analysis) as analyze:
+            self.win._auto_lanes()
+            analyze.assert_not_called()
+        self.win.lane_table.item(0, 0).setText('Sample A')
+        self.win.lane_table.item(1, 0).setText('Ladder')
+        combo = self.win.lane_table.cellWidget(1, 1)
+        with patch('bandwagon.lanes.MarkerDialog') as dialog:
+            combo.activated[int].emit(1)
+            dialog.assert_not_called()
+        self.assertTrue(all(lane.peaks is None for lane in self.win.lanes))
+        self.win.workflow_next.click()
+        self.assertEqual(self.win.ribbon.currentIndex(), 2)
         self.assertEqual(self.win._active_tool, 'marker')
         presets = [{'name': 'Workflow ladder', 'mw': [100, 50, 25]}]
         with patch('bandwagon.lanes.load_marker_presets', return_value=presets):
             self.win._update_marker_presets()
         self.win.marker_preset_combo.setCurrentIndex(1)
         self.win.sp_marker_lane.setValue(2)
-        self.win.workflow_next.click()
-        self.assertEqual(self.win.ribbon.currentIndex(), 2)
-        self.assertEqual(self.win.gel.mode, 'lane')
-        self.win._auto_lanes()
+        self.win.btn_detect_bands.click()
         self.assertTrue(self.win.workflow_next.isEnabled())
         self.assertEqual(self.win.lanes[1].marker_mw, [100, 50, 25])
+        self.assertEqual([lane.name for lane in self.win.lanes], ['Sample A', 'Ladder'])
         self.assertTrue(self.win.lanes[0].mw)
         self.assertFalse(self.win.btn_marker_review.isVisible())
         self.win.sp_prom.setValue(85)
@@ -93,8 +104,10 @@ class WorkflowNavigationTest(unittest.TestCase):
         self.win.marker_preset_combo.addItem(preset['name'], preset)
         self.win.marker_preset_combo.setCurrentIndex(self.win.marker_preset_combo.count() - 1)
         self.win._select_ribbon_tool('manual_lanes')
-        self.win._auto_lanes()
-        self.assertEqual(self.win._active_tool, 'manual_lanes')
+        self.win._auto_lanes(); self.win.run_analysis()
+        with patch('bandwagon.lanes.load_marker_presets', return_value=[preset]):
+            self.win._select_ribbon_tool('marker')
+        self.assertEqual(self.win._active_tool, 'marker')
         self.assertFalse(self.win.btn_marker_review.isHidden())
         self.assertIn('3', self.win.marker_review_notice.text())
         with patch('bandwagon.lanes.MarkerDialog') as dialog:
@@ -107,11 +120,36 @@ class WorkflowNavigationTest(unittest.TestCase):
             dialog.return_value.exec_.return_value = 1
             dialog.return_value.values.return_value = [100, 50, 25]
             self.win.btn_marker_review.click()
-        self.assertEqual(self.win._active_tool, 'manual_lanes')
+        self.assertEqual(self.win._active_tool, 'marker')
         self.assertEqual(self.win.lanes[0].kind, 'marker')
         self.assertTrue(self.win.lanes[1].mw)
         self.assertFalse(self.win._prepared_marker_pending)
         self.assertTrue(self.win.btn_marker_review.isHidden())
+
+    def test_lane_redetection_preserves_names_and_types_without_detecting_bands(self):
+        self.win._select_ribbon_tool('manual_lanes')
+        self.win._auto_lanes()
+        self.win.lane_table.item(0, 0).setText('Control')
+        self.win.lane_table.item(1, 0).setText('Standard')
+        combo = self.win.lane_table.cellWidget(1, 1)
+        with patch.object(self.win, 'run_analysis') as analyze, patch('bandwagon.lanes.MarkerDialog') as dialog:
+            combo.activated[int].emit(1)
+            self.win._auto_lanes()
+            analyze.assert_not_called(); dialog.assert_not_called()
+        self.assertEqual([lane.name for lane in self.win.lanes], ['Control', 'Standard'])
+        self.assertEqual([lane.kind for lane in self.win.lanes], ['sample', 'marker'])
+        self.assertTrue(all(lane.peaks is None for lane in self.win.lanes))
+
+    def test_reverting_marker_type_cancels_pending_preset(self):
+        self.win._select_ribbon_tool('manual_lanes'); self.win._auto_lanes()
+        preset = {'name': 'Saved marker', 'mw': [100, 50, 25]}
+        self.win.marker_preset_combo.addItem(preset['name'], preset)
+        self.win.marker_preset_combo.setCurrentIndex(self.win.marker_preset_combo.count() - 1)
+        self.win.lane_table.cellWidget(0, 1).activated[int].emit(1)
+        self.win.lane_table.cellWidget(0, 1).activated[int].emit(0)
+        self.assertFalse(self.win._prepared_marker_pending)
+        self.win.run_analysis()
+        self.assertEqual(self.win.lanes[0].kind, 'sample')
 
     def test_copy_quick_action_available_in_every_stage(self):
         # The button invokes the same export-options dialog as File > Copy.
@@ -150,7 +188,7 @@ class WorkflowNavigationTest(unittest.TestCase):
         self.assertTrue(event.isAccepted())
 
     def test_free_navigation_keeps_analysis_selection_and_settings(self):
-        self.win._auto_lanes()
+        self.win._auto_lanes(); self.win.run_analysis()
         self.win._select_ribbon_tool('manual_lanes')
         lane = self.win.lanes[1]
         self.win.gel.selected_lane = lane
@@ -159,13 +197,13 @@ class WorkflowNavigationTest(unittest.TestCase):
         for stage in (1, 3, 0, 2):
             self.win.ribbon.setCurrentIndex(stage)
             self.assertIs(self.win.gel.selected_lane, lane)
-            if stage == 1: self.assertEqual(self.win.marker_lane_combo.currentIndex(), 1)
+            if stage == 2: self.assertEqual(self.win.marker_lane_combo.currentIndex(), 1)
         self.assertTrue(self.win.band_settings_toggle.isChecked())
         self.assertEqual([item.to_dict() for item in self.win.lanes], before)
         self.assertIn(lane.name, self.win.selected_lane_summary.text())
 
     def test_selecting_lane_edge_without_drag_does_not_invalidate_analysis(self):
-        self.win._auto_lanes()
+        self.win._auto_lanes(); self.win.run_analysis()
         self.win._select_ribbon_tool('manual_lanes'); self.win.show(); self.app.processEvents()
         lane = self.win.lanes[0]
         point = QPoint(round(self.win.gel._ix_to_wx(lane.x2)), round(self.win.gel._rect.center().y()))
@@ -197,7 +235,7 @@ class WorkflowNavigationTest(unittest.TestCase):
         self.assertEqual(self.win._active_tool, 'crop')
         self.assertEqual(self.win.gel.crop_rect, (10, 20, 140, 150))
         self.assertEqual(self.win._orig.size, (160, 160))
-        self.assertEqual(self.win.workflow_next.text(), tr('workflow_to_marker'))
+        self.assertEqual(self.win.workflow_next.text(), tr('workflow_to_lanes'))
 
     def test_reclicking_active_crop_or_curve_keeps_unapplied_edit(self):
         self.win._select_ribbon_tool('crop')
@@ -248,7 +286,7 @@ class WorkflowNavigationTest(unittest.TestCase):
         self.assertFalse(self.win._edit_ops)
 
     def test_marker_panel_fits_long_preset_and_lane_names_at_minimum_size(self):
-        self.win._auto_lanes()
+        self.win._auto_lanes(); self.win.run_analysis()
         self.win.lanes[0].name = 'Very long sample name ' * 8
         presets = [{'name': 'Very long manufacturer and marker preset ' * 8, 'mw': [100, 50, 25]}]
         with patch('bandwagon.lanes.load_marker_presets', return_value=presets):

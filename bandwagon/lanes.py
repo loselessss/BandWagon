@@ -342,6 +342,10 @@ class LanesMixin:
         detect_layout.addWidget(self.btn_marker_review)
         self.marker_review_notice.hide(); self.btn_marker_review.hide()
         v.insertWidget(v.indexOf(self.band_basic_box) + 1, self.band_detect_wrap)
+        # In step three the extraction controls must be reachable before the
+        # marker mapping panel, including at the minimum window height.
+        v.removeWidget(self.band_basic_box); v.removeWidget(self.band_detect_wrap)
+        v.insertWidget(0, self.band_basic_box); v.insertWidget(1, self.band_detect_wrap)
 
         v.addStretch()
 
@@ -382,7 +386,7 @@ class LanesMixin:
         self._show_lane_tool('manual_lanes')
 
     def _show_lane_tool(self, name):
-        show_detection = name == 'manual_lanes'
+        show_detection = name == 'marker'
         for key, widget in self.lane_tools.items():
             widget.setVisible(key == name)
         self.band_basic_box.setVisible(show_detection)
@@ -391,7 +395,7 @@ class LanesMixin:
         self.lane_style_toggle.setVisible(show_detection)
         self.lane_style_wrap.setVisible(show_detection and self.lane_style_toggle.isChecked())
         self.band_detect_wrap.setVisible(show_detection)
-        has_table = name == 'lane_list'
+        has_table = name in ('manual_lanes', 'lane_list')
         self.lane_table.setVisible(has_table)
         self.lane_settings_scroll.setSizePolicy(QSizePolicy.Preferred,
             QSizePolicy.Maximum if has_table else QSizePolicy.Expanding)
@@ -825,6 +829,8 @@ class LanesMixin:
             self._info(tr('detect_fail_title'), tr('detect_fail_count_msg', n=n_target))
             return
 
+        previous_lanes = sorted(self.lanes, key=lambda lane: lane.x1)
+        metadata = [lane.to_dict() for lane in previous_lanes] if len(previous_lanes) == len(spans) else []
         self._clear_lanes()
         self._suppress_lane_commit = True
         try:
@@ -832,11 +838,15 @@ class LanesMixin:
                 self._on_lane_added(int(a), int(b))
         finally:
             self._suppress_lane_commit = False
+        for lane, saved in zip(self.lanes, metadata):
+            lane.name = saved['name']
+            lane.kind = saved['kind']
+            lane.marker_mw = list(saved.get('marker_mw', []))
+            lane.bsa_amount = saved.get('bsa_amount', 0)
         self._commit_lanes()   # 자동 검출 전체를 되돌리기 한 단계로 기록
         self.status.showMessage(tr("status_auto_lane_done", n=len(spans)))
-        # Keep lane settings open, but prepare peaks so marker MW can be entered
-        # immediately without a round trip to the analysis ribbon.
-        self.run_analysis()
+        # Band extraction follows naming/type assignment in stage three.
+        self._mark_analysis_stale()
 
     @staticmethod
     def _split_lanes_by_count(sm, n_target, W):
@@ -1201,6 +1211,19 @@ class LanesMixin:
     def _set_lane_kind(self, lane, idx, combo):
         old_kind = lane.kind
         new_kind = ["sample", "marker", "bsa"][idx]
+        if self.ribbon.currentIndex() == 1:
+            # Stage two describes lanes; it must not detect bands or request MW.
+            lane.kind = new_kind
+            if new_kind == 'marker':
+                self.sp_marker_lane.blockSignals(True)
+                self.sp_marker_lane.setValue(self.lanes.index(lane) + 1)
+                self.sp_marker_lane.blockSignals(False)
+                self._prepared_marker_pending = True
+            elif old_kind == 'marker' and self.sp_marker_lane.value() == self.lanes.index(lane) + 1:
+                self._prepared_marker_pending = False
+            self._compute_mw(); self._refresh_results(); self._commit_lanes()
+            self.gel.update()
+            return
         if new_kind == "marker" and (
                 getattr(self, "_analysis_stale", False)
                 or any(item.profile is None for item in self.lanes)):
@@ -1235,9 +1258,7 @@ class LanesMixin:
         if new_kind == 'marker':
             if self._compute_mw():
                 self._refresh_results()
-                self._select_ribbon_tool('results')
             else:
-                self._select_ribbon_tool('marker')
                 self.status.showMessage(tr('mw_regression_placeholder'))
 
     def _edit_marker(self, lane, prepared=False):

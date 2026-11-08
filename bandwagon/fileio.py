@@ -522,7 +522,7 @@ class FileIOMixin:
             fallback = 'results'
         tool = saved.get('tool', fallback)
         if not isinstance(tool, str) or tool not in self.ribbon_tools and tool != 'memo': tool = fallback
-        if self._analysis_stale and tool in ('results', 'quant'): tool = 'manual_lanes'
+        if self._analysis_stale and tool in ('results', 'quant'): tool = 'marker'
         if tool == 'memo':
             stage = saved.get('stage', 0)
             if isinstance(stage, int) and 0 <= stage < 4: self.ribbon.setCurrentIndex(stage)
@@ -533,7 +533,7 @@ class FileIOMixin:
         if not self._confirm_tool_change(for_output=True): return False
         self._finish_tool_preview()
         if self.lanes and getattr(self, '_analysis_stale', False):
-            self._select_ribbon_tool('manual_lanes')
+            self._select_ribbon_tool('marker')
             self.status.showMessage(tr('workflow_export_stale'), 10000)
             return False
         return True

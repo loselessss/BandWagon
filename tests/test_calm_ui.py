@@ -57,6 +57,7 @@ class CalmUiTest(unittest.TestCase):
         self.assertTrue(self.win._layout_settings.value('view/profile_expanded', type=bool))
 
     def test_optional_settings_expand_without_running_detection_or_losing_values(self):
+        self.win._select_ribbon_tool('marker')
         self.assertTrue(self.win.sp_prom.isVisible())
         self.assertFalse(self.win.sl_band_thresh.isVisible())
         self.assertFalse(self.win.combo_band_style.isVisible())
@@ -68,7 +69,7 @@ class CalmUiTest(unittest.TestCase):
             self.assertTrue(self.win.combo_band_style.isVisible())
             self.win.sl_band_thresh.setValue(55)
             self.win._select_ribbon_tool('lane_list')
-            self.win._select_ribbon_tool('manual_lanes')
+            self.win._select_ribbon_tool('marker')
             self.assertEqual(self.win.sl_band_thresh.value(), 55)
             self.assertTrue(self.win.sl_band_thresh.isVisible())
             analyze.assert_not_called()

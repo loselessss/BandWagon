@@ -124,7 +124,7 @@ class WorkflowPhase2Test(unittest.TestCase):
                 patch('bandwagon.fileio.copy_pil_image_to_clipboard') as clipboard:
             for output in (self.win.copy_image, self.win.save_image, self.win.export_csv):
                 output()
-                self.assertEqual(self.win._active_tool, 'manual_lanes')
+                self.assertEqual(self.win._active_tool, 'marker')
             options.assert_not_called(); destination.assert_not_called(); clipboard.assert_not_called()
 
     def test_save_and_copy_cancel_keep_pending_crop(self):
@@ -179,7 +179,7 @@ class WorkflowPhase2Test(unittest.TestCase):
                 self.assertTrue(self.win.open_project(path))
                 detect.assert_not_called()
         self.assertTrue(self.win._analysis_stale)
-        self.assertEqual(self.win._active_tool, 'manual_lanes')
+        self.assertEqual(self.win._active_tool, 'marker')
         self.assertFalse(self.win.workflow_next.isEnabled())
 
     def test_prepared_marker_preset_survives_project_on_another_computer(self):

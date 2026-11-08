@@ -55,7 +55,7 @@ class RibbonMixin:
         self.ribbon.setUsesScrollButtons(False); self.ribbon.setElideMode(Qt.ElideRight)
         self.ribbon.setStyleSheet(self._tabs_css() + 'QTabBar::tab{padding:8px 12px;}')
         self.ribbon_strips = []; self.ribbon_tools = {}
-        self._ribbon_last = {0: 'rotate', 1: 'marker', 2: 'manual_lanes', 3: 'results'}
+        self._ribbon_last = {0: 'rotate', 1: 'manual_lanes', 2: 'marker', 3: 'results'}
         self._lane_last_tool = 'manual_lanes'
         self._active_tool = 'rotate'; self._switching_tool = False
         def action(key, label, symbol, fn): return (key, label, symbol, fn, False)
@@ -70,15 +70,15 @@ class RibbonMixin:
                 ('rotate','tool_orientation','rotate'),('crop','tool_crop','crop'),
                 ('bow','tool_shape','curve'),('brightness','tool_brightness','adjust'),('curve','tool_curve','curve'))]
                 + [action('invert','tool_invert','color',self._invert_ribbon_colors)]),
-            ('workflow_marker', [setting('marker','tool_marker','marker')]),
             ('workflow_lanes', [setting(k, 'tool_lane_adjust' if k == 'manual_lanes' else 'tool_'+k, sym) for k,sym in (
                 ('manual_lanes','lanes'),('lane_list','memo'),('range','crop'))]),
+            ('workflow_marker', [setting('marker','tool_marker','marker')]),
             ('workflow_results', [setting('results','tool_results','analysis'),
                 setting('quant','tab_std','quant'),
                 action('copy','toolbar_copy_result','copy',self.copy_image),
                 action('image','toolbar_save_result','save',self.save_image),
                 action('csv','toolbar_export_csv','download',self.export_csv)])]
-        category_icons = ('adjust', 'marker', 'lanes', 'analysis')
+        category_icons = ('adjust', 'lanes', 'marker', 'analysis')
         existing_tips = {
             'prepare_copy': 'toolbar_copy_result_tip',
             'save': 'toolbar_project_save_tip', 'save_as': 'toolbar_project_save_as_tip',
@@ -90,8 +90,8 @@ class RibbonMixin:
         for index, (title, commands) in enumerate(pages):
             strip = ToolStrip(commands); self.ribbon.addTab(strip, f'{index + 1}  {tr(title)}'); self.ribbon_strips.append(strip)
             self.ribbon.setTabIcon(index, icon(category_icons[index]))
-            self.ribbon.setTabToolTip(index, tr(('workflow_prepare_hint', 'workflow_marker_hint',
-                                               'workflow_lanes_hint', 'workflow_results_hint')[index]))
+            self.ribbon.setTabToolTip(index, tr(('workflow_prepare_hint', 'workflow_lanes_hint',
+                                               'workflow_marker_hint', 'workflow_results_hint')[index]))
             for key, _, _, _, selectable in commands:
                 if selectable: self.ribbon_tools[key] = (index, strip.buttons[key])
                 strip.buttons[key].setToolTip(tr(existing_tips.get(key, 'ribbon_tip_' + key)))
@@ -169,18 +169,18 @@ class RibbonMixin:
         fresh = detected and not getattr(self, '_analysis_stale', False)
         calibrated = fresh and any(lane.kind == 'marker' and
             sum(value is not None and value > 0 for value in lane.mw) >= 2 for lane in self.lanes)
-        hints = ('workflow_prepare_hint', 'workflow_marker_hint', 'workflow_lanes_hint', 'workflow_results_hint')
+        hints = ('workflow_prepare_hint', 'workflow_lanes_hint', 'workflow_marker_hint', 'workflow_results_hint')
         hint = hints[stage]
         if not image: hint = 'workflow_empty_hint'
-        elif stage in (1, 2, 3) and getattr(self, '_analysis_stale', False): hint = 'workflow_stale_hint'
-        elif stage == 2 and not fresh: hint = 'workflow_detect_hint'
+        elif stage == 2 and not detected: hint = 'workflow_detect_hint'
+        elif stage in (2, 3) and getattr(self, '_analysis_stale', False): hint = 'workflow_stale_hint'
         self.workflow_hint.setText(tr(hint))
         self.workflow_back.setVisible(stage > 0)
         self.workflow_back.setToolTip(tr('workflow_back_tip'))
-        self.workflow_next.setText(tr(('workflow_to_marker', 'workflow_to_lanes', 'workflow_to_results', 'toolbar_copy_result')[stage]))
-        self.workflow_next.setEnabled((image, image, fresh, image)[stage])
+        self.workflow_next.setText(tr(('workflow_to_lanes', 'workflow_to_marker', 'workflow_to_results', 'toolbar_copy_result')[stage]))
+        self.workflow_next.setEnabled((image, bool(self.lanes), fresh, image)[stage])
         self.workflow_next.setToolTip(tr(hint if not self.workflow_next.isEnabled() else
-                                      ('workflow_marker_hint', 'workflow_lanes_hint', 'workflow_results_hint', 'toolbar_copy_result_tip')[stage]))
+                                      ('workflow_lanes_hint', 'workflow_marker_hint', 'workflow_results_hint', 'toolbar_copy_result_tip')[stage]))
         if stage == 3 and getattr(self, '_active_tool', '') == 'quant':
             quant_hint = ('workflow_empty_hint' if not image else
                           'workflow_stale_hint' if getattr(self, '_analysis_stale', False) else 'quant_workflow_hint')
@@ -200,7 +200,7 @@ class RibbonMixin:
         if getattr(self, '_workflow_cta_state', None) != cta_state:
             self.btn_detect_bands.setStyleSheet(self._btn_css() if fresh else self._btn_accent_css())
             self.btn_marker_setup.setStyleSheet(self._btn_css() if calibrated or not self.lanes else self._btn_accent_css())
-            self.workflow_next.setStyleSheet(self._btn_css() if stage == 1 and self.lanes and not calibrated else self._btn_accent_css())
+            self.workflow_next.setStyleSheet(self._btn_accent_css())
             self._workflow_cta_state = cta_state
 
     def _workflow_advance(self):
