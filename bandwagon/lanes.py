@@ -218,6 +218,7 @@ class LanesMixin:
         details_toggle.setText(tr('group_band_advanced'))
         details_toggle.setCheckable(True)
         details_toggle.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        details_toggle.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
         details_toggle.setArrowType(Qt.RightArrow)
         details_toggle.setStyleSheet(self._disclosure_css())
         self.band_settings_toggle = details_toggle
@@ -314,6 +315,7 @@ class LanesMixin:
         self.lane_style_toggle.setText(tr('group_overlay_display'))
         self.lane_style_toggle.setCheckable(True)
         self.lane_style_toggle.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self.lane_style_toggle.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
         self.lane_style_toggle.setArrowType(Qt.RightArrow)
         self.lane_style_toggle.setStyleSheet(self._disclosure_css())
         v.addWidget(self.lane_style_toggle)

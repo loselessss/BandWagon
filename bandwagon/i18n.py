@@ -819,7 +819,7 @@ STRINGS = {
         "profile_title": "Density Profile (raw image)",
         "profile_disclosure": "Lane profile",
         "profile_disclosure_tip": "Expand or collapse lane signal graphs without changing analysis values.",
-        "group_band_advanced": "Advanced detection settings",
+        "group_band_advanced": "Advanced settings",
         "group_overlay_display": "Display options",
         "focus_overlay": "Highlight selected lane only",
         "focus_overlay_tip": "Highlight the selected lane while keeping every lane's band ranges and MW visible. Turn off for original lane colours. Copy and save options stay independent.",
