@@ -233,8 +233,13 @@ class LanesMixin:
         self.sp_dist.valueChanged.connect(self._on_document_value_changed)
         self.sp_prom.editingFinished.connect(self._commit_document_state)
         self.sp_dist.editingFinished.connect(self._commit_document_state)
-        basic_form.addRow(tr("label_sensitivity"), self.sp_prom)
-        basic_form.addRow(tr("label_min_band_spacing"), self.sp_dist)
+        for text, control in ((tr("label_sensitivity"), self.sp_prom),
+                              (tr("label_min_band_spacing"), self.sp_dist)):
+            label = QLabel(text)
+            label.setWordWrap(True)
+            label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+            control.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
+            basic_form.addRow(label, control)
 
         # 밴드 경계(=정량 적분 범위) 임계값 — '피크 높이의 N%까지 떨어지는
         # 지점을 경계로 본다'. find_peaks의 left/right_bases(인접 피크
