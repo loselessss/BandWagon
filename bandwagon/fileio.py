@@ -240,6 +240,9 @@ class FileIOMixin:
         self._wb_gray_override = pristine_gray.copy() if pristine_gray is not None else None
         self._current_project_path = None
         self._clear_lanes()
+        self.chk_lane_xrange.setChecked(False)
+        self.sp_lane_left.setValue(0)
+        self.gel.hrange = None
         self.gel.clear_corners(); self.corner_label.setText(tr("corner_count", n=0))
         self.gel.cancel_crop()
         self.gel.clear_vrange()
@@ -315,6 +318,8 @@ class FileIOMixin:
             "memo": self.memo_edit.toPlainText(),
             "analysis_params": {
                 "prominence": self.sp_prom.value(),
+                "lane_sensitivity": self.sp_lane_sensitivity.value(),
+                "lane_xrange": self._lane_xrange(),
                 "distance": self.sp_dist.value(),
                 "band_threshold": self.sl_band_thresh.value(),
                 "smear_max_px": self.sp_smear.value(),
@@ -383,23 +388,28 @@ class FileIOMixin:
         self._update_workflow_state()
 
     def _export_options(self, src, saving=False):
-        dialog = ExportDialog(src, self.lanes, self._layout_settings, self, saving=saving)
+        available = (not getattr(self, '_analysis_stale', False)
+                     and any(lane.peaks is not None for lane in self.lanes))
+        dialog = ExportDialog(src, self.lanes, self._layout_settings, self, saving=saving,
+                              analysis_available=available if not saving else True)
         try:
             return dialog.options() if dialog.exec_() == QDialog.Accepted else None
         finally:
             dialog.deleteLater()
 
     def copy_image(self):
-        if not self._prepare_output(): return
+        if not self._prepare_output(allow_stale_copy=True): return
         src = self._display or self._orig
         if src is None:
             self.status.showMessage(tr("nothing_to_copy_msg")); return
         options = self._export_options(src)
         if options is None:
             return
+        if getattr(self, '_analysis_stale', False) or not any(lane.peaks is not None for lane in self.lanes):
+            options = {**options, 'bands': False, 'marker_mw': False, 'lane_mw': False}
         out_img = render_export(src, self.lanes, options, band_style=self._band_display_style)
         copy_pil_image_to_clipboard(out_img, QApplication.clipboard())
-        self.status.showMessage(tr("status_copied_to_clipboard"))
+        self.status.showMessage(tr("status_copied_to_clipboard"), 4000)
 
     def save_image(self):
         if not self._prepare_output(): return
@@ -464,6 +474,8 @@ class FileIOMixin:
             "memo": self.memo_edit.toPlainText(),
             "analysis_params": {
                 "prominence": self.sp_prom.value(),
+                "lane_sensitivity": self.sp_lane_sensitivity.value(),
+                "lane_xrange": self._lane_xrange(),
                 "distance": self.sp_dist.value(),
                 "band_threshold": self.sl_band_thresh.value(),
                 "smear_max_px": self.sp_smear.value(),
@@ -528,11 +540,11 @@ class FileIOMixin:
             if isinstance(stage, int) and 0 <= stage < 4: self.ribbon.setCurrentIndex(stage)
         self._select_ribbon_tool(tool)
 
-    def _prepare_output(self):
+    def _prepare_output(self, allow_stale_copy=False):
         """Resolve pending edits and never export known out-of-date overlays."""
         if not self._confirm_tool_change(for_output=True): return False
         self._finish_tool_preview()
-        if self.lanes and getattr(self, '_analysis_stale', False):
+        if not allow_stale_copy and self.lanes and getattr(self, '_analysis_stale', False):
             self._select_ribbon_tool('marker')
             self.status.showMessage(tr('workflow_export_stale'), 10000)
             return False
@@ -665,6 +677,8 @@ class FileIOMixin:
                 "mw_extrapolate": project.get('mw_extrapolate', False),
                 "analysis_params": {
                     "prominence": ap.get("prominence", 90),
+                    "lane_sensitivity": ap.get('lane_sensitivity', 50),
+                    "lane_xrange": ap.get('lane_xrange'),
                     "distance": ap.get("distance", 6),
                     "band_threshold": ap.get("band_threshold", 40),
                     "smear_max_px": ap.get("smear_max_px", 0),

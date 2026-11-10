@@ -114,18 +114,34 @@ class WorkflowPhase2Test(unittest.TestCase):
         self.win._on_gel_lane_selected(self.win.lanes[1])
         self.assertEqual(self.win.quant_amount.value(), 0)
 
-    def test_stale_results_clear_quant_and_block_all_output_paths(self):
+    def test_stale_results_allow_image_copy_but_block_other_output(self):
         self.assign_bsa(0, 2); self.assign_bsa(1, 1)
         self.win.sp_prom.setValue(80)
         self.assertTrue(self.win._analysis_stale)
         self.assertIsNone(self.win.std_view._xy)
-        with patch.object(self.win, '_export_options') as options, \
+        with patch.object(self.win, '_export_options', return_value=None) as options, \
                 patch('bandwagon.fileio.QFileDialog.getSaveFileName') as destination, \
                 patch('bandwagon.fileio.copy_pil_image_to_clipboard') as clipboard:
-            for output in (self.win.copy_image, self.win.save_image, self.win.export_csv):
+            self.win.copy_image()
+            options.assert_called_once()
+            for output in (self.win.save_image, self.win.export_csv):
                 output()
                 self.assertEqual(self.win._active_tool, 'marker')
-            options.assert_not_called(); destination.assert_not_called(); clipboard.assert_not_called()
+            destination.assert_not_called(); clipboard.assert_not_called()
+
+    def test_stale_image_copy_masks_band_and_mw_even_if_options_request_them(self):
+        self.win.sp_prom.setValue(80)
+        self.assertTrue(self.win._analysis_stale)
+        selected = dict(DEFAULT_OPTIONS, photo=True, border=True, annotation=True,
+                        bands=True, marker_mw=True, lane_mw=True)
+        with patch.object(self.win, '_export_options', return_value=selected), \
+                patch('bandwagon.fileio.render_export', return_value=self.win._orig) as render, \
+                patch('bandwagon.fileio.copy_pil_image_to_clipboard') as clipboard:
+            self.win.copy_image()
+        options = render.call_args.args[2]
+        self.assertTrue(options['photo']); self.assertTrue(options['border']); self.assertTrue(options['annotation'])
+        self.assertFalse(options['bands']); self.assertFalse(options['marker_mw']); self.assertFalse(options['lane_mw'])
+        clipboard.assert_called_once()
 
     def test_save_and_copy_cancel_keep_pending_crop(self):
         self.win._select_ribbon_tool('crop')

@@ -163,6 +163,7 @@ class RibbonMixin:
     def _update_workflow_state(self):
         if not hasattr(self, 'ribbon') or not hasattr(self, 'workflow_next'): return
         self._update_marker_review()
+        self._update_lane_xrange_preview()
         stage = self.ribbon.currentIndex()
         image = self._orig is not None
         detected = bool(self.lanes) and any(lane.peaks is not None and len(lane.peaks) for lane in self.lanes)

@@ -306,6 +306,7 @@ class GelView(CropToolMixin, QWidget):
         self.corners = []
         self.crop_rect = None
         self.crop_quad = None
+        self.hrange = None
         self._crop_drag = None
         self._crop_fresh = True
         self._corner_drag = None
@@ -1032,6 +1033,11 @@ class GelView(CropToolMixin, QWidget):
             self._draw_lane_edit_highlight(qp, r)
         if self.mode == 'crop':
             self._draw_crop_overlay(qp)
+        if self.hrange is not None and self.mode in ('view', 'lane'):
+            qp.setPen(QPen(QColor(CYAN), 2, Qt.DashLine))
+            for x in self.hrange:
+                wx = self._ix_to_wx(x)
+                qp.drawLine(QPointF(wx, r.top()), QPointF(wx, r.bottom()))
 
     def _draw_lane_edit_highlight(self, painter, image_rect):
         """Draw last so neighbouring lanes cannot cover the editing feedback."""

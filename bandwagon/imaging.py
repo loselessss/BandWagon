@@ -17,13 +17,16 @@ from PyQt5.QtCore import QByteArray, QMimeData
 from PyQt5.QtGui import QImage, QPixmap
 
 
-def lane_boundary_signal(gray, count, yrange=None):
+def lane_boundary_signal(gray, count, yrange=None, sensitivity=50):
     """Bounded, background-corrected column evidence for dark-band lanes.
 
     Rows are normalized independently so a saturated band or illumination
     gradient cannot dominate the entire gel. Return evidence at sampled x's.
     """
     from scipy.ndimage import gaussian_filter1d
+    sensitivity = float(sensitivity)
+    if not np.isfinite(sensitivity) or not 1 <= sensitivity <= 100:
+        raise ValueError('Lane sensitivity must be between 1 and 100')
     height, width = gray.shape
     top, bottom = (0, height) if yrange is None else yrange
     top = max(0, min(height - 1, int(top)))
@@ -32,13 +35,16 @@ def lane_boundary_signal(gray, count, yrange=None):
     ys = np.linspace(top, bottom - 1, min(bottom - top, 512)).astype(int)
     sampled = np.asarray(gray[np.ix_(ys, xs)], dtype=np.float32)
     pitch = len(xs) / max(1, count)
-    background = gaussian_filter1d(sampled, max(2, pitch * .65), axis=1, mode="reflect")
+    background_scale = .65 * 2 ** ((50 - sensitivity) / 100)
+    background = gaussian_filter1d(sampled, max(2, pitch * background_scale), axis=1, mode="reflect")
     residual = np.maximum(background - sampled, 0)
     # Reject sub-gray-level noise; retain faint bands alongside strong lanes.
-    residual = np.maximum(residual - .5, 0)
+    noise_floor = .5 * 2 ** ((50 - sensitivity) / 25)
+    residual = np.maximum(residual - noise_floor, 0)
     scale = np.maximum(np.percentile(residual, 90, axis=1), 2)
     evidence = np.sqrt(np.minimum(residual / scale[:, None], 1))
-    signal = gaussian_filter1d(evidence.mean(axis=0), max(.6, pitch * .025), mode="nearest")
+    smooth_scale = .025 * 2 ** ((50 - sensitivity) / 50)
+    signal = gaussian_filter1d(evidence.mean(axis=0), max(.6, pitch * smooth_scale), mode="nearest")
     return np.interp(np.arange(width), xs, signal)
 
 

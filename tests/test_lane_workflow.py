@@ -13,6 +13,85 @@ from bandwagon.models import Lane
 
 
 class LaneWorkflowTest(unittest.TestCase):
+    def test_horizontal_range_limits_detection_and_restores_full_image_coordinates(self):
+        self.win._select_ribbon_tool('manual_lanes')
+        self.win.chk_lane_xrange.setChecked(True)
+        self.win.sp_lane_left.setValue(20); self.win.sp_lane_right.setValue(139)
+        with patch('bandwagon.lanes.lane_boundary_signal', return_value=np.ones(120)) as signal, \
+                patch.object(self.win, '_split_lanes_by_count', return_value=[(0,59),(60,119)]), \
+                patch('bandwagon.lanes.signal_lane_spans', return_value=[(5,40),(70,110)]):
+            self.win._auto_lanes()
+        self.assertEqual(signal.call_args.args[0].shape, (160,120))
+        self.assertEqual([(lane.x1,lane.x2) for lane in self.win.lanes], [(25,60),(90,130)])
+        self.assertEqual(self.win.gel.hrange, [20,139])
+        self.assertEqual(self.win._capture_project_metadata()['analysis_params']['lane_xrange'], [20,139])
+        self.win._select_ribbon_tool('marker')
+        self.assertIsNone(self.win.gel.hrange)
+
+    def test_invalid_horizontal_range_keeps_existing_lanes(self):
+        self.win._auto_lanes()
+        before = [(lane.x1,lane.x2) for lane in self.win.lanes]
+        self.win.chk_lane_xrange.setChecked(True)
+        self.win.sp_lane_left.setValue(100); self.win.sp_lane_right.setValue(20)
+        with patch.object(self.win, '_info') as info:
+            self.win._auto_lanes()
+        info.assert_called_once()
+        self.assertEqual([(lane.x1,lane.x2) for lane in self.win.lanes], before)
+
+    def test_horizontal_range_resets_after_rotation_and_undo_restores_it(self):
+        self.win._select_ribbon_tool('manual_lanes')
+        self.win.chk_lane_xrange.setChecked(True)
+        self.win.sp_lane_left.setValue(20); self.win.sp_lane_right.setValue(139)
+        self.win._commit_document_state()
+        self.win._rotate(90)
+        self.assertIsNone(self.win._lane_xrange())
+        self.win._undo()
+        self.assertEqual(self.win._lane_xrange(), [20,139])
+
+    def test_lane_sensitivity_waits_for_detection_and_is_saved_separately(self):
+        self.win._auto_lanes()
+        self.win.run_analysis()
+        before = [(lane.x1, lane.x2) for lane in self.win.lanes]
+        band_sensitivity = self.win.sp_prom.value()
+        with patch.object(self.win, '_auto_lanes') as detect:
+            self.win.sp_lane_sensitivity.setValue(80)
+            detect.assert_not_called()
+        self.assertFalse(self.win._analysis_stale)
+        self.assertEqual(self.win.sp_prom.value(), band_sensitivity)
+        self.assertEqual([(lane.x1, lane.x2) for lane in self.win.lanes], before)
+        self.assertEqual(self.win._current_document_snapshot()['analysis_params']['lane_sensitivity'], 80)
+        self.assertEqual(self.win._capture_project_metadata()['analysis_params']['lane_sensitivity'], 80)
+        self.win._apply_document_snapshot({'analysis_params': {}})
+        self.assertEqual(self.win.sp_lane_sensitivity.value(), 50)
+
+    def test_marker_selection_fits_only_untouched_auto_lanes(self):
+        signal = np.zeros(160); signal[20:50] = 1; signal[95:145] = 1
+        with patch('bandwagon.lanes.lane_boundary_signal', return_value=signal):
+            self.win._auto_lanes()
+        before = [(lane.x1, lane.x2) for lane in self.win.lanes]
+        self.win.lane_table.item(1, 0).setText('Sample')
+        self.win.lane_table.cellWidget(0, 1).activated[int].emit(1)
+        after = [(lane.x1, lane.x2) for lane in self.win.lanes]
+        self.assertLess(after[0][1] - after[0][0], before[0][1] - before[0][0])
+        self.assertEqual({b-a+1 for a, b in after}, {32})
+        self.assertTrue(all(abs((a+b)-(c+d)) <= 1 for (a,b),(c,d) in zip(before, after)))
+        self.assertEqual(self.win.lanes[1].name, 'Sample')
+        self.assertTrue(all(lane.peaks is None for lane in self.win.lanes))
+        self.win._undo()
+        self.assertEqual([(lane.x1, lane.x2) for lane in self.win.lanes], before)
+        self.win._redo()
+        self.assertEqual([(lane.x1, lane.x2) for lane in self.win.lanes], after)
+
+    def test_marker_selection_never_overwrites_manually_adjusted_width(self):
+        signal = np.zeros(160); signal[20:50] = 1; signal[95:145] = 1
+        with patch('bandwagon.lanes.lane_boundary_signal', return_value=signal):
+            self.win._auto_lanes()
+        self.win.lanes[0].x1 += 2
+        self.win._on_lane_edge_changed()
+        before = [(lane.x1, lane.x2) for lane in self.win.lanes]
+        self.win.lane_table.cellWidget(0, 1).activated[int].emit(1)
+        self.assertEqual([(lane.x1, lane.x2) for lane in self.win.lanes], before)
+
     def test_auto_lanes_measure_marker_width_instead_of_image_margin(self):
         preset = {'name': 'Three bands', 'mw': [100, 50, 25]}
         self.win.marker_preset_combo.addItem(preset['name'], preset)

@@ -3,11 +3,11 @@ import copy
 import json
 
 from PIL import Image
-from PyQt5.QtCore import Qt, QTimer, QRectF
-from PyQt5.QtGui import QColor, QPainter
+from PyQt5.QtCore import Qt, QTimer, QRectF, QEvent
+from PyQt5.QtGui import QColor, QPainter, QKeySequence
 from PyQt5.QtWidgets import (
     QDialog, QDialogButtonBox, QFormLayout, QHBoxLayout,
-    QLabel, QPushButton, QSpinBox, QVBoxLayout, QWidget,
+    QLabel, QPushButton, QSpinBox, QVBoxLayout, QWidget, QShortcut,
 )
 
 from .dialogs import _dialog_style, _no_help_button
@@ -53,7 +53,7 @@ class ExportPreview(QWidget):
 
 
 class ExportDialog(QDialog):
-    def __init__(self, source, lanes, settings, parent=None, saving=False, band_style=None):
+    def __init__(self, source, lanes, settings, parent=None, saving=False, band_style=None, analysis_available=True):
         super().__init__(parent)
         _no_help_button(self)
         self.setWindowTitle(tr("export_options_title"))
@@ -74,6 +74,8 @@ class ExportDialog(QDialog):
             pass
         if saved["linked"]:
             saved["graphic_transparency"] = saved["text_transparency"]
+        self._unavailable_options = ({key: saved[key] for key in ('bands', 'marker_mw', 'lane_mw')}
+                                     if not analysis_available else {})
         root = QVBoxLayout(self)
         columns = QHBoxLayout()
         controls = QVBoxLayout()
@@ -86,7 +88,8 @@ class ExportDialog(QDialog):
                            ("marker_mw", "export_component_marker_mw"),
                            ("lane_mw", "export_component_lane_mw"),
                            ("annotation", "export_component_annotation")):
-            check = QCheckBox(tr(label)); check.setChecked(saved[key])
+            check = QCheckBox(tr(label)); check.setChecked(saved[key] if key not in self._unavailable_options else False)
+            if key in self._unavailable_options: check.setEnabled(False)
             check.setStyleSheet(parent._checkbox_css() if parent else "")
             controls.addWidget(check); self.checks[key] = check
         hint = QLabel(tr("export_elements_hint")); hint.setWordWrap(True)
@@ -114,6 +117,12 @@ class ExportDialog(QDialog):
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         self.submit = buttons.button(QDialogButtonBox.Ok)
         self.submit.setText(tr("export_save_action" if saving else "export_copy_action"))
+        if not saving:
+            self.copy_shortcut = QShortcut(QKeySequence.Copy, self)
+            self.copy_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+            self.copy_shortcut.activated.connect(self.accept)
+            for spin in (self.text_alpha, self.graphic_alpha):
+                spin.lineEdit().installEventFilter(self)
         buttons.button(QDialogButtonBox.Cancel).setText(tr("btn_cancel"))
         buttons.accepted.connect(self.accept); buttons.rejected.connect(self.reject)
         root.addWidget(buttons)
@@ -139,6 +148,15 @@ class ExportDialog(QDialog):
             self.preview_lanes.append(item)
         self.refresh_preview()
 
+    def eventFilter(self, obj, event):
+        if (hasattr(self, 'copy_shortcut') and event.type() in (QEvent.ShortcutOverride, QEvent.KeyPress)
+                and event.modifiers() == Qt.ControlModifier and event.key() == Qt.Key_C):
+            event.accept()
+            if event.type() == QEvent.KeyPress:
+                self.accept()
+            return True
+        return super().eventFilter(obj, event)
+
     def options(self):
         return {**{key: check.isChecked() for key, check in self.checks.items()},
                 "text_transparency": self.text_alpha.value(),
@@ -146,7 +164,7 @@ class ExportDialog(QDialog):
 
     def _select_all(self):
         for check in self.checks.values():
-            check.setChecked(True)
+            if check.isEnabled(): check.setChecked(True)
         self.schedule_preview()
 
     def _alpha_changed(self, other, value):
@@ -176,6 +194,6 @@ class ExportDialog(QDialog):
         self.refresh_preview()
         if not self.submit.isEnabled():
             return
-        self.settings.setValue("export/options", json.dumps(self.options()))
+        self.settings.setValue("export/options", json.dumps({**self.options(), **self._unavailable_options}))
         self.settings.sync()
         super().accept()

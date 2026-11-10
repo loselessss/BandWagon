@@ -9,6 +9,7 @@ _replay_history)에 함께 기록된다 — _commit_lanes()가 "lanes" 연산을
 기록하고, _apply_lanes_snapshot()이 _replay_history()의 호출을 받아
 복원을 책임진다(자세한 내용은 geometry.py의 _GEOMETRY_OPS 주석 참고)."""
 import numpy as np
+import weakref
 from PyQt5.QtWidgets import (
     QComboBox, QFormLayout, QGroupBox, QHBoxLayout, QHeaderView,
     QInputDialog, QLabel, QPushButton, QSpinBox, QTableWidget,
@@ -127,6 +128,33 @@ class LanesMixin:
         nrow.addWidget(self.sp_lane_n)
         h.addLayout(nrow)
         self.sp_lane_n.setToolTip(tr('lane_count_hint'))
+        sensitivity_row = QHBoxLayout()
+        sensitivity_label = QLabel(tr('lane_sensitivity'))
+        sensitivity_label.setWordWrap(True)
+        sensitivity_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        sensitivity_row.addWidget(sensitivity_label, 1)
+        self.sp_lane_sensitivity = QSpinBox()
+        self.sp_lane_sensitivity.setRange(1, 100); self.sp_lane_sensitivity.setValue(50)
+        self.sp_lane_sensitivity.setStyleSheet(self._spin_css())
+        self.sp_lane_sensitivity.valueChanged.connect(self._on_document_value_changed)
+        self.sp_lane_sensitivity.editingFinished.connect(self._commit_document_state)
+        sensitivity_row.addWidget(self.sp_lane_sensitivity)
+        h.addLayout(sensitivity_row)
+        sensitivity_hint = QLabel(tr('lane_sensitivity_hint')); sensitivity_hint.setWordWrap(True)
+        sensitivity_hint.setStyleSheet(f'color:{MUTE};font-size:11px;')
+        h.addWidget(sensitivity_hint)
+        self.chk_lane_xrange = TickCheckBox(tr('lane_xrange'))
+        self.chk_lane_xrange.setStyleSheet(self._checkbox_css())
+        h.addWidget(self.chk_lane_xrange)
+        xrange_row = QHBoxLayout()
+        self.sp_lane_left = QSpinBox(); self.sp_lane_right = QSpinBox()
+        for label, spin in ((tr('lane_left'), self.sp_lane_left), (tr('lane_right'), self.sp_lane_right)):
+            spin.setRange(0, 1000000000); spin.setStyleSheet(self._spin_css()); spin.setSuffix('px')
+            xrange_row.addWidget(QLabel(label)); xrange_row.addWidget(spin, 1)
+            spin.valueChanged.connect(self._on_lane_xrange_changed)
+            spin.editingFinished.connect(self._commit_document_state)
+        h.addLayout(xrange_row)
+        self.chk_lane_xrange.toggled.connect(self._on_lane_xrange_changed)
 
         auto = QPushButton(tr("btn_auto_detect_lanes")); auto.clicked.connect(self._auto_lanes)
         auto.setStyleSheet(self._btn_css())
@@ -415,9 +443,27 @@ class LanesMixin:
         self.lane_panel_layout.setStretch(self.lane_panel_bottom_index, 0)
         self.lane_settings_scroll.widget().layout().invalidate()
         self.lane_settings_scroll.updateGeometry()
+        self._update_lane_xrange_preview()
         if name == 'marker':
             self._update_marker_presets()
             self._update_marker_controls()
+
+    def _lane_xrange(self):
+        return [self.sp_lane_left.value(), self.sp_lane_right.value()] if self.chk_lane_xrange.isChecked() else None
+
+    def _on_lane_xrange_changed(self, *_):
+        self._update_lane_xrange_preview()
+        self._on_document_value_changed()
+
+    def _update_lane_xrange_preview(self):
+        if self._orig is not None:
+            for spin in (self.sp_lane_left, self.sp_lane_right):
+                spin.blockSignals(True); spin.setMaximum(self._orig.width - 1); spin.blockSignals(False)
+            if not self.chk_lane_xrange.isChecked():
+                self.sp_lane_right.blockSignals(True); self.sp_lane_right.setValue(self._orig.width - 1); self.sp_lane_right.blockSignals(False)
+        for spin in (self.sp_lane_left, self.sp_lane_right): spin.setEnabled(self.chk_lane_xrange.isChecked())
+        self.gel.hrange = self._lane_xrange() if getattr(self, '_active_tool', None) in ('manual_lanes', 'lane_list') else None
+        self.gel.update()
 
     def _set_focus_overlay(self, enabled):
         self.gel.focus_overlay = enabled
@@ -822,13 +868,20 @@ class LanesMixin:
             self._info(tr("no_image_title"), tr("no_image_msg")); return
         W = self._gray_orig.shape[1]
         n_target = self.sp_lane_n.value()
-        sm = lane_boundary_signal(self._gray_orig, n_target, self.gel.vrange)
+        left, right = self._lane_xrange() or (0, W - 1)
+        if not 0 <= left <= right < W or right - left + 1 < 2 * n_target:
+            self._info(tr('detect_fail_title'), tr('lane_xrange_invalid'))
+            return
+        W = right - left + 1
+        sm = lane_boundary_signal(self._gray_orig[:, left:right + 1], n_target, self.gel.vrange,
+                                  sensitivity=self.sp_lane_sensitivity.value())
         if sm.max() <= 0:
             self._info(tr("detect_fail_title"), tr("detect_fail_no_signal")); return
         spans = self._split_lanes_by_count(sm, n_target, W)
         if spans is None or not valid_lane_spans(spans, W, count=n_target, contiguous=True):
             self._info(tr("detect_fail_title"), tr("detect_fail_count_msg", n=n_target))
             return
+        partitions = tuple(spans)
 
         marker_index = None
         if self.marker_preset_combo.currentData() is not None:
@@ -840,6 +893,7 @@ class LanesMixin:
         if spans is None:
             self._info(tr('detect_fail_title'), tr('detect_fail_count_msg', n=n_target))
             return
+        spans = [(a + left, b + left) for a, b in spans]
 
         previous_lanes = sorted(self.lanes, key=lambda lane: lane.x1)
         metadata = [lane.to_dict() for lane in previous_lanes] if len(previous_lanes) == len(spans) else []
@@ -856,6 +910,9 @@ class LanesMixin:
             lane.marker_mw = list(saved.get('marker_mw', []))
             lane.bsa_amount = saved.get('bsa_amount', 0)
         self._commit_lanes()   # 자동 검출 전체를 되돌리기 한 단계로 기록
+        self._auto_width_reference = (partitions, sm.copy(),
+                                      tuple((lane.x1, lane.x2) for lane in sorted(self.lanes, key=lambda item: item.x1)),
+                                      weakref.ref(self._gray_orig))
         self.status.showMessage(tr("status_auto_lane_done", n=len(spans)))
         # Band extraction follows naming/type assignment in stage three.
         self._mark_analysis_stale()
@@ -1037,6 +1094,7 @@ class LanesMixin:
         됨 — _replay_history의 _GEOMETRY_OPS 리셋 규칙이 이미 같은 효과를
         재현한다). 사용자가 직접 누르는 '레인 전체 삭제' 버튼은
         _on_clear_lanes_clicked가 처리한다."""
+        self._auto_width_reference = None
         self.lanes = []
         if hasattr(self, 'marker_preset_combo') and self.marker_preset_combo.currentData() is not None:
             self._prepared_marker_pending = True
@@ -1227,6 +1285,7 @@ class LanesMixin:
             # Stage two describes lanes; it must not detect bands or request MW.
             lane.kind = new_kind
             if new_kind == 'marker':
+                self._fit_auto_widths_to_marker(lane)
                 self.sp_marker_lane.blockSignals(True)
                 self.sp_marker_lane.setValue(self.lanes.index(lane) + 1)
                 self.sp_marker_lane.blockSignals(False)
@@ -1272,6 +1331,25 @@ class LanesMixin:
                 self._refresh_results()
             else:
                 self.status.showMessage(tr('mw_regression_placeholder'))
+
+    def _fit_auto_widths_to_marker(self, marker):
+        """Only narrow untouched automatic lanes; never move their centres."""
+        reference = getattr(self, '_auto_width_reference', None)
+        ordered = sorted(self.lanes, key=lambda item: item.x1)
+        if not reference or marker not in ordered or any(item.profile is not None for item in ordered):
+            return
+        partitions, signal, original, gray_ref = reference
+        if gray_ref() is not self._gray_orig or tuple((item.x1, item.x2) for item in ordered) != original:
+            return
+        suggested = signal_lane_spans(signal, partitions, ordered.index(marker))
+        if not suggested:
+            return
+        width = suggested[ordered.index(marker)][1] - suggested[ordered.index(marker)][0] + 1
+        if any(width >= item.x2 - item.x1 + 1 for item in ordered):
+            return
+        for item in ordered:
+            left = item.x1 + (item.x2 - item.x1 + 1 - width) // 2
+            item.x1, item.x2 = left, left + width - 1
 
     def _edit_marker(self, lane, prepared=False):
         """Apply a matching preset immediately; ask only for manual entry or

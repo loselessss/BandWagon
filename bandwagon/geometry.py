@@ -1021,6 +1021,7 @@ class GeometryMixin:
                     else self._document_pristine
                 document_snapshot = copy.deepcopy(effective)
                 document_snapshot.setdefault("analysis_params", {})["vrange"] = None
+                document_snapshot['analysis_params']['lane_xrange'] = None
             if op_name == "fine_rotate":
                 last_rot = params
             elif op_name == "bow_correct":
@@ -1114,6 +1115,8 @@ class GeometryMixin:
             "mw_extrapolate": self.chk_mw_extrapolate.isChecked(),
             "analysis_params": {
                 "prominence": self.sp_prom.value(),
+                "lane_sensitivity": self.sp_lane_sensitivity.value(),
+                "lane_xrange": self._lane_xrange(),
                 "distance": self.sp_dist.value(),
                 "band_threshold": self.sl_band_thresh.value(),
                 "smear_max_px": self.sp_smear.value(),
@@ -1202,6 +1205,13 @@ class GeometryMixin:
             ap = snapshot.get("analysis_params") or {}
             self.chk_mw_extrapolate.setChecked(bool(snapshot.get('mw_extrapolate', False)))
             self.sp_prom.setValue(int(ap.get("prominence", 90)))
+            self.sp_lane_sensitivity.setValue(int(ap.get('lane_sensitivity', 50)))
+            if self._orig is not None:
+                for spin in (self.sp_lane_left, self.sp_lane_right): spin.setMaximum(self._orig.width - 1)
+            xrange = ap.get('lane_xrange')
+            self.chk_lane_xrange.setChecked(bool(xrange and len(xrange) == 2))
+            if xrange and len(xrange) == 2:
+                self.sp_lane_left.setValue(int(xrange[0])); self.sp_lane_right.setValue(int(xrange[1]))
             self.sp_dist.setValue(int(ap.get("distance", 6)))
             self.sl_band_thresh.setValue(int(ap.get("band_threshold", 40)))
             self.sp_smear.setValue(int(ap.get("smear_max_px", 0)))
@@ -1219,6 +1229,7 @@ class GeometryMixin:
             self.memo_edit.blockSignals(False)
             self._history_suspended = previous_suspended
         self._update_vrange_label()
+        self._update_lane_xrange_preview()
         self.curve.set_histogram(self._hist_for(self._ch))
         self.gel.update()
 

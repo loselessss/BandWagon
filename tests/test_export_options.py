@@ -2,18 +2,86 @@ import json
 import os
 import tempfile
 import unittest
+from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PIL import Image
-from PyQt5.QtCore import QSettings
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtCore import QSettings, Qt, QTimer
+from PyQt5.QtTest import QTest
+from PyQt5.QtWidgets import QApplication, QDialog
 
 from bandwagon.export_dialog import DEFAULT_OPTIONS, ExportDialog, render_export
 from bandwagon.models import Lane
 
 
 class ExportOptionsTest(unittest.TestCase):
+    def test_ctrl_c_accepts_current_copy_options_but_not_save_dialog(self):
+        dialog = ExportDialog(self.source, self.lanes, self.settings)
+        dialog.show(); dialog.activateWindow(); self.app.processEvents()
+        dialog.checks['bands'].setChecked(True)
+        dialog.checks['bands'].setFocus(); self.app.processEvents()
+        QTest.keyClick(dialog.checks['bands'], Qt.Key_C, Qt.ControlModifier)
+        self.app.processEvents()
+        self.assertEqual(dialog.result(), QDialog.Accepted)
+        self.assertTrue(json.loads(self.settings.value('export/options'))['bands'])
+        dialog.close()
+        save = ExportDialog(self.source, self.lanes, self.settings, saving=True)
+        self.assertFalse(hasattr(save, 'copy_shortcut'))
+        save.close()
+
+    def test_ctrl_c_does_not_accept_empty_export(self):
+        dialog = ExportDialog(self.source, self.lanes, self.settings)
+        for check in dialog.checks.values(): check.setChecked(False)
+        dialog.show(); dialog.activateWindow(); self.app.processEvents()
+        QTest.keyClick(dialog, Qt.Key_C, Qt.ControlModifier)
+        self.app.processEvents()
+        self.assertNotEqual(dialog.result(), QDialog.Accepted)
+        dialog.close()
+
+    def test_unavailable_analysis_options_are_disabled_and_preferences_preserved(self):
+        self.settings.setValue('export/options', json.dumps(dict(DEFAULT_OPTIONS, bands=True, lane_mw=True)))
+        dialog = ExportDialog(self.source, self.lanes, self.settings, analysis_available=False)
+        for key in ('bands', 'marker_mw', 'lane_mw'):
+            self.assertFalse(dialog.checks[key].isEnabled())
+            self.assertFalse(dialog.options()[key])
+        for key in ('photo', 'border', 'annotation'):
+            self.assertTrue(dialog.checks[key].isEnabled())
+        dialog.select_all.click()
+        self.assertFalse(any(dialog.options()[key] for key in ('bands', 'marker_mw', 'lane_mw')))
+        dialog.accept()
+        saved = json.loads(self.settings.value('export/options'))
+        self.assertTrue(saved['bands']); self.assertTrue(saved['marker_mw']); self.assertTrue(saved['lane_mw'])
+        dialog.close()
+
+    def test_ctrl_c_works_when_transparency_input_has_focus(self):
+        dialog = ExportDialog(self.source, self.lanes, self.settings)
+        dialog.show(); dialog.activateWindow(); dialog.text_alpha.setFocus()
+        dialog.text_alpha.lineEdit().selectAll(); self.app.processEvents()
+        QTest.keyClick(dialog.text_alpha.lineEdit(), Qt.Key_C, Qt.ControlModifier)
+        self.app.processEvents()
+        self.assertEqual(dialog.result(), QDialog.Accepted)
+        dialog.close()
+
+    def test_ctrl_c_in_modal_copies_once_and_reports_success(self):
+        from bandwagon.app import Analyzer
+        from bandwagon.i18n import tr
+        win = Analyzer()
+        try:
+            win._orig = self.source.copy(); win._after_load('shortcut.png')
+            win.show(); win.activateWindow(); self.app.processEvents()
+            def press_copy():
+                dialog = QApplication.activeModalWidget()
+                dialog.checks['photo'].setFocus()
+                QTest.keyClick(dialog.checks['photo'], Qt.Key_C, Qt.ControlModifier)
+            with patch('bandwagon.fileio.copy_pil_image_to_clipboard') as copy:
+                QTimer.singleShot(100, press_copy)
+                win.copy_image()
+                copy.assert_called_once()
+            self.assertEqual(win.status.currentMessage(), tr('status_copied_to_clipboard'))
+        finally:
+            win._saved_snapshot = win._project_state_snapshot(); win.close()
+
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
