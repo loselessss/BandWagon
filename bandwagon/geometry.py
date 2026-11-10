@@ -901,6 +901,10 @@ class GeometryMixin:
             # pristine으로 놓고 기록을 새로 시작한다.
             if self._orig is None:
                 return
+            if self._quant_source is None:
+                self._quant_source = (self._gray_orig.copy() if self._gray_orig is not None
+                                      else np.array(self._orig.convert('L'), dtype=np.uint8))
+                self._quant_uv = self._wb_gray_override is not None
             self._edit_pristine = self._orig.copy()
             # 이 시점의 UV 오버라이드(합성 임포트 세션이면 존재)를 재생
             # 시작 그레이스케일로 함께 고정한다 — 없으면 None(평소 세션).
@@ -924,6 +928,9 @@ class GeometryMixin:
             # — 기록이 무한히 늘지 않으면서도 남은 연산은 항상 pristine
             # 기준으로 재생 가능하다는 불변식이 유지된다.
             oldest_op, oldest_params = self._edit_ops.pop(0)
+            from .quantitation import PIXEL_OPS
+            if oldest_op in PIXEL_OPS:
+                self._quant_prefix.append((oldest_op, copy.deepcopy(oldest_params)))
             # 가장 오래된 연산을 pristine에 합칠 때, 재생 시작 그레이스케일
             # 오버라이드도 같은 연산으로 함께 변환해야 정렬이 유지된다
             # (합성 임포트 세션에서만 _edit_gray_pristine이 non-None).

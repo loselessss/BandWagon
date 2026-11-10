@@ -145,9 +145,10 @@ class Lane:
 
     def analyze(self, gray_orig, prominence, distance, threshold_pct=40,
                 y_top=None, y_bot=None, smear_max_px=0):
-        """원본 그레이스케일에서 프로파일·밴드·volume 계산(보정 무시).
+        """검출 좌표계의 그레이스케일에서 프로파일·밴드·임시 volume 계산.
         느리게 변하는 배경/넓은 번짐을 분리한 신호에서 피크와 경계를 찾고,
-        volume은 그 경계 안의 원본 강도를 국소 배경 차감 적분한다.
+        편집이 있으면 호출자가 SourceQuantitation으로 원본 픽셀의
+        적분값을 다시 계산한다. 피크와 경계/MW 좌표는 바꾸지 않는다.
 
         threshold_pct: 밴드 경계(=적분 범위) 기준 — '피크 높이에서 로컬
         배경을 뺀 순신호가 threshold_pct%로 떨어지는 지점'을 골짜기 범위

@@ -10,6 +10,7 @@ LanesMixin, 밝기/대비/커브는 GeometryMixin) — '새 이미지로 세션�
 자리이기 때문이다. 웨스턴 블롯 합성 파일(.bwcomposite)을 불러오는
 import_composite()도 여기 있다(합성 자체는 독립 모듈 composite.py 담당)."""
 import csv
+import copy
 import hashlib
 import io
 import json
@@ -225,6 +226,9 @@ class FileIOMixin:
         self._history_suspended = True
         self._edit_pristine = None
         self._edit_gray_pristine = None
+        self._quant_source = self._pristine_quant_source
+        self._quant_prefix = copy.deepcopy(self._pristine_quant_ops)
+        self._quant_uv = self._pristine_quant_uv
         self._edit_ops = []
         self._edit_pos = -1
         if hasattr(self, "btn_undo"):
@@ -372,6 +376,9 @@ class FileIOMixin:
         if getattr(self, "_inline_curve", None) is not None:
             self._inline_curve.finish()
         self._pristine_wb_gray_override = None
+        self._pristine_quant_source = None
+        self._pristine_quant_ops = []
+        self._pristine_quant_uv = False
         self._base_title = f"{name} — {APP_NAME} v{APP_VERSION}"
         self._pristine_orig = self._orig.copy()   # 전체 초기화 시 복귀할 기준
         self._reset_session_state()   # _saved_snapshot을 방금 리셋한 상태 기준으로 갱신
@@ -550,6 +557,12 @@ class FileIOMixin:
             return False
         return True
 
+    def _quantitation_geometry(self):
+        from .quantitation import PIXEL_OPS
+        ops = self._quant_prefix + self._edit_ops[:self._edit_pos+1]
+        return json.dumps({'operations': [(name, p) for name, p in ops if name in PIXEL_OPS],
+                           'uv': self._quant_uv})
+
     def _write_project_file(self, path, recovery=False):
         temporary = None
         try:
@@ -562,6 +575,8 @@ class FileIOMixin:
                 with z.open(entry, "w", force_zip64=True) as stream:
                     self._orig.save(stream, format="PNG")
                 z.writestr("project.json", json.dumps(project, ensure_ascii=False, indent=2))
+                from .quantitation import write_quantitation_source
+                write_quantitation_source(z, self._quant_source, self._quantitation_geometry())
                 # WB 합성 모드(_orig가 화면용 블렌드일 때)는 실제 분석에 쓰던
                 # UV 단독 그레이스케일을 따로 저장해야 한다. 안 그러면 다시
                 # 열었을 때 블렌드 이미지에서 그레이스케일을 자동 재계산하게
@@ -633,6 +648,11 @@ class FileIOMixin:
                 img_bytes = z.read("image.png")
                 names = z.namelist()
                 wb_gray_bytes = z.read("wb_gray_override.png") if "wb_gray_override.png" in names else None
+                quant_bytes = z.read('quant_source.png') if 'quant_source.png' in names else None
+                quant_geometry = (json.loads(z.read('quant_geometry.json'))
+                                  if 'quant_geometry.json' in names else None)
+                if (quant_bytes is None) != (quant_geometry is None):
+                    raise ValueError('Incomplete original-pixel quantitation data')
             if project.get("format_version", 1) > GELPROJ_FORMAT_VERSION:
                 self._warn(tr("version_warning_title"), tr("version_warning_msg"))
 
@@ -650,6 +670,20 @@ class FileIOMixin:
                 self._gray_orig = self._wb_gray_override
                 self._pristine_wb_gray_override = self._wb_gray_override.copy()
                 self.curve.set_histogram(self._hist_for(self._ch))
+
+            if quant_bytes is not None:
+                from .quantitation import SourceQuantitation
+                source = np.array(Image.open(io.BytesIO(quant_bytes)).convert('L'))
+                operations = quant_geometry['operations']
+                context = SourceQuantitation(source, operations, not quant_geometry.get('uv', False))
+                if context.size != self._orig.size:
+                    raise ValueError('Quantitation geometry does not match project image')
+                self._quant_source = source
+                self._quant_prefix = operations
+                self._quant_uv = bool(quant_geometry.get('uv', False))
+                self._pristine_quant_source = source
+                self._pristine_quant_ops = copy.deepcopy(operations)
+                self._pristine_quant_uv = self._quant_uv
 
             # _after_load > _reset_session_state 가 밝기/대비/커브/레인을 전부
             # 기본값으로 되돌려 둔 상태이므로, 그 위에 저장된 상태를 다시 입힌다.

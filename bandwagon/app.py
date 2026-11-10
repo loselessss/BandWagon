@@ -65,6 +65,12 @@ class Analyzer(RibbonMixin, StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, 
         # 펴기 등이 apply_edit_op을 통해 이 값도 함께 변환해 정렬을 유지한다.
         # (평소 세션에서는 계속 None.)
         self._edit_gray_pristine = None
+        self._quant_source = None
+        self._quant_prefix = []
+        self._quant_uv = False
+        self._pristine_quant_source = None
+        self._pristine_quant_ops = []
+        self._pristine_quant_uv = False
         # 밴드 표시 방식: "area"(경계 영역, 기본) 또는 "line"(피크 위치 한 줄).
         # 둘 다 같은 peak_bounds/peaks를 보여주는 방식만 다를 뿐, 정량값과는
         # 무관 — render_analysis_overlay()와 GelView.paintEvent() 양쪽이
@@ -602,12 +608,15 @@ class Analyzer(RibbonMixin, StyleMixin, GeometryMixin, LanesMixin, FileIOMixin, 
             windows.remove(self)
         for name in ("_orig", "_display", "_gray_orig", "_pristine_orig",
                      "_wb_gray_override", "_pristine_wb_gray_override",
-                     "_edit_pristine", "_edit_gray_pristine", "_rot_base",
+                     "_edit_pristine", "_edit_gray_pristine", "_quant_source",
+                     "_pristine_quant_source", "_rot_base",
                      "_curve_base", "_shear_base", "_preview_small",
                      "_color_preview_base"):
             setattr(self, name, None)
         self._img_hash_cache = (None, None)
         self._edit_ops.clear()
+        self._quant_prefix.clear()
+        self._pristine_quant_ops.clear()
         self.lanes.clear()
         self.gel.set_image(None, (0, 0))
         self.gel.set_lanes([])

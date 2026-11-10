@@ -22,10 +22,12 @@ def recovery_directory():
 
 class RecoveryWriter(QThread):
     """No widget access: encode a captured revision into a private staging file."""
-    def __init__(self, owner, path, snapshot, metadata, image, gray):
+    def __init__(self, owner, path, snapshot, metadata, image, gray,
+                 quant_source=None, quant_geometry=None):
         super().__init__(owner)
         self.path, self.snapshot = path, snapshot
         self.metadata, self.image, self.gray = metadata, image, gray
+        self.quant_source, self.quant_geometry = quant_source, quant_geometry
         self.temporary = None
         self.error = None
         self.disposition = "publish"
@@ -43,6 +45,8 @@ class RecoveryWriter(QThread):
                 if self.gray is not None:
                     with archive.open(zipfile.ZipInfo("wb_gray_override.png"), "w", force_zip64=True) as stream:
                         Image.fromarray(self.gray, "L").save(stream, format="PNG")
+                from .quantitation import write_quantitation_source
+                write_quantitation_source(archive, self.quant_source, self.quant_geometry)
             with open(self.temporary, "rb+") as durable:
                 os.fsync(durable.fileno())
         except Exception as error:
@@ -50,6 +54,7 @@ class RecoveryWriter(QThread):
             logging.exception("Autosave encoding failed")
         finally:
             self.image = self.gray = None
+            self.quant_source = self.quant_geometry = None
 
 
 class RecoveryMixin:
@@ -109,7 +114,8 @@ class RecoveryMixin:
                 self._recovery_path, self._recovery_lock = path, lock
             metadata = json.dumps(self._capture_project_metadata(recovery=True), ensure_ascii=False, indent=2)
             worker = RecoveryWriter(self, self._recovery_path, snapshot, metadata,
-                                    self._orig, self._wb_gray_override)
+                                    self._orig, self._wb_gray_override,
+                                    self._quant_source, self._quantitation_geometry())
             self._recovery_worker = worker
             worker.finished.connect(self._recovery_finished)
             worker.start()

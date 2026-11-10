@@ -14,7 +14,7 @@ APP_NAME     = "BandWagon"
 APP_VERSION  = "2.11.0"
 RELEASE_DATE = "2026-11-09"
 PRIVACY_POLICY_URL = "https://loselessss.github.io/BandWagon/privacy/"
-GELPROJ_FORMAT_VERSION = 2   # .bandwagon 내부 JSON 스키마 버전 (구조 바꾸면 올릴 것) — v2: "memo" 필드 추가
+GELPROJ_FORMAT_VERSION = 3   # v3: 정량용 원본 및 기하변환 기록. v2: memo 필드.
 
 def resource_path(name):
     """빌드/개발 양쪽에서 저장소 루트에 있는 리소스 파일(예: bandwagon.ico)을

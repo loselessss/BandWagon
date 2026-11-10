@@ -1413,6 +1413,11 @@ class LanesMixin:
         for lane in self.lanes:
             lane.analyze(self._gray_orig, prom, dist, threshold_pct=thresh,
                          y_top=y_top, y_bot=y_bot, smear_max_px=smear_max_px)
+        if self._quant_source is not None:
+            from .quantitation import SourceQuantitation, PIXEL_OPS
+            operations = self._quant_prefix + self._edit_ops[:self._edit_pos+1]
+            if any(name in PIXEL_OPS - {'invert_colors'} for name, _ in operations):
+                SourceQuantitation(self._quant_source, operations, not self._quant_uv).apply(self.lanes)
         marker_changed = self._apply_prepared_marker()
         self.gel.selected_band = None  # 재분석하면 밴드 구성이 바뀔 수 있어 이전 강조는 무효화
         self.gel.set_lanes(self.lanes)
