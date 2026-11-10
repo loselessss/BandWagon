@@ -11,8 +11,8 @@ HAS_CV2 = importlib.util.find_spec("cv2") is not None
 
 # ── 릴리스 메타데이터 ────────────────────────────────────────────────
 APP_NAME     = "BandWagon"
-APP_VERSION  = "2.11.0"
-RELEASE_DATE = "2026-11-09"
+APP_VERSION  = "2.12.0"
+RELEASE_DATE = "2026-11-10"
 PRIVACY_POLICY_URL = "https://loselessss.github.io/BandWagon/privacy/"
 GELPROJ_FORMAT_VERSION = 3   # v3: 정량용 원본 및 기하변환 기록. v2: memo 필드.
 
